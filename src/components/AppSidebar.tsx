@@ -5,11 +5,13 @@ import {
   Bot,
   Tag,
   Package,
+  Package2,
   MapPin,
   UserCheck,
   ChevronDown,
   Home,
   Settings,
+  Route,
 } from "lucide-react";
 import {
   Sidebar,
@@ -41,6 +43,8 @@ const menuItems = [
     ],
   },
   { title: "Contexto de Agentes", url: "/dashboard/agents", icon: Bot },
+  { title: "Pedidos", url: "/dashboard/orders", icon: Package2 },
+  { title: "Planeación de Rutas", url: "/dashboard/routes", icon: Route },
   { title: "Promociones", url: "/dashboard/promotions", icon: Tag },
   { title: "Inventario", url: "/dashboard/inventory", icon: Package },
   { title: "Ciudades", url: "/dashboard/cities", icon: MapPin },

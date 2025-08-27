@@ -15,6 +15,8 @@ import Promotions from "./pages/Promotions";
 import Inventory from "./pages/Inventory";
 import Cities from "./pages/Cities";
 import Customers from "./pages/Customers";
+import Orders from "./pages/Orders";
+import RouteManagement from "./pages/RouteManagement";
 
 const queryClient = new QueryClient();
 
@@ -31,6 +33,8 @@ const App = () => (
             <Route path="users" element={<Users />} />
             <Route path="roles" element={<Roles />} />
             <Route path="permissions" element={<Permissions />} />
+            <Route path="orders" element={<Orders />} />
+            <Route path="routes" element={<RouteManagement />} />
             <Route path="promotions" element={<Promotions />} />
             <Route path="inventory" element={<Inventory />} />
             <Route path="cities" element={<Cities />} />
