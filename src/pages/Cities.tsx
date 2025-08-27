@@ -26,10 +26,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Search, Plus, MoreHorizontal, Edit, Trash2, MapPin, Users, Package } from "lucide-react";
+import CreateCityModal from "@/components/modals/CreateCityModal";
 
 const Cities = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const itemsPerPage = 8;
   
   const cities = [
@@ -209,7 +211,7 @@ const Cities = () => {
             Administra las ciudades donde opera Miau Miau y sus zonas de cobertura
           </p>
         </div>
-        <Button className="gap-2">
+        <Button className="gap-2" onClick={() => setIsCreateModalOpen(true)}>
           <MapPin className="h-4 w-4" />
           Nueva Ciudad
         </Button>
@@ -376,6 +378,11 @@ const Cities = () => {
           </div>
         </CardContent>
       </Card>
+
+      <CreateCityModal 
+        open={isCreateModalOpen} 
+        onOpenChange={setIsCreateModalOpen} 
+      />
     </div>
   );
 };

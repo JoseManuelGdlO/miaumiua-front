@@ -26,10 +26,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Search, Plus, MoreHorizontal, Edit, Trash2, Package, AlertTriangle } from "lucide-react";
+import CreateInventoryModal from "@/components/modals/CreateInventoryModal";
 
 const Inventory = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const itemsPerPage = 10;
   
   const inventory = [
@@ -194,7 +196,7 @@ const Inventory = () => {
             Control de stock de productos Miau Miau por ciudad
           </p>
         </div>
-        <Button className="gap-2">
+        <Button className="gap-2" onClick={() => setIsCreateModalOpen(true)}>
           <Package className="h-4 w-4" />
           Agregar Producto
         </Button>
@@ -358,6 +360,11 @@ const Inventory = () => {
           </div>
         </CardContent>
       </Card>
+
+      <CreateInventoryModal 
+        open={isCreateModalOpen} 
+        onOpenChange={setIsCreateModalOpen} 
+      />
     </div>
   );
 };

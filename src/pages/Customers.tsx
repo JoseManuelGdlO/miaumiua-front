@@ -26,10 +26,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Search, Plus, MoreHorizontal, Edit, Trash2, UserCheck, Star, MessageSquare, Phone } from "lucide-react";
+import CreateCustomerModal from "@/components/modals/CreateCustomerModal";
 
 const Customers = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const itemsPerPage = 10;
   
   const customers = [
@@ -204,7 +206,7 @@ const Customers = () => {
             Base de datos de clientes Miau Miau y programa de lealtad
           </p>
         </div>
-        <Button className="gap-2">
+        <Button className="gap-2" onClick={() => setIsCreateModalOpen(true)}>
           <UserCheck className="h-4 w-4" />
           Nuevo Cliente
         </Button>
@@ -383,6 +385,11 @@ const Customers = () => {
           </div>
         </CardContent>
       </Card>
+
+      <CreateCustomerModal 
+        open={isCreateModalOpen} 
+        onOpenChange={setIsCreateModalOpen} 
+      />
     </div>
   );
 };

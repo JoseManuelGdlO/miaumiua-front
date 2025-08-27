@@ -27,10 +27,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Search, Plus, MoreHorizontal, Edit, Trash2, Tag, Calendar } from "lucide-react";
+import CreatePromotionModal from "@/components/modals/CreatePromotionModal";
 
 const Promotions = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const itemsPerPage = 8;
   
   const promotions = [
@@ -227,7 +229,7 @@ const Promotions = () => {
             Administra descuentos y ofertas especiales para productos Miau Miau
           </p>
         </div>
-        <Button className="gap-2">
+        <Button className="gap-2" onClick={() => setIsCreateModalOpen(true)}>
           <Tag className="h-4 w-4" />
           Nueva Promoción
         </Button>
@@ -382,6 +384,11 @@ const Promotions = () => {
           </div>
         </CardContent>
       </Card>
+
+      <CreatePromotionModal 
+        open={isCreateModalOpen} 
+        onOpenChange={setIsCreateModalOpen} 
+      />
     </div>
   );
 };
