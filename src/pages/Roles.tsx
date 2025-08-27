@@ -18,9 +18,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Search, Plus, MoreHorizontal, Edit, Trash2, Shield, Users } from "lucide-react";
+import CreateRoleModal from "@/components/modals/CreateRoleModal";
+import ManageRolePermissionsModal from "@/components/modals/ManageRolePermissionsModal";
 
 const Roles = () => {
   const [searchTerm, setSearchTerm] = useState("");
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [permissionsModalOpen, setPermissionsModalOpen] = useState(false);
+  const [selectedRole, setSelectedRole] = useState<{ id: string; name: string } | null>(null);
   
   const roles = [
     {
@@ -100,7 +105,7 @@ const Roles = () => {
             Define y administra los roles de usuario en el sistema Miau Miau
           </p>
         </div>
-        <Button className="gap-2">
+        <Button className="gap-2" onClick={() => setIsCreateModalOpen(true)}>
           <Shield className="h-4 w-4" />
           Nuevo Rol
         </Button>
@@ -193,7 +198,10 @@ const Roles = () => {
                             <Edit className="mr-2 h-4 w-4" />
                             Editar Rol
                           </DropdownMenuItem>
-                          <DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => {
+                            setSelectedRole({ id: role.id.toString(), name: role.name });
+                            setPermissionsModalOpen(true);
+                          }}>
                             <Shield className="mr-2 h-4 w-4" />
                             Gestionar Permisos
                           </DropdownMenuItem>
@@ -226,6 +234,18 @@ const Roles = () => {
           </div>
         </CardContent>
       </Card>
+
+      <CreateRoleModal 
+        open={isCreateModalOpen} 
+        onOpenChange={setIsCreateModalOpen} 
+      />
+
+      <ManageRolePermissionsModal
+        open={permissionsModalOpen}
+        onOpenChange={setPermissionsModalOpen}
+        roleId={selectedRole?.id}
+        roleName={selectedRole?.name}
+      />
     </div>
   );
 };

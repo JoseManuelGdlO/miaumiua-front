@@ -26,10 +26,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Search, Plus, MoreHorizontal, Edit, Trash2, UserPlus } from "lucide-react";
+import CreateUserModal from "@/components/modals/CreateUserModal";
 
 const Users = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const itemsPerPage = 8;
   
   const users = [
@@ -141,7 +143,7 @@ const Users = () => {
             Administra los usuarios del sistema de chatbots Miau Miau
           </p>
         </div>
-        <Button className="gap-2">
+        <Button className="gap-2" onClick={() => setIsCreateModalOpen(true)}>
           <UserPlus className="h-4 w-4" />
           Nuevo Usuario
         </Button>
@@ -272,6 +274,11 @@ const Users = () => {
           </Pagination>
         </CardContent>
       </Card>
+
+      <CreateUserModal 
+        open={isCreateModalOpen} 
+        onOpenChange={setIsCreateModalOpen} 
+      />
     </div>
   );
 };
