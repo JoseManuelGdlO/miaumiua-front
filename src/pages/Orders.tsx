@@ -26,10 +26,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Search, Plus, MoreHorizontal, Edit, Eye, Truck, MapPin, Package2 } from "lucide-react";
+import CreateOrderModal from "@/components/modals/CreateOrderModal";
 
 const Orders = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const itemsPerPage = 12;
   
   const orders = [
@@ -211,7 +213,7 @@ const Orders = () => {
             Todos los pedidos realizados y su estado de entrega
           </p>
         </div>
-        <Button className="gap-2">
+        <Button className="gap-2" onClick={() => setIsCreateModalOpen(true)}>
           <Package2 className="h-4 w-4" />
           Nuevo Pedido
         </Button>
@@ -400,6 +402,11 @@ const Orders = () => {
           </div>
         </CardContent>
       </Card>
+
+      <CreateOrderModal 
+        open={isCreateModalOpen} 
+        onOpenChange={setIsCreateModalOpen} 
+      />
     </div>
   );
 };
