@@ -12,6 +12,7 @@ import {
   Home,
   Settings,
   Route,
+  MessageCircle,
 } from "lucide-react";
 import {
   Sidebar,
@@ -42,6 +43,7 @@ const menuItems = [
       { title: "Permisos", url: "/dashboard/permissions" },
     ],
   },
+  { title: "Conversaciones", url: "/dashboard/conversations", icon: MessageCircle },
   { title: "Contexto de Agentes", url: "/dashboard/agents", icon: Bot },
   { title: "Pedidos", url: "/dashboard/orders", icon: Package2 },
   { title: "Planeación de Rutas", url: "/dashboard/routes", icon: Route },

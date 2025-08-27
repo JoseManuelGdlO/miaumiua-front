@@ -18,6 +18,7 @@ import Customers from "./pages/Customers";
 import Orders from "./pages/Orders";
 import RouteManagement from "./pages/RouteManagement";
 import Agents from "./pages/Agents";
+import Conversations from "./pages/Conversations";
 
 const queryClient = new QueryClient();
 
@@ -34,6 +35,7 @@ const App = () => (
             <Route path="users" element={<Users />} />
             <Route path="roles" element={<Roles />} />
             <Route path="permissions" element={<Permissions />} />
+            <Route path="conversations" element={<Conversations />} />
             <Route path="orders" element={<Orders />} />
             <Route path="routes" element={<RouteManagement />} />
             <Route path="promotions" element={<Promotions />} />
