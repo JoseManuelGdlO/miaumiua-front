@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import miauMiauLogo from "@/assets/miau-miau-logo.png";
+import miauMiauLogo from "/lovable-uploads/9f868334-2970-46f8-a783-9ab32ecc297b.png";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -25,11 +25,11 @@ const Login = () => {
         {/* Logo and branding */}
         <div className="text-center space-y-4">
           <div className="flex justify-center">
-            <div className="w-20 h-20 bg-gradient-to-br from-primary/10 to-primary/5 rounded-3xl flex items-center justify-center shadow-lg p-2">
+            <div className="w-24 h-24 rounded-3xl overflow-hidden shadow-lg">
               <img 
                 src={miauMiauLogo} 
                 alt="Miau Miau Logo" 
-                className="w-full h-full object-contain"
+                className="w-full h-full object-cover"
               />
             </div>
           </div>
