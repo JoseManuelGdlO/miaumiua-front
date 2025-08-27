@@ -4,11 +4,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { MessageCircle, Plus, Search, Filter, MoreVertical } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { MessageCircle, Plus, Search, Filter, MoreVertical, AlertTriangle, XCircle, Info } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import ErrorDetailsModal from "@/components/ErrorDetailsModal";
 
 const Conversations = () => {
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedConversation, setSelectedConversation] = useState<any>(null);
+  const [showErrorDetails, setShowErrorDetails] = useState(false);
 
   const conversations = [
     {
@@ -17,19 +22,23 @@ const Conversations = () => {
       avatar: "",
       lastMessage: "¿Cuándo llegará mi pedido?",
       timestamp: "hace 2 minutos",
-      status: "activo",
+      status: "error",
       unread: 3,
-      agent: "Bot Assistant"
+      agent: "Bot Assistant",
+      errorDetails: "Error 500: Timeout en API externa. El servicio de pagos no respondió después de 30 segundos.",
+      failureReason: "API de pagos no disponible",
+      errorCode: "PAYMENT_SERVICE_TIMEOUT"
     },
     {
       id: 2,
       customer: "Carlos López",
       avatar: "",
-      lastMessage: "Gracias por la información",
+      lastMessage: "Esto es inaceptable, quiero una solución YA!",
       timestamp: "hace 15 minutos",
-      status: "resuelto",
+      status: "escalado",
       unread: 0,
-      agent: "Ana Martínez"
+      agent: "Ana Martínez",
+      escalationReason: "Cliente insatisfecho - Requiere atención urgente"
     },
     {
       id: 3,
@@ -71,6 +80,10 @@ const Conversations = () => {
         return "bg-yellow-500";
       case "resuelto":
         return "bg-gray-500";
+      case "error":
+        return "bg-red-500";
+      case "escalado":
+        return "bg-orange-500";
       default:
         return "bg-gray-500";
     }
@@ -84,6 +97,10 @@ const Conversations = () => {
         return "secondary";
       case "resuelto":
         return "outline";
+      case "error":
+        return "destructive";
+      case "escalado":
+        return "secondary";
       default:
         return "outline";
     }
@@ -102,22 +119,22 @@ const Conversations = () => {
       color: "text-green-600"
     },
     {
-      title: "Pendientes",
-      value: conversations.filter(c => c.status === "pendiente").length,
-      icon: MessageCircle,
-      color: "text-yellow-600"
+      title: "Con Errores",
+      value: conversations.filter(c => c.status === "error").length,
+      icon: XCircle,
+      color: "text-red-600"
+    },
+    {
+      title: "Escaladas",
+      value: conversations.filter(c => c.status === "escalado").length,
+      icon: AlertTriangle,
+      color: "text-orange-600"
     },
     {
       title: "Resueltas Hoy",
       value: conversations.filter(c => c.status === "resuelto").length,
       icon: MessageCircle,
       color: "text-gray-600"
-    },
-    {
-      title: "Total Conversaciones",
-      value: conversations.length,
-      icon: MessageCircle,
-      color: "text-blue-600"
     }
   ];
 
@@ -153,6 +170,17 @@ const Conversations = () => {
           </Card>
         ))}
       </div>
+
+      {/* Error Alert */}
+      {conversations.some(c => c.status === "error" || c.status === "escalado") && (
+        <Alert className="border-destructive/20 bg-destructive/5">
+          <AlertTriangle className="h-4 w-4 text-destructive" />
+          <AlertDescription className="text-destructive">
+            Hay {conversations.filter(c => c.status === "error").length} conversaciones con errores y{" "}
+            {conversations.filter(c => c.status === "escalado").length} escaladas que requieren atención inmediata.
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Search and Filters */}
       <div className="flex flex-col sm:flex-row gap-4">
@@ -216,6 +244,21 @@ const Conversations = () => {
                       <span className="text-xs text-muted-foreground">
                         Agente: {conversation.agent}
                       </span>
+                      {(conversation.status === "error" || conversation.status === "escalado") && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-xs h-6 px-2 text-destructive hover:text-destructive"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedConversation(conversation);
+                            setShowErrorDetails(true);
+                          }}
+                        >
+                          <Info className="h-3 w-3 mr-1" />
+                          Ver detalles
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -248,6 +291,15 @@ const Conversations = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Error Details Modal */}
+      {selectedConversation && (
+        <ErrorDetailsModal
+          open={showErrorDetails}
+          onOpenChange={setShowErrorDetails}
+          conversation={selectedConversation}
+        />
+      )}
     </div>
   );
 };

@@ -18,22 +18,49 @@ import {
   X, 
   Clock,
   MapPin,
-  TrendingDown
+  TrendingDown,
+  MessageCircle,
+  XCircle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Notification {
   id: string;
-  type: 'stock' | 'order' | 'promotion' | 'route';
+  type: 'stock' | 'order' | 'promotion' | 'route' | 'error' | 'conversation';
   title: string;
   message: string;
   timestamp: string;
   priority: 'high' | 'medium' | 'low';
   read: boolean;
   actionUrl?: string;
+  errorDetails?: string;
+  conversationId?: string;
 }
 
 const mockNotifications: Notification[] = [
+  {
+    id: '0',
+    type: 'error',
+    title: 'Error en Conversación - Bot Falló',
+    message: 'El bot no pudo procesar la solicitud de María González. Requiere intervención humana.',
+    timestamp: '2024-01-15 15:15',
+    priority: 'high',
+    read: false,
+    actionUrl: '/dashboard/conversations',
+    errorDetails: 'Error 500: Timeout en API externa. El servicio de pagos no respondió después de 30 segundos. Stack trace: PaymentService.processPayment() -> ConnectionTimeout',
+    conversationId: '1'
+  },
+  {
+    id: '00',
+    type: 'conversation',
+    title: 'Cliente Insatisfecho - Conversación Escalada',
+    message: 'Carlos López expresó su molestia. La conversación necesita atención prioritaria.',
+    timestamp: '2024-01-15 14:45',
+    priority: 'high',
+    read: false,
+    actionUrl: '/dashboard/conversations',
+    conversationId: '2'
+  },
   {
     id: '1',
     type: 'stock',
@@ -132,6 +159,10 @@ const NotificationPanel = () => {
         return <Tag className="h-4 w-4" />;
       case 'route':
         return <Route className="h-4 w-4" />;
+      case 'error':
+        return <XCircle className="h-4 w-4" />;
+      case 'conversation':
+        return <MessageCircle className="h-4 w-4" />;
       default:
         return <Bell className="h-4 w-4" />;
     }
@@ -160,6 +191,10 @@ const NotificationPanel = () => {
         return 'text-success';
       case 'route':
         return 'text-accent-foreground';
+      case 'error':
+        return 'text-destructive';
+      case 'conversation':
+        return 'text-blue-600';
       default:
         return 'text-muted-foreground';
     }
