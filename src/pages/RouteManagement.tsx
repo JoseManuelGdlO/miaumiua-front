@@ -18,7 +18,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import RouteMap from "@/components/RouteMap";
-import { MapPin, Truck, Plus, Users, MoreHorizontal, Calendar, Navigation } from "lucide-react";
+import AIRouteOptimizer from "@/components/AIRouteOptimizer";
+import { MapPin, Truck, Plus, Users, MoreHorizontal, Calendar, Navigation, Sparkles } from "lucide-react";
 
 const RouteManagement = () => {
   const [selectedCity, setSelectedCity] = useState("");
@@ -224,15 +225,17 @@ const RouteManagement = () => {
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">Planeación de Rutas</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">Planeación Inteligente de Rutas</h1>
           <p className="text-muted-foreground">
-            Organiza los pedidos por rutas y asigna repartidores para optimizar las entregas
+            Organiza pedidos automáticamente con IA o manualmente por rutas y asigna repartidores
           </p>
         </div>
-        <Button onClick={createNewRoute} className="gap-2">
-          <Plus className="h-4 w-4" />
-          Nueva Ruta
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={createNewRoute} variant="outline" className="gap-2">
+            <Plus className="h-4 w-4" />
+            Nueva Ruta Manual
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -276,6 +279,16 @@ const RouteManagement = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* AI Optimizer */}
+      {selectedCity && filteredOrders.length > 0 && (
+        <AIRouteOptimizer
+          orders={filteredOrders}
+          city={selectedCity}
+          date={selectedDate}
+          onRoutesGenerated={(newRoutes) => setRoutes(newRoutes)}
+        />
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Pedidos Sin Asignar */}
