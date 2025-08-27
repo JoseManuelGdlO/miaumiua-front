@@ -84,8 +84,8 @@ export function AppSidebar() {
           </div>
           {!isCollapsed && (
             <div>
-              <h2 className="text-lg font-bold text-sidebar-foreground">Intelekia</h2>
-              <p className="text-xs text-sidebar-foreground/70">Admin Panel</p>
+              <h2 className="text-lg font-bold text-sidebar-foreground">Miau Miau</h2>
+              <p className="text-xs text-sidebar-foreground/70">Bot Manager</p>
             </div>
           )}
         </div>

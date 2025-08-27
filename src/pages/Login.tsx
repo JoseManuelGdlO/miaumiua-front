@@ -31,10 +31,10 @@ const Login = () => {
           </div>
           <div className="space-y-2">
             <h1 className="text-3xl font-bold tracking-tight text-foreground">
-              Intelekia
+              Miau Miau
             </h1>
             <p className="text-sm text-muted-foreground">
-              Software Inteligente, Decisiones Brillantes
+              Arena aglutinante para gato
             </p>
           </div>
         </div>
@@ -91,7 +91,7 @@ const Login = () => {
 
         {/* Footer */}
         <p className="text-center text-xs text-muted-foreground">
-          © 2024 Intelekia Consultoría. Todos los derechos reservados.
+          © 2024 Miau Miau. Todos los derechos reservados.
         </p>
       </div>
     </div>

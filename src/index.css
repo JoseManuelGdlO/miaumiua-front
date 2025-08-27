@@ -15,11 +15,11 @@
     --popover: 0 0% 100%;
     --popover-foreground: 200 20% 12%;
 
-    /* Primary - Intelekia Green/Teal */
-    --primary: 166 58% 42%;
+    /* Primary - Miau Miau Pink/Magenta */
+    --primary: 330 81% 60%;
     --primary-foreground: 0 0% 100%;
-    --primary-light: 166 58% 65%;
-    --primary-dark: 166 58% 28%;
+    --primary-light: 330 81% 75%;
+    --primary-dark: 330 81% 45%;
 
     /* Secondary - Complementary colors */
     --secondary: 200 15% 95%;
@@ -28,8 +28,8 @@
     --muted: 200 15% 95%;
     --muted-foreground: 200 10% 45%;
 
-    --accent: 166 25% 92%;
-    --accent-foreground: 166 58% 35%;
+    --accent: 330 25% 92%;
+    --accent-foreground: 330 58% 35%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
@@ -42,14 +42,14 @@
 
     --border: 200 20% 88%;
     --input: 200 20% 88%;
-    --ring: 166 58% 42%;
+    --ring: 330 81% 60%;
 
     --radius: 0.75rem;
 
     /* Gradients */
     --gradient-primary: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary-light)));
-    --gradient-card: linear-gradient(145deg, hsl(0 0% 100%), hsl(200 15% 98%));
-    --gradient-hero: linear-gradient(135deg, hsl(166 58% 42%) 0%, hsl(166 45% 55%) 100%);
+    --gradient-card: linear-gradient(145deg, hsl(0 0% 100%), hsl(330 15% 98%));
+    --gradient-hero: linear-gradient(135deg, hsl(330 81% 60%) 0%, hsl(330 65% 70%) 100%);
 
     /* Shadows */
     --shadow-card: 0 4px 6px -1px hsl(var(--primary) / 0.1), 0 2px 4px -1px hsl(var(--primary) / 0.06);
@@ -61,35 +61,35 @@
     /* Sidebar colors aligned with design system */
     --sidebar-background: 0 0% 99%;
     --sidebar-foreground: 200 20% 15%;
-    --sidebar-primary: 166 58% 42%;
+    --sidebar-primary: 330 81% 60%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 166 25% 95%;
-    --sidebar-accent-foreground: 166 58% 35%;
+    --sidebar-accent: 330 25% 95%;
+    --sidebar-accent-foreground: 330 58% 35%;
     --sidebar-border: 200 20% 88%;
-    --sidebar-ring: 166 58% 42%;
+    --sidebar-ring: 330 81% 60%;
   }
 
   .dark {
-    --background: 166 20% 8%;
-    --foreground: 166 15% 95%;
+    --background: 330 20% 8%;
+    --foreground: 330 15% 95%;
 
-    --card: 166 20% 10%;
-    --card-foreground: 166 15% 95%;
+    --card: 330 20% 10%;
+    --card-foreground: 330 15% 95%;
 
-    --popover: 166 20% 10%;
-    --popover-foreground: 166 15% 95%;
+    --popover: 330 20% 10%;
+    --popover-foreground: 330 15% 95%;
 
-    --primary: 166 58% 65%;
-    --primary-foreground: 166 20% 8%;
+    --primary: 330 81% 75%;
+    --primary-foreground: 330 20% 8%;
 
-    --secondary: 166 15% 15%;
-    --secondary-foreground: 166 15% 85%;
+    --secondary: 330 15% 15%;
+    --secondary-foreground: 330 15% 85%;
 
-    --muted: 166 15% 15%;
-    --muted-foreground: 166 10% 65%;
+    --muted: 330 15% 15%;
+    --muted-foreground: 330 10% 65%;
 
-    --accent: 166 25% 18%;
-    --accent-foreground: 166 58% 75%;
+    --accent: 330 25% 18%;
+    --accent-foreground: 330 58% 75%;
 
     --destructive: 0 84% 65%;
     --destructive-foreground: 0 0% 100%;
@@ -100,19 +100,19 @@
     --warning: 38 92% 60%;
     --warning-foreground: 0 0% 100%;
 
-    --border: 166 15% 20%;
-    --input: 166 15% 20%;
-    --ring: 166 58% 65%;
+    --border: 330 15% 20%;
+    --input: 330 15% 20%;
+    --ring: 330 81% 75%;
 
     /* Dark mode sidebar */
-    --sidebar-background: 166 20% 8%;
-    --sidebar-foreground: 166 15% 85%;
-    --sidebar-primary: 166 58% 55%;
-    --sidebar-primary-foreground: 166 20% 8%;
-    --sidebar-accent: 166 15% 15%;
-    --sidebar-accent-foreground: 166 58% 75%;
-    --sidebar-border: 166 15% 20%;
-    --sidebar-ring: 166 58% 55%;
+    --sidebar-background: 330 20% 8%;
+    --sidebar-foreground: 330 15% 85%;
+    --sidebar-primary: 330 81% 65%;
+    --sidebar-primary-foreground: 330 20% 8%;
+    --sidebar-accent: 330 15% 15%;
+    --sidebar-accent-foreground: 330 58% 75%;
+    --sidebar-border: 330 15% 20%;
+    --sidebar-ring: 330 81% 65%;
   }
 }
 
