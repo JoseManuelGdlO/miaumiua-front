@@ -39,6 +39,18 @@ interface Notification {
 
 const mockNotifications: Notification[] = [
   {
+    id: 'bot-error-1',
+    type: 'error',
+    title: '🤖 Bot Falló - Sistema Caído',
+    message: 'El bot dejó de responder en múltiples conversaciones. Error crítico detectado.',
+    timestamp: '2024-01-15 16:30',
+    priority: 'high',
+    read: false,
+    actionUrl: '/dashboard/conversations',
+    errorDetails: 'Error crítico en el sistema del bot. El servicio de procesamiento de lenguaje natural falló. Code: BOT_CRITICAL_ERROR. Afecta a 15 conversaciones activas.',
+    conversationId: 'multiple'
+  },
+  {
     id: '0',
     type: 'error',
     title: 'Error en Conversación - Bot Falló',
