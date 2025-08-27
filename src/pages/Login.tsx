@@ -20,7 +20,7 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-accent/10 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-accent/10 p-4 relative">
       <div className="w-full max-w-md space-y-8">
         {/* Logo and branding */}
         <div className="text-center space-y-4">
@@ -97,6 +97,26 @@ const Login = () => {
         <p className="text-center text-xs text-muted-foreground">
           © 2024 Miau Miau. Todos los derechos reservados.
         </p>
+      </div>
+
+      {/* Intelekia Logo - Bottom Left */}
+      <div className="fixed bottom-4 left-4 z-10">
+        <div className="bg-white/90 backdrop-blur-sm rounded-lg p-3 shadow-lg border max-w-xs">
+          <div className="flex items-center gap-3">
+            <img 
+              src="/lovable-uploads/e7d6a686-c959-4e3a-9e6e-f7de95f74e9e.png" 
+              alt="Powered by Intelekia" 
+              className="w-12 h-auto object-contain opacity-80 hover:opacity-100 transition-opacity flex-shrink-0"
+            />
+            <div className="text-xs text-muted-foreground">
+              <div className="font-medium">Powered by Intelekia</div>
+              <div className="text-xs opacity-75">
+                Propiedad intelectual de<br />
+                <span className="font-semibold">Intelekia Consultoría</span>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
