@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
-  Brain,
   Users,
   Bot,
   Tag,
@@ -28,6 +27,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import miauMiauLogo from "@/assets/miau-miau-logo.png";
 
 const menuItems = [
   { title: "Dashboard", url: "/dashboard", icon: Home },
@@ -79,8 +79,12 @@ export function AppSidebar() {
       {/* Header */}
       <div className="p-4 border-b border-sidebar-border">
         <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 bg-gradient-to-br from-primary to-primary-light rounded-lg flex items-center justify-center">
-            <Brain className="h-5 w-5 text-primary-foreground" />
+          <div className="w-10 h-10 bg-gradient-to-br from-primary/10 to-primary/5 rounded-xl flex items-center justify-center p-1">
+            <img 
+              src={miauMiauLogo} 
+              alt="Miau Miau Logo" 
+              className="w-full h-full object-contain"
+            />
           </div>
           {!isCollapsed && (
             <div>

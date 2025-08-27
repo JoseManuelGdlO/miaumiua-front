@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Brain } from "lucide-react";
+import miauMiauLogo from "@/assets/miau-miau-logo.png";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -25,8 +25,12 @@ const Login = () => {
         {/* Logo and branding */}
         <div className="text-center space-y-4">
           <div className="flex justify-center">
-            <div className="w-16 h-16 bg-gradient-to-br from-primary to-primary-light rounded-2xl flex items-center justify-center shadow-lg">
-              <Brain className="h-8 w-8 text-primary-foreground" />
+            <div className="w-20 h-20 bg-gradient-to-br from-primary/10 to-primary/5 rounded-3xl flex items-center justify-center shadow-lg p-2">
+              <img 
+                src={miauMiauLogo} 
+                alt="Miau Miau Logo" 
+                className="w-full h-full object-contain"
+              />
             </div>
           </div>
           <div className="space-y-2">
@@ -56,7 +60,7 @@ const Login = () => {
                 <Input
                   id="email"
                   type="email"
-                  placeholder="admin@intelekia.com"
+                  placeholder="admin@miaumiau.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
