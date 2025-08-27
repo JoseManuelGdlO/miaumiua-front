@@ -11,6 +11,10 @@ import DashboardLayout from "./pages/DashboardLayout";
 import Users from "./pages/Users";
 import Roles from "./pages/Roles";
 import Permissions from "./pages/Permissions";
+import Promotions from "./pages/Promotions";
+import Inventory from "./pages/Inventory";
+import Cities from "./pages/Cities";
+import Customers from "./pages/Customers";
 
 const queryClient = new QueryClient();
 
@@ -27,11 +31,11 @@ const App = () => (
             <Route path="users" element={<Users />} />
             <Route path="roles" element={<Roles />} />
             <Route path="permissions" element={<Permissions />} />
+            <Route path="promotions" element={<Promotions />} />
+            <Route path="inventory" element={<Inventory />} />
+            <Route path="cities" element={<Cities />} />
+            <Route path="customers" element={<Customers />} />
             <Route path="agents" element={<div className="p-6"><h1 className="text-2xl font-bold">Contexto de Agentes</h1><p className="text-muted-foreground">Configuración de agentes de IA</p></div>} />
-            <Route path="promotions" element={<div className="p-6"><h1 className="text-2xl font-bold">Promociones</h1><p className="text-muted-foreground">Gestión de promociones y descuentos</p></div>} />
-            <Route path="inventory" element={<div className="p-6"><h1 className="text-2xl font-bold">Inventario</h1><p className="text-muted-foreground">Control de stock por ciudad</p></div>} />
-            <Route path="cities" element={<div className="p-6"><h1 className="text-2xl font-bold">Ciudades</h1><p className="text-muted-foreground">Gestión de ciudades disponibles</p></div>} />
-            <Route path="customers" element={<div className="p-6"><h1 className="text-2xl font-bold">Clientes</h1><p className="text-muted-foreground">Base de datos de clientes</p></div>} />
             <Route path="settings" element={<div className="p-6"><h1 className="text-2xl font-bold">Configuración</h1><p className="text-muted-foreground">Configuración general del sistema</p></div>} />
           </Route>
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

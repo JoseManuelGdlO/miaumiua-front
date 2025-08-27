@@ -12,6 +12,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -21,6 +29,8 @@ import { Search, Plus, MoreHorizontal, Edit, Trash2, UserPlus } from "lucide-rea
 
 const Users = () => {
   const [searchTerm, setSearchTerm] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 8;
   
   const users = [
     {
@@ -76,7 +86,17 @@ const Users = () => {
       status: "Activo",
       lastLogin: "2024-01-14 22:15",
       city: "Bogotá"
-    }
+    },
+    // Agregar más usuarios para paginación
+    ...Array.from({ length: 15 }, (_, i) => ({
+      id: 7 + i,
+      name: `Usuario ${7 + i}`,
+      email: `usuario${7 + i}@miaumiau.com`,
+      role: ["Agente Chat", "Inventario", "Supervisor Ventas"][Math.floor(Math.random() * 3)],
+      status: Math.random() > 0.2 ? "Activo" : "Inactivo",
+      lastLogin: "2024-01-15 09:00",
+      city: ["Bogotá", "Medellín", "Cali", "Barranquilla"][Math.floor(Math.random() * 4)]
+    }))
   ];
 
   const getStatusBadge = (status: string) => {
@@ -103,6 +123,14 @@ const Users = () => {
     user.role.toLowerCase().includes(searchTerm.toLowerCase()) ||
     user.city.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedUsers = filteredUsers.slice(startIndex, startIndex + itemsPerPage);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
@@ -154,7 +182,7 @@ const Users = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredUsers.map((user) => (
+                {paginatedUsers.map((user) => (
                   <TableRow key={user.id}>
                     <TableCell>
                       <div className="space-y-1">
@@ -201,16 +229,47 @@ const Users = () => {
             </Table>
           </div>
 
-          {/* Stats */}
-          <div className="flex items-center justify-between mt-6 text-sm text-muted-foreground">
-            <div>
-              Mostrando {filteredUsers.length} de {users.length} usuarios
+          {/* Stats and Pagination */}
+          <div className="flex items-center justify-between mt-6">
+            <div className="text-sm text-muted-foreground">
+              Mostrando {startIndex + 1} - {Math.min(startIndex + itemsPerPage, filteredUsers.length)} de {filteredUsers.length} usuarios
             </div>
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-4 text-sm text-muted-foreground">
               <span>Activos: {users.filter(u => u.status === "Activo").length}</span>
               <span>Inactivos: {users.filter(u => u.status === "Inactivo").length}</span>
             </div>
           </div>
+
+          {/* Pagination */}
+          <Pagination className="mt-4">
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious 
+                  onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+                  className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                />
+              </PaginationItem>
+              
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                <PaginationItem key={page}>
+                  <PaginationLink
+                    onClick={() => handlePageChange(page)}
+                    isActive={currentPage === page}
+                    className="cursor-pointer"
+                  >
+                    {page}
+                  </PaginationLink>
+                </PaginationItem>
+              ))}
+              
+              <PaginationItem>
+                <PaginationNext 
+                  onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+                  className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
         </CardContent>
       </Card>
     </div>
