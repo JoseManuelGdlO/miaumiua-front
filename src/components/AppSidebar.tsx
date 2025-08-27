@@ -29,7 +29,6 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import miauMiauLogo from "/lovable-uploads/9f868334-2970-46f8-a783-9ab32ecc297b.png";
 
 const menuItems = [
   { title: "Dashboard", url: "/dashboard", icon: Home },
@@ -83,17 +82,17 @@ export function AppSidebar() {
       {/* Header */}
       <div className="p-4 border-b border-sidebar-border">
         <div className="flex items-center space-x-3">
-          <div className="w-12 h-12 rounded-xl overflow-hidden">
+          <div className="w-12 h-12 rounded-xl overflow-hidden bg-white p-1">
             <img 
-              src={miauMiauLogo} 
-              alt="Miau Miau Logo" 
-              className="w-full h-full object-cover"
+              src="/lovable-uploads/e7d6a686-c959-4e3a-9e6e-f7de95f74e9e.png" 
+              alt="Intelekia Logo" 
+              className="w-full h-full object-contain"
             />
           </div>
           {!isCollapsed && (
             <div>
-              <h2 className="text-lg font-bold text-sidebar-foreground">Miau Miau</h2>
-              <p className="text-xs text-sidebar-foreground/70">Bot Manager</p>
+              <h2 className="text-lg font-bold text-sidebar-foreground">Intelekia</h2>
+              <p className="text-xs text-sidebar-foreground/70">Consultoría IA</p>
             </div>
           )}
         </div>
