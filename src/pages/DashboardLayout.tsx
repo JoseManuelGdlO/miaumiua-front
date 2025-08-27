@@ -11,6 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import NotificationPanel from "@/components/NotificationPanel";
 
 const DashboardLayout = () => {
   const handleLogout = () => {
@@ -35,10 +36,7 @@ const DashboardLayout = () => {
             
             <div className="flex items-center gap-3">
               {/* Notifications */}
-              <Button variant="ghost" size="sm" className="relative">
-                <Bell className="h-4 w-4" />
-                <span className="absolute -top-1 -right-1 h-3 w-3 bg-primary rounded-full text-xs"></span>
-              </Button>
+              <NotificationPanel />
               
               {/* User Menu */}
               <DropdownMenu>
