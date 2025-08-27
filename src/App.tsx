@@ -8,6 +8,9 @@ import NotFound from "./pages/NotFound";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import DashboardLayout from "./pages/DashboardLayout";
+import Users from "./pages/Users";
+import Roles from "./pages/Roles";
+import Permissions from "./pages/Permissions";
 
 const queryClient = new QueryClient();
 
@@ -21,9 +24,9 @@ const App = () => (
           <Route path="/" element={<Login />} />
           <Route path="/dashboard" element={<DashboardLayout />}>
             <Route index element={<Dashboard />} />
-            <Route path="users" element={<div className="p-6"><h1 className="text-2xl font-bold">Usuarios</h1><p className="text-muted-foreground">Gestión de usuarios del sistema</p></div>} />
-            <Route path="roles" element={<div className="p-6"><h1 className="text-2xl font-bold">Roles</h1><p className="text-muted-foreground">Configuración de roles</p></div>} />
-            <Route path="permissions" element={<div className="p-6"><h1 className="text-2xl font-bold">Permisos</h1><p className="text-muted-foreground">Gestión de permisos</p></div>} />
+            <Route path="users" element={<Users />} />
+            <Route path="roles" element={<Roles />} />
+            <Route path="permissions" element={<Permissions />} />
             <Route path="agents" element={<div className="p-6"><h1 className="text-2xl font-bold">Contexto de Agentes</h1><p className="text-muted-foreground">Configuración de agentes de IA</p></div>} />
             <Route path="promotions" element={<div className="p-6"><h1 className="text-2xl font-bold">Promociones</h1><p className="text-muted-foreground">Gestión de promociones y descuentos</p></div>} />
             <Route path="inventory" element={<div className="p-6"><h1 className="text-2xl font-bold">Inventario</h1><p className="text-muted-foreground">Control de stock por ciudad</p></div>} />
