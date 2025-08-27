@@ -17,6 +17,7 @@ import Cities from "./pages/Cities";
 import Customers from "./pages/Customers";
 import Orders from "./pages/Orders";
 import RouteManagement from "./pages/RouteManagement";
+import Agents from "./pages/Agents";
 
 const queryClient = new QueryClient();
 
@@ -39,7 +40,7 @@ const App = () => (
             <Route path="inventory" element={<Inventory />} />
             <Route path="cities" element={<Cities />} />
             <Route path="customers" element={<Customers />} />
-            <Route path="agents" element={<div className="p-6"><h1 className="text-2xl font-bold">Contexto de Agentes</h1><p className="text-muted-foreground">Configuración de agentes de IA</p></div>} />
+            <Route path="agents" element={<Agents />} />
             <Route path="settings" element={<div className="p-6"><h1 className="text-2xl font-bold">Configuración</h1><p className="text-muted-foreground">Configuración general del sistema</p></div>} />
           </Route>
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
