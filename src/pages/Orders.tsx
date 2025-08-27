@@ -27,11 +27,14 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Search, Plus, MoreHorizontal, Edit, Eye, Truck, MapPin, Package2 } from "lucide-react";
 import CreateOrderModal from "@/components/modals/CreateOrderModal";
+import ReScheduleOrderModal from "@/components/modals/ReScheduleOrderModal";
 
 const Orders = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isReScheduleModalOpen, setIsReScheduleModalOpen] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const itemsPerPage = 12;
   
   const orders = [
@@ -204,6 +207,24 @@ const Orders = () => {
     setCurrentPage(page);
   };
 
+  const handleReSchedule = (order: any) => {
+    const orderForReSchedule = {
+      id: order.id,
+      orderNumber: order.orderNumber,
+      customer: order.customer,
+      phone: order.phone,
+      address: order.address,
+      city: order.city,
+      zone: order.zone,
+      products: order.products,
+      total: order.total,
+      originalDate: order.deliveryDate,
+      cancelReason: "Pedido cancelado previamente"
+    };
+    setSelectedOrder(orderForReSchedule);
+    setIsReScheduleModalOpen(true);
+  };
+
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
       <div className="flex items-center justify-between">
@@ -342,6 +363,12 @@ const Orders = () => {
                             <MapPin className="mr-2 h-4 w-4" />
                             Ver en Mapa
                           </DropdownMenuItem>
+                          {order.status === "Cancelado" && (
+                            <DropdownMenuItem onClick={() => handleReSchedule(order)}>
+                              <Package2 className="mr-2 h-4 w-4" />
+                              Reagendar Pedido
+                            </DropdownMenuItem>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
@@ -406,6 +433,12 @@ const Orders = () => {
       <CreateOrderModal 
         open={isCreateModalOpen} 
         onOpenChange={setIsCreateModalOpen} 
+      />
+
+      <ReScheduleOrderModal
+        open={isReScheduleModalOpen}
+        onOpenChange={setIsReScheduleModalOpen}
+        order={selectedOrder}
       />
     </div>
   );
