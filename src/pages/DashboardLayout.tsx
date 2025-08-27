@@ -68,8 +68,19 @@ const DashboardLayout = () => {
           </header>
           
           {/* Main Content */}
-          <main className="flex-1 overflow-auto">
+          <main className="flex-1 overflow-auto relative">
             <Outlet />
+            
+            {/* Intelekia Logo - Bottom Left */}
+            <div className="fixed bottom-4 left-4 z-10">
+              <div className="bg-white/90 backdrop-blur-sm rounded-lg p-2 shadow-lg border">
+                <img 
+                  src="/lovable-uploads/e7d6a686-c959-4e3a-9e6e-f7de95f74e9e.png" 
+                  alt="Powered by Intelekia" 
+                  className="w-20 h-auto object-contain opacity-80 hover:opacity-100 transition-opacity"
+                />
+              </div>
+            </div>
           </main>
         </div>
       </div>
