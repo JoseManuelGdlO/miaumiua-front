@@ -43,13 +43,13 @@ const CreateCityModal = ({ open, onOpenChange }: CreateCityModalProps) => {
   });
 
   const departments = [
-    "Amazonas", "Antioquia", "Arauca", "Atlántico", "Bolívar",
-    "Boyacá", "Caldas", "Caquetá", "Casanare", "Cauca",
-    "Cesar", "Chocó", "Córdoba", "Cundinamarca", "Guainía",
-    "Guaviare", "Huila", "La Guajira", "Magdalena", "Meta",
-    "Nariño", "Norte de Santander", "Putumayo", "Quindío",
-    "Risaralda", "San Andrés y Providencia", "Santander",
-    "Sucre", "Tolima", "Valle del Cauca", "Vaupés", "Vichada"
+    "Aguascalientes", "Baja California", "Baja California Sur", "Campeche", "Chiapas",
+    "Chihuahua", "CDMX", "Coahuila", "Colima", "Durango",
+    "Estado de México", "Guanajuato", "Guerrero", "Hidalgo", "Jalisco",
+    "Michoacán", "Morelos", "Nayarit", "Nuevo León", "Oaxaca",
+    "Puebla", "Querétaro", "Quintana Roo", "San Luis Potosí",
+    "Sinaloa", "Sonora", "Tabasco", "Tamaulipas", "Tlaxcala",
+    "Veracruz", "Yucatán", "Zacatecas"
   ];
 
   const statuses = [

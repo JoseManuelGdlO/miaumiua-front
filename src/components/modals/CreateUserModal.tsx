@@ -45,12 +45,12 @@ const CreateUserModal = ({ open, onOpenChange }: CreateUserModalProps) => {
   ];
 
   const cities = [
-    "Bogotá",
-    "Medellín", 
-    "Cali",
-    "Barranquilla",
-    "Cartagena",
-    "Bucaramanga"
+    "Ciudad de México",
+    "Guadalajara", 
+    "Monterrey",
+    "Puebla",
+    "Tijuana",
+    "León"
   ];
 
   const handleSubmit = (e: React.FormEvent) => {

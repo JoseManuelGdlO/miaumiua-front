@@ -37,7 +37,7 @@ const RouteMap: React.FC<RouteMapProps> = ({ orders, routes, onOrderRouteChange 
       map.current = new mapboxgl.Map({
         container: mapContainer.current,
         style: 'mapbox://styles/mapbox/streets-v12',
-        center: [-74.0721, 4.7110], // Bogotá center
+        center: [-99.1332, 19.4326], // Ciudad de México center
         zoom: 11,
       });
 

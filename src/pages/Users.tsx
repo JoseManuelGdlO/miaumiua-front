@@ -42,7 +42,7 @@ const Users = () => {
       role: "Administrador",
       status: "Activo",
       lastLogin: "2024-01-15 10:30",
-      city: "Bogotá"
+      city: "Ciudad de México"
     },
     {
       id: 2,
@@ -51,7 +51,7 @@ const Users = () => {
       role: "Supervisor Ventas",
       status: "Activo",
       lastLogin: "2024-01-15 08:45",
-      city: "Medellín"
+      city: "Guadalajara"
     },
     {
       id: 3,
@@ -60,7 +60,7 @@ const Users = () => {
       role: "Agente Chat",
       status: "Activo",
       lastLogin: "2024-01-15 09:15",
-      city: "Cali"
+      city: "Monterrey"
     },
     {
       id: 4,
@@ -69,7 +69,7 @@ const Users = () => {
       role: "Inventario",
       status: "Inactivo",
       lastLogin: "2024-01-12 16:20",
-      city: "Barranquilla"
+      city: "Puebla"
     },
     {
       id: 5,
@@ -78,7 +78,7 @@ const Users = () => {
       role: "Agente Chat",
       status: "Activo",
       lastLogin: "2024-01-15 07:30",
-      city: "Cartagena"
+      city: "Tijuana"
     },
     {
       id: 6,
@@ -87,7 +87,7 @@ const Users = () => {
       role: "Supervisor Técnico",
       status: "Activo",
       lastLogin: "2024-01-14 22:15",
-      city: "Bogotá"
+      city: "Ciudad de México"
     },
     // Agregar más usuarios para paginación
     ...Array.from({ length: 15 }, (_, i) => ({
@@ -97,7 +97,7 @@ const Users = () => {
       role: ["Agente Chat", "Inventario", "Supervisor Ventas"][Math.floor(Math.random() * 3)],
       status: Math.random() > 0.2 ? "Activo" : "Inactivo",
       lastLogin: "2024-01-15 09:00",
-      city: ["Bogotá", "Medellín", "Cali", "Barranquilla"][Math.floor(Math.random() * 4)]
+      city: ["Ciudad de México", "Guadalajara", "Monterrey", "Puebla"][Math.floor(Math.random() * 4)]
     }))
   ];
 

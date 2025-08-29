@@ -26,10 +26,10 @@ const RouteManagement = () => {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [routes, setRoutes] = useState<{ [key: string]: any[] }>({});
   const [drivers, setDrivers] = useState([
-    { id: 1, name: "Juan Pérez", vehicle: "Moto 001", phone: "+57 300 123 4567" },
-    { id: 2, name: "Ana López", vehicle: "Camión 002", phone: "+57 301 234 5678" },
-    { id: 3, name: "Carlos Ruiz", vehicle: "Moto 003", phone: "+57 302 345 6789" },
-    { id: 4, name: "María García", vehicle: "Camión 004", phone: "+57 303 456 7890" },
+    { id: 1, name: "Juan Pérez", vehicle: "Moto 001", phone: "+52 55 1234 5678" },
+    { id: 2, name: "Ana López", vehicle: "Camión 002", phone: "+52 33 2345 6789" },
+    { id: 3, name: "Carlos Ruiz", vehicle: "Moto 003", phone: "+52 81 3456 7890" },
+    { id: 4, name: "María García", vehicle: "Camión 004", phone: "+52 22 4567 8901" },
   ]);
 
   // Datos de ejemplo de pedidos del día
@@ -38,13 +38,13 @@ const RouteManagement = () => {
       id: 1,
       orderNumber: "MM-2024-0001",
       customer: "María González",
-      phone: "+57 320 123 4567",
+      phone: "+52 55 1234 5678",
       address: "Calle 127 #15-45, Apto 502",
-      city: "Bogotá",
-      zone: "Zona Norte",
+      city: "Ciudad de México",
+      zone: "Polanco",
       products: "2x Arena Premium 10kg",
       total: 90000,
-      coordinates: { lat: 4.7110, lng: -74.0721 },
+      coordinates: { lat: 19.4326, lng: -99.1332 },
       route: null,
       driver: null
     },
@@ -54,11 +54,11 @@ const RouteManagement = () => {
       customer: "Roberto Silva", 
       phone: "+57 312 567 8901",
       address: "Carrera 15 #85-20, Casa 12",
-      city: "Bogotá",
-      zone: "Zona Norte", 
+      city: "Ciudad de México",
+      zone: "Roma Norte", 
       products: "1x Arena Antibacterial 5kg",
       total: 28000,
-      coordinates: { lat: 4.7200, lng: -74.0680 },
+      coordinates: { lat: 19.4200, lng: -99.1600 },
       route: null,
       driver: null
     },
@@ -68,11 +68,11 @@ const RouteManagement = () => {
       customer: "Carmen Vega",
       phone: "+57 315 678 9012", 
       address: "Calle 100 #20-30, Torre B",
-      city: "Bogotá",
-      zone: "Zona Norte",
+      city: "Ciudad de México",
+      zone: "Condesa",
       products: "3x Arena Perfumada 15kg",
       total: 156000,
-      coordinates: { lat: 4.6850, lng: -74.0550 },
+      coordinates: { lat: 19.4100, lng: -99.1700 },
       route: null,
       driver: null
     },
@@ -82,11 +82,11 @@ const RouteManagement = () => {
       customer: "Diego Morales",
       phone: "+57 318 789 0123",
       address: "Avenida 68 #45-67, Apto 801",
-      city: "Bogotá",
-      zone: "Zona Oeste",
+      city: "Ciudad de México",
+      zone: "Santa Fe",
       products: "2x Arena Ultra 12kg", 
       total: 116000,
-      coordinates: { lat: 4.6500, lng: -74.0900 },
+      coordinates: { lat: 19.3600, lng: -99.2600 },
       route: null,
       driver: null
     },
@@ -96,11 +96,11 @@ const RouteManagement = () => {
       customer: "Elena Ruiz",
       phone: "+57 320 890 1234",
       address: "Calle 53 #10-15, Local 3", 
-      city: "Bogotá",
-      zone: "Zona Centro",
+      city: "Ciudad de México",
+      zone: "Centro",
       products: "1x Arena Básica 8kg",
       total: 18000,
-      coordinates: { lat: 4.6200, lng: -74.0700 },
+      coordinates: { lat: 19.4270, lng: -99.1276 },
       route: null,
       driver: null
     },
@@ -110,26 +110,26 @@ const RouteManagement = () => {
       customer: "Fernando Castro",
       phone: "+57 301 901 2345",
       address: "Carrera 7 #75-40, Oficina 501", 
-      city: "Bogotá", 
-      zone: "Zona Centro",
+      city: "Ciudad de México", 
+      zone: "Del Valle",
       products: "4x Arena Premium 10kg",
       total: 180000,
-      coordinates: { lat: 4.6400, lng: -74.0600 },
+      coordinates: { lat: 19.3800, lng: -99.1500 },
       route: null,
       driver: null
     },
-    // Medellín
+    // Guadalajara
     {
       id: 7,
       orderNumber: "MM-2024-0011",
       customer: "Carlos Ramírez",
       phone: "+57 315 987 6543",
       address: "Carrera 70 #45-12, Casa 15",
-      city: "Medellín", 
-      zone: "El Poblado",
+      city: "Guadalajara", 
+      zone: "Providencia",
       products: "3x Arena Antibacterial 5kg",
       total: 84000,
-      coordinates: { lat: 6.2442, lng: -75.5812 },
+      coordinates: { lat: 20.6597, lng: -103.3496 },
       route: null,
       driver: null
     },
@@ -139,17 +139,17 @@ const RouteManagement = () => {
       customer: "Sofía Herrera",
       phone: "+57 304 123 4567",
       address: "Calle 10 #40-25, Torre 2",
-      city: "Medellín",
-      zone: "Laureles", 
+      city: "Guadalajara",
+      zone: "Chapultepec", 
       products: "2x Arena Perfumada 15kg",
       total: 104000,
-      coordinates: { lat: 6.2500, lng: -75.5900 },
+      coordinates: { lat: 20.6700, lng: -103.3600 },
       route: null,
       driver: null
     }
   ];
 
-  const cities = ["Bogotá", "Medellín", "Cali", "Barranquilla", "Cartagena"];
+  const cities = ["Ciudad de México", "Guadalajara", "Monterrey", "Puebla", "Tijuana"];
 
   const filteredOrders = useMemo(() => {
     return allOrders.filter(order => 

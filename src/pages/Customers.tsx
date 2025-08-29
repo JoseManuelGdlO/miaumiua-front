@@ -40,7 +40,7 @@ const Customers = () => {
       name: "María González",
       email: "maria.gonzalez@gmail.com",
       phone: "+57 320 123 4567",
-      city: "Bogotá",
+      city: "Ciudad de México",
       registrationDate: "2023-11-15",
       lastOrder: "2024-01-12",
       totalOrders: 15,
@@ -56,7 +56,7 @@ const Customers = () => {
       name: "Carlos Ramírez", 
       email: "carlos.ramirez@hotmail.com",
       phone: "+57 315 987 6543",
-      city: "Medellín",
+      city: "Guadalajara",
       registrationDate: "2024-01-08",
       lastOrder: "2024-01-14",
       totalOrders: 3,
@@ -72,7 +72,7 @@ const Customers = () => {
       name: "Laura Martínez",
       email: "laura.martinez@yahoo.com",
       phone: "+57 301 456 7890",
-      city: "Cali",
+      city: "Monterrey",
       registrationDate: "2023-08-22",
       lastOrder: "2024-01-10",
       totalOrders: 28,
@@ -88,7 +88,7 @@ const Customers = () => {
       name: "Andrés Torres",
       email: "andres.torres@gmail.com", 
       phone: "+57 304 234 5678",
-      city: "Barranquilla",
+      city: "Puebla",
       registrationDate: "2023-12-03",
       lastOrder: "2023-12-28",
       totalOrders: 8,
@@ -104,7 +104,7 @@ const Customers = () => {
       name: "Patricia Herrera",
       email: "patricia.herrera@outlook.com",
       phone: "+57 318 345 6789",
-      city: "Cartagena",
+      city: "Tijuana",
       registrationDate: "2024-01-05",
       lastOrder: "2024-01-13",
       totalOrders: 5,
@@ -120,7 +120,7 @@ const Customers = () => {
       name: "Roberto Silva",
       email: "roberto.silva@gmail.com",
       phone: "+57 312 567 8901",
-      city: "Bucaramanga",
+      city: "León",
       registrationDate: "2023-09-18",
       lastOrder: "2024-01-11",
       totalOrders: 22,
@@ -135,7 +135,7 @@ const Customers = () => {
     ...Array.from({ length: 50 }, (_, i) => {
       const names = ['Ana', 'Luis', 'Carmen', 'Diego', 'Elena', 'Fernando', 'Gabriela', 'Héctor'];
       const lastNames = ['Pérez', 'López', 'García', 'Rodríguez', 'Martín', 'Hernández', 'Ruiz', 'Vargas'];
-      const cities = ['Bogotá', 'Medellín', 'Cali', 'Barranquilla', 'Cartagena', 'Bucaramanga', 'Pereira'];
+      const cities = ['Ciudad de México', 'Guadalajara', 'Monterrey', 'Puebla', 'Tijuana', 'León', 'Mérida'];
       const channels = ['WhatsApp', 'Instagram', 'Facebook'];
       const products = ['Arena Premium 10kg', 'Arena Antibacterial 5kg', 'Arena Perfumada 15kg', 'Arena Básica 8kg'];
       const catNames = ['Misu', 'Felix', 'Salem', 'Coco', 'Milo', 'Nina', 'Oreo', 'Zara'];

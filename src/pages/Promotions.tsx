@@ -47,7 +47,7 @@ const Promotions = () => {
       used: 245,
       limit: 1000,
       status: "Activa",
-      cities: ["Bogotá", "Medellín", "Cali"]
+      cities: ["Ciudad de México", "Guadalajara", "Monterrey"]
     },
     {
       id: 2,
@@ -60,7 +60,7 @@ const Promotions = () => {
       used: 89,
       limit: 500,
       status: "Activa",
-      cities: ["Bogotá"]
+      cities: ["Ciudad de México"]
     },
     {
       id: 3,
@@ -99,7 +99,7 @@ const Promotions = () => {
       used: 67,
       limit: 300,
       status: "Activa",
-      cities: ["Medellín", "Cali", "Barranquilla"]
+      cities: ["Guadalajara", "Monterrey", "Puebla"]
     },
     {
       id: 6,
@@ -125,7 +125,7 @@ const Promotions = () => {
       used: 23,
       limit: 200,
       status: "Activa",
-      cities: ["Bogotá", "Medellín"]
+      cities: ["Ciudad de México", "Guadalajara"]
     },
     {
       id: 8,
@@ -138,7 +138,7 @@ const Promotions = () => {
       used: 112,
       limit: 400,
       status: "Pausada",
-      cities: ["Cali", "Cartagena"]
+      cities: ["Monterrey", "Tijuana"]
     },
     {
       id: 9,
@@ -178,7 +178,7 @@ const Promotions = () => {
       used: Math.floor(Math.random() * 100),
       limit: Math.floor(Math.random() * 500 + 100),
       status: ["Activa", "Pausada", "Finalizada"][Math.floor(Math.random() * 3)],
-      cities: ["Bogotá", "Medellín"]
+      cities: ["Ciudad de México", "Guadalajara"]
     }))
   ];
 

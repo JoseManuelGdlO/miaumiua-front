@@ -65,19 +65,19 @@ const CreateOrderModal = ({ open, onOpenChange }: CreateOrderModalProps) => {
   ]);
 
   const cities = [
-    "Bogotá", "Medellín", "Cali", "Barranquilla",
-    "Cartagena", "Bucaramanga", "Pereira", "Manizales"
+    "Ciudad de México", "Guadalajara", "Monterrey", "Puebla",
+    "Tijuana", "León", "Mérida", "Zapopan"
   ];
 
   const zones = {
-    "Bogotá": ["Norte", "Sur", "Centro", "Chapinero", "Usaquén", "Suba"],
-    "Medellín": ["El Poblado", "Envigado", "Centro", "Laureles", "Sabaneta"],
-    "Cali": ["Norte", "Sur", "Centro", "Oeste", "Valle del Lili"],
-    "Barranquilla": ["Riomar", "Centro", "Norte", "Atlántico", "Villa Country"],
-    "Cartagena": ["Bocagrande", "Centro", "Manga", "Pie de la Popa", "Castillogrande"],
-    "Bucaramanga": ["Cabecera", "Centro", "Norte", "Cañaveral", "Floridablanca"],
-    "Pereira": ["Centro", "Cuba", "Boston", "Villa Santana"],
-    "Manizales": ["La Sultana", "Centro", "Palermo", "Versalles"]
+    "Ciudad de México": ["Polanco", "Roma Norte", "Condesa", "Centro", "Del Valle", "Santa Fe"],
+    "Guadalajara": ["Providencia", "Chapultepec", "Centro", "Americana", "Vallarta Norte"],
+    "Monterrey": ["San Pedro", "Centro", "Santa Catarina", "Valle Oriente", "Cumbres"],
+    "Puebla": ["Centro", "Angelópolis", "La Paz", "Reforma", "Zavaleta"],
+    "Tijuana": ["Zona Río", "Centro", "Otay", "La Mesa", "Playas"],
+    "León": ["Centro", "Del Valle", "Lomas del Campestre", "San Jerónimo", "Jardines"],
+    "Mérida": ["Centro", "Norte", "García Ginerés", "Montejo", "Itzimná"],
+    "Zapopan": ["Centro", "Real del Country", "Puerta de Hierro", "Vallarta", "Plaza del Sol"]
   };
 
   const availableProducts = [

@@ -54,14 +54,14 @@ const CreateInventoryModal = ({ open, onOpenChange }: CreateInventoryModalProps)
   ];
 
   const cities = [
-    "Bogotá",
-    "Medellín",
-    "Cali", 
-    "Barranquilla",
-    "Cartagena",
-    "Bucaramanga",
-    "Pereira",
-    "Manizales"
+    "Ciudad de México",
+    "Guadalajara",
+    "Monterrey", 
+    "Puebla",
+    "Tijuana",
+    "León",
+    "Mérida",
+    "Zapopan"
   ];
 
   const suppliers = [

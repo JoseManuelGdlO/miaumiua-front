@@ -44,8 +44,8 @@ const Orders = () => {
       customer: "María González",
       phone: "+57 320 123 4567",
       address: "Calle 127 #15-45, Apto 502",
-      city: "Bogotá",
-      zone: "Zona Norte",
+      city: "Ciudad de México",
+      zone: "Polanco",
       products: [
         { name: "Arena Premium 10kg", quantity: 2, price: 45000 }
       ],
@@ -64,8 +64,8 @@ const Orders = () => {
       customer: "Carlos Ramírez",
       phone: "+57 315 987 6543", 
       address: "Carrera 70 #45-12, Casa 15",
-      city: "Medellín",
-      zone: "El Poblado",
+      city: "Guadalajara",
+      zone: "Providencia",
       products: [
         { name: "Arena Antibacterial 5kg", quantity: 3, price: 28000 }
       ],
@@ -84,8 +84,8 @@ const Orders = () => {
       customer: "Laura Martínez",
       phone: "+57 301 456 7890",
       address: "Avenida 6N #28-15, Torre 3",
-      city: "Cali",
-      zone: "Norte",
+      city: "Monterrey",
+      zone: "San Pedro",
       products: [
         { name: "Arena Perfumada 15kg", quantity: 1, price: 52000 },
         { name: "Arena Básica 8kg", quantity: 2, price: 18000 }
@@ -142,14 +142,14 @@ const Orders = () => {
     // Generar más pedidos para paginación
     ...Array.from({ length: 45 }, (_, i) => {
       const customers = ['Roberto Silva', 'Carmen Vega', 'Diego Morales', 'Elena Ruiz', 'Fernando Castro'];
-      const cities = ['Bogotá', 'Medellín', 'Cali', 'Barranquilla', 'Cartagena', 'Bucaramanga'];
+      const cities = ['Ciudad de México', 'Guadalajara', 'Monterrey', 'Puebla', 'Tijuana', 'León'];
       const zones = {
-        'Bogotá': ['Norte', 'Sur', 'Centro', 'Chapinero'],
-        'Medellín': ['El Poblado', 'Envigado', 'Centro', 'Laureles'],
-        'Cali': ['Norte', 'Sur', 'Centro', 'Oeste'],
-        'Barranquilla': ['Riomar', 'Centro', 'Norte', 'Atlántico'],
-        'Cartagena': ['Bocagrande', 'Centro', 'Manga', 'Pie de la Popa'],
-        'Bucaramanga': ['Cabecera', 'Centro', 'Norte', 'Cañaveral']
+        'Ciudad de México': ['Polanco', 'Roma Norte', 'Condesa', 'Centro'],
+        'Guadalajara': ['Providencia', 'Chapultepec', 'Centro', 'Americana'],
+        'Monterrey': ['San Pedro', 'Centro', 'Santa Catarina', 'Valle Oriente'],
+        'Puebla': ['Centro', 'Angelópolis', 'La Paz', 'Reforma'],
+        'Tijuana': ['Zona Río', 'Centro', 'Otay', 'La Mesa'],
+        'León': ['Centro', 'Del Valle', 'Lomas del Campestre', 'San Jerónimo']
       };
       const products = ['Arena Premium 10kg', 'Arena Antibacterial 5kg', 'Arena Perfumada 15kg', 'Arena Básica 8kg'];
       const statuses = ['Pendiente', 'En Ruta', 'Entregado', 'Programado'];

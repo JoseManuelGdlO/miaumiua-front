@@ -45,8 +45,8 @@ const CreateCustomerModal = ({ open, onOpenChange }: CreateCustomerModalProps) =
   });
 
   const cities = [
-    "Bogotá", "Medellín", "Cali", "Barranquilla",
-    "Cartagena", "Bucaramanga", "Pereira", "Manizales"
+    "Ciudad de México", "Guadalajara", "Monterrey", "Puebla",
+    "Tijuana", "León", "Mérida", "Zapopan"
   ];
 
   const channels = [

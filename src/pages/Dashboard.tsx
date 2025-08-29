@@ -47,9 +47,9 @@ const Dashboard = () => {
   ];
 
   const recentActivity = [
-    { id: 1, type: "Nueva conversación", description: "Cliente en Bogotá - Consulta sobre arena premium Miau Miau", time: "Hace 5 min", status: "activa" },
+    { id: 1, type: "Nueva conversación", description: "Cliente en Ciudad de México - Consulta sobre arena premium Miau Miau", time: "Hace 5 min", status: "activa" },
     { id: 2, type: "Venta completada", description: "Pedido #MM-2024-001 - Arena antibacterial Miau Miau 10kg", time: "Hace 15 min", status: "completada" },
-    { id: 3, type: "Inventario bajo", description: "Arena perfumada Miau Miau en Medellín - Solo 5 unidades", time: "Hace 30 min", status: "alerta" },
+    { id: 3, type: "Inventario bajo", description: "Arena perfumada Miau Miau en Guadalajara - Solo 5 unidades", time: "Hace 30 min", status: "alerta" },
     { id: 4, type: "Cliente nuevo", description: "Registro completado vía WhatsApp - Interesado en arena Miau Miau", time: "Hace 1 hora", status: "nuevo" },
   ];
 
