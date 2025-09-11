@@ -12,12 +12,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import NotificationPanel from "@/components/NotificationPanel";
+import { useAuth } from "@/hooks/useAuth";
 
 const DashboardLayout = () => {
-  const handleLogout = () => {
-    // Navigate back to login
-    window.location.href = "/";
-  };
+  const { logout, user } = useAuth();
 
   return (
     <SidebarProvider>
@@ -43,11 +41,20 @@ const DashboardLayout = () => {
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="sm" className="gap-2">
                     <User className="h-4 w-4" />
-                    <span className="hidden md:inline">Administrador</span>
+                    <span className="hidden md:inline">
+                      {user?.nombre_completo || user?.correo_electronico || "Usuario"}
+                    </span>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuLabel>Mi Cuenta</DropdownMenuLabel>
+                  <DropdownMenuLabel>
+                    {user?.nombre_completo || user?.correo_electronico || "Mi Cuenta"}
+                  </DropdownMenuLabel>
+                  {user?.rol_id && (
+                    <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
+                      Rol ID: {user.rol_id}
+                    </DropdownMenuLabel>
+                  )}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem>
                     <User className="mr-2 h-4 w-4" />
@@ -58,7 +65,7 @@ const DashboardLayout = () => {
                     <span>Notificaciones</span>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleLogout} className="text-destructive">
+                  <DropdownMenuItem onClick={logout} className="text-destructive">
                     <LogOut className="mr-2 h-4 w-4" />
                     <span>Cerrar Sesión</span>
                   </DropdownMenuItem>

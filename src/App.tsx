@@ -19,6 +19,7 @@ import Orders from "./pages/Orders";
 import RouteManagement from "./pages/RouteManagement";
 import Agents from "./pages/Agents";
 import Conversations from "./pages/Conversations";
+import ProtectedRoute from "./components/ProtectedRoute";
 
 const queryClient = new QueryClient();
 
@@ -30,7 +31,12 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Login />} />
-          <Route path="/dashboard" element={<DashboardLayout />}>
+          <Route path="/login" element={<Login />} />
+          <Route path="/dashboard" element={
+            <ProtectedRoute>
+              <DashboardLayout />
+            </ProtectedRoute>
+          }>
             <Route index element={<Dashboard />} />
             <Route path="users" element={<Users />} />
             <Route path="roles" element={<Roles />} />

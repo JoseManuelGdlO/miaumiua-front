@@ -1,22 +1,45 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Loader2 } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 import miauMiauLogo from "/lovable-uploads/9f868334-2970-46f8-a783-9ab32ecc297b.png";
 
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const { login, isLoading, error, clearError, isAuthenticated } = useAuth();
   const navigate = useNavigate();
 
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    // Simple validation for demo
-    if (email && password) {
+  // Redirigir si ya está autenticado
+  useEffect(() => {
+    if (isAuthenticated) {
       navigate("/dashboard");
     }
+  }, [isAuthenticated, navigate]);
+
+  // Limpiar errores cuando el usuario empiece a escribir
+  useEffect(() => {
+    if (error) {
+      clearError();
+    }
+  }, [email, password, error, clearError]);
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!email || !password) {
+      return;
+    }
+
+    await login({
+      correo_electronico: email,
+      contrasena: password,
+    });
   };
 
   return (
@@ -53,6 +76,13 @@ const Login = () => {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleLogin} className="space-y-6">
+              {/* Mostrar errores */}
+              {error && (
+                <Alert variant="destructive">
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+
               <div className="space-y-2">
                 <Label htmlFor="email" className="text-sm font-medium">
                   Correo Electrónico
@@ -64,6 +94,7 @@ const Login = () => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
+                  disabled={isLoading}
                   className="h-11"
                 />
               </div>
@@ -79,15 +110,24 @@ const Login = () => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
+                  disabled={isLoading}
                   className="h-11"
                 />
               </div>
 
               <Button 
                 type="submit" 
+                disabled={isLoading}
                 className="w-full h-11 bg-gradient-to-r from-primary to-primary-light hover:from-primary-dark hover:to-primary font-medium shadow-lg transition-all duration-300"
               >
-                Ingresar al Panel
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Iniciando sesión...
+                  </>
+                ) : (
+                  "Ingresar al Panel"
+                )}
               </Button>
             </form>
           </CardContent>
