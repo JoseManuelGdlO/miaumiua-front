@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -15,89 +15,59 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { rolesService, CreateRoleData, Permission } from "@/services/rolesService";
+import { permissionsService } from "@/services/permissionsService";
 
 interface CreateRoleModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onRoleCreated?: () => void;
 }
 
-const CreateRoleModal = ({ open, onOpenChange }: CreateRoleModalProps) => {
+const CreateRoleModal = ({ open, onOpenChange, onRoleCreated }: CreateRoleModalProps) => {
   const { toast } = useToast();
+  const [loading, setLoading] = useState(false);
+  const [permissions, setPermissions] = useState<Permission[]>([]);
   const [formData, setFormData] = useState({
     name: "",
     description: "",
-    selectedPermissions: [] as string[]
+    selectedPermissions: [] as number[]
   });
 
-  const permissionCategories = [
-    {
-      name: "Dashboard",
-      permissions: [
-        { id: "dashboard.view", name: "Ver Dashboard", critical: false }
-      ]
-    },
-    {
-      name: "Usuarios", 
-      permissions: [
-        { id: "users.view", name: "Ver Usuarios", critical: false },
-        { id: "users.manage", name: "Gestionar Usuarios", critical: true }
-      ]
-    },
-    {
-      name: "Seguridad",
-      permissions: [
-        { id: "roles.view", name: "Ver Roles", critical: false },
-        { id: "roles.manage", name: "Gestionar Roles", critical: true },
-        { id: "permissions.manage", name: "Gestionar Permisos", critical: true }
-      ]
-    },
-    {
-      name: "Agentes IA",
-      permissions: [
-        { id: "agents.view", name: "Ver Agentes", critical: false },
-        { id: "agents.configure", name: "Configurar Agentes", critical: false }
-      ]
-    },
-    {
-      name: "Inventario",
-      permissions: [
-        { id: "inventory.view", name: "Ver Inventario", critical: false },
-        { id: "inventory.manage", name: "Gestionar Inventario", critical: false },
-        { id: "products.manage", name: "Gestionar Productos", critical: false }
-      ]
-    },
-    {
-      name: "Clientes",
-      permissions: [
-        { id: "customers.view", name: "Ver Clientes", critical: false },
-        { id: "customers.edit", name: "Editar Clientes", critical: false }
-      ]
-    },
-    {
-      name: "Marketing", 
-      permissions: [
-        { id: "promotions.view", name: "Ver Promociones", critical: false },
-        { id: "promotions.manage", name: "Gestionar Promociones", critical: false },
-        { id: "campaigns.manage", name: "Gestionar Campañas", critical: false }
-      ]
-    },
-    {
-      name: "Reportes",
-      permissions: [
-        { id: "reports.view", name: "Ver Reportes", critical: false },
-        { id: "reports.generate", name: "Generar Reportes", critical: false }
-      ]
-    },
-    {
-      name: "Sistema",
-      permissions: [
-        { id: "cities.manage", name: "Gestionar Ciudades", critical: false },
-        { id: "system.configure", name: "Configurar Sistema", critical: true }
-      ]
+  // Cargar permisos al abrir el modal
+  useEffect(() => {
+    if (open) {
+      loadPermissions();
     }
-  ];
+  }, [open]);
 
-  const handlePermissionToggle = (permissionId: string) => {
+  const loadPermissions = async () => {
+    try {
+      const response = await permissionsService.getAllPermissions({ activos: 'true' });
+      if (response.success) {
+        setPermissions(response.data.permissions);
+      }
+    } catch (error) {
+      console.error('Error al cargar permisos:', error);
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar los permisos",
+        variant: "destructive"
+      });
+    }
+  };
+
+  // Agrupar permisos por categoría
+  const permissionCategories = permissions.reduce((acc, permission) => {
+    const category = permission.categoria;
+    if (!acc[category]) {
+      acc[category] = [];
+    }
+    acc[category].push(permission);
+    return acc;
+  }, {} as Record<string, Permission[]>);
+
+  const handlePermissionToggle = (permissionId: number) => {
     setFormData(prev => ({
       ...prev,
       selectedPermissions: prev.selectedPermissions.includes(permissionId)
@@ -106,42 +76,64 @@ const CreateRoleModal = ({ open, onOpenChange }: CreateRoleModalProps) => {
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
 
-    if (!formData.name || !formData.description) {
+    try {
+      // Validaciones
+      if (!formData.name.trim()) {
+        toast({
+          title: "Error",
+          description: "El nombre del rol es requerido",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      if (!formData.description.trim()) {
+        toast({
+          title: "Error",
+          description: "La descripción del rol es requerida",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      const roleData: CreateRoleData = {
+        nombre: formData.name,
+        descripcion: formData.description,
+        permissions: formData.selectedPermissions
+      };
+
+      const response = await rolesService.createRole(roleData);
+
+      if (response.success) {
+        toast({
+          title: "Rol creado",
+          description: `Rol "${formData.name}" creado exitosamente`,
+        });
+
+        // Reset form
+        setFormData({
+          name: "",
+          description: "",
+          selectedPermissions: []
+        });
+
+        onOpenChange(false);
+        onRoleCreated?.();
+      }
+    } catch (error) {
+      console.error('Error al crear rol:', error);
       toast({
         title: "Error",
-        description: "Por favor completa el nombre y descripción del rol",
+        description: error instanceof Error ? error.message : "Error al crear el rol",
         variant: "destructive"
       });
-      return;
+    } finally {
+      setLoading(false);
     }
-
-    if (formData.selectedPermissions.length === 0) {
-      toast({
-        title: "Error",
-        description: "Selecciona al menos un permiso para el rol",
-        variant: "destructive" 
-      });
-      return;
-    }
-
-    // Simular creación de rol
-    console.log("Creando rol:", formData);
-
-    toast({
-      title: "Rol creado",
-      description: `Rol "${formData.name}" creado con ${formData.selectedPermissions.length} permisos`,
-    });
-
-    // Reset form y cerrar modal
-    setFormData({
-      name: "",
-      description: "", 
-      selectedPermissions: []
-    });
-    onOpenChange(false);
   };
 
   return (
@@ -187,26 +179,26 @@ const CreateRoleModal = ({ open, onOpenChange }: CreateRoleModalProps) => {
             </div>
 
             <div className="grid gap-4 max-h-96 overflow-y-auto">
-              {permissionCategories.map((category) => (
-                <Card key={category.name}>
+              {Object.entries(permissionCategories).map(([categoryName, categoryPermissions]) => (
+                <Card key={categoryName}>
                   <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-medium">{category.name}</CardTitle>
+                    <CardTitle className="text-sm font-medium">{categoryName}</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-3">
-                      {category.permissions.map((permission) => (
+                      {categoryPermissions.map((permission) => (
                         <div key={permission.id} className="flex items-center space-x-2">
                           <Checkbox
-                            id={permission.id}
+                            id={permission.id.toString()}
                             checked={formData.selectedPermissions.includes(permission.id)}
                             onCheckedChange={() => handlePermissionToggle(permission.id)}
                           />
                           <Label 
-                            htmlFor={permission.id} 
-                            className={`text-sm ${permission.critical ? 'text-destructive font-medium' : ''} cursor-pointer flex-1`}
+                            htmlFor={permission.id.toString()} 
+                            className={`text-sm ${permission.tipo === 'administracion' ? 'text-destructive font-medium' : ''} cursor-pointer flex-1`}
                           >
-                            {permission.name}
-                            {permission.critical && (
+                            {permission.nombre}
+                            {permission.tipo === 'administracion' && (
                               <Badge variant="outline" className="ml-2 text-xs text-destructive border-destructive">
                                 Crítico
                               </Badge>
@@ -222,11 +214,11 @@ const CreateRoleModal = ({ open, onOpenChange }: CreateRoleModalProps) => {
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
               Cancelar
             </Button>
-            <Button type="submit">
-              Crear Rol
+            <Button type="submit" disabled={loading}>
+              {loading ? "Creando..." : "Crear Rol"}
             </Button>
           </DialogFooter>
         </form>

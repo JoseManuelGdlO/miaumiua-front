@@ -19,6 +19,8 @@ import Orders from "./pages/Orders";
 import RouteManagement from "./pages/RouteManagement";
 import Agents from "./pages/Agents";
 import Conversations from "./pages/Conversations";
+import CategoriasProducto from "./pages/CategoriasProducto";
+import Pesos from "./pages/Pesos";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 const queryClient = new QueryClient();
@@ -49,6 +51,8 @@ const App = () => (
             <Route path="cities" element={<Cities />} />
             <Route path="customers" element={<Customers />} />
             <Route path="agents" element={<Agents />} />
+            <Route path="categorias-producto" element={<CategoriasProducto />} />
+            <Route path="pesos" element={<Pesos />} />
             <Route path="settings" element={<div className="p-6"><h1 className="text-2xl font-bold">Configuración</h1><p className="text-muted-foreground">Configuración general del sistema</p></div>} />
           </Route>
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

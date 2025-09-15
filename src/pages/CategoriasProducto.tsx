@@ -25,34 +25,36 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Search, Plus, MoreHorizontal, Edit, Trash2, UserPlus, Loader2 } from "lucide-react";
+import { Search, Plus, MoreHorizontal, Edit, Trash2, Package, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { usersService, User } from "@/services/usersService";
-import CreateUserModal from "@/components/modals/CreateUserModal";
+import { categoriasProductoService, CategoriaProducto } from "@/services/categoriasProductoService";
+import CreateCategoriaProductoModal from "@/components/modals/CreateCategoriaProductoModal";
+import EditCategoriaProductoModal from "@/components/modals/EditCategoriaProductoModal";
 import ConfirmDeleteModal from "@/components/modals/ConfirmDeleteModal";
 
-const Users = () => {
+const CategoriasProducto = () => {
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const [users, setUsers] = useState<User[]>([]);
+  const [selectedCategoria, setSelectedCategoria] = useState<CategoriaProducto | null>(null);
+  const [categorias, setCategorias] = useState<CategoriaProducto[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalPages, setTotalPages] = useState(1);
-  const [totalUsers, setTotalUsers] = useState(0);
+  const [totalCategorias, setTotalCategorias] = useState(0);
   const itemsPerPage = 8;
 
-  // Cargar usuarios al montar el componente
+  // Cargar categorías al montar el componente
   useEffect(() => {
-    loadUsers();
+    loadCategorias();
   }, [currentPage, searchTerm]);
 
-  const loadUsers = async () => {
+  const loadCategorias = async () => {
     try {
       setLoading(true);
-      const response = await usersService.getAllUsers({
+      const response = await categoriasProductoService.getAllCategorias({
         activos: 'true',
         search: searchTerm || undefined,
         page: currentPage,
@@ -60,21 +62,21 @@ const Users = () => {
       });
       
       if (response.success) {
-        setUsers(response.data.users);
-        setTotalPages(response.data.totalPages);
-        setTotalUsers(response.data.total);
+        setCategorias(response.data.categorias);
+        setTotalPages(response.data.pagination.totalPages);
+        setTotalCategorias(response.data.pagination.total);
       } else {
         toast({
           title: "Error",
-          description: "No se pudieron cargar los usuarios",
+          description: "No se pudieron cargar las categorías de producto",
           variant: "destructive"
         });
       }
     } catch (error) {
-      console.error('Error al cargar usuarios:', error);
+      console.error('Error al cargar categorías:', error);
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Error al cargar los usuarios",
+        description: error instanceof Error ? error.message : "Error al cargar las categorías de producto",
         variant: "destructive"
       });
     } finally {
@@ -82,51 +84,36 @@ const Users = () => {
     }
   };
 
-  const getStatusBadge = (isActive: boolean) => {
-    return isActive 
-      ? <Badge className="bg-green-100 text-green-800 border-green-200">Activo</Badge>
-      : <Badge variant="destructive">Inactivo</Badge>;
-  };
-
-  const getRoleBadge = (roleName: string) => {
-    const roleColors: Record<string, string> = {
-      "admin": "bg-blue-100 text-blue-800 border-blue-200",
-      "super_admin": "bg-purple-100 text-purple-800 border-purple-200",
-      "supervisor_ventas": "bg-orange-100 text-orange-800 border-orange-200",
-      "supervisor_tecnico": "bg-yellow-100 text-yellow-800 border-yellow-200",
-      "agente_chat": "bg-green-100 text-green-800 border-green-200",
-      "inventario": "bg-gray-100 text-gray-800 border-gray-200",
-      "marketing": "bg-pink-100 text-pink-800 border-pink-200"
-    };
-    
-    return <Badge className={roleColors[roleName] || "bg-gray-100 text-gray-800 border-gray-200"}>{roleName}</Badge>;
-  };
-
-  const handleDeleteUser = async () => {
-    if (!selectedUser) return;
+  const handleDeleteCategoria = async () => {
+    if (!selectedCategoria) return;
     
     try {
-      const response = await usersService.deleteUser(selectedUser.id);
+      const response = await categoriasProductoService.deleteCategoria(selectedCategoria.id);
       if (response.success) {
         toast({
-          title: "Usuario eliminado",
-          description: "El usuario ha sido eliminado exitosamente",
+          title: "Categoría eliminada",
+          description: "La categoría ha sido eliminada exitosamente",
         });
-        loadUsers(); // Recargar la lista
+        loadCategorias(); // Recargar la lista
       }
     } catch (error) {
-      console.error('Error al eliminar usuario:', error);
+      console.error('Error al eliminar categoría:', error);
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Error al eliminar el usuario",
+        description: error instanceof Error ? error.message : "Error al eliminar la categoría",
         variant: "destructive"
       });
     }
   };
 
-  const handleDeleteClick = (user: User) => {
-    setSelectedUser(user);
+  const handleDeleteClick = (categoria: CategoriaProducto) => {
+    setSelectedCategoria(categoria);
     setIsDeleteModalOpen(true);
+  };
+
+  const handleEditCategoria = (categoria: CategoriaProducto) => {
+    setSelectedCategoria(categoria);
+    setIsEditModalOpen(true);
   };
 
   const handleSearch = (value: string) => {
@@ -138,22 +125,22 @@ const Users = () => {
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">Gestión de Usuarios</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">Categorías de Producto</h1>
           <p className="text-muted-foreground">
-            Administra los usuarios del sistema Miau Miau
+            Administra las categorías de productos del sistema Miau Miau
           </p>
         </div>
         <Button className="gap-2" onClick={() => setIsCreateModalOpen(true)}>
-          <UserPlus className="h-4 w-4" />
-          Nuevo Usuario
+          <Package className="h-4 w-4" />
+          Nueva Categoría
         </Button>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Usuarios del Sistema</CardTitle>
+          <CardTitle>Categorías del Sistema</CardTitle>
           <CardDescription>
-            Lista de usuarios registrados con sus roles y estados
+            Lista de categorías de productos registradas
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -162,7 +149,7 @@ const Users = () => {
             <div className="relative flex-1">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar usuarios por nombre, email, rol o ciudad..."
+                placeholder="Buscar categorías por nombre o descripción..."
                 value={searchTerm}
                 onChange={(e) => handleSearch(e.target.value)}
                 className="pl-8"
@@ -170,65 +157,55 @@ const Users = () => {
             </div>
           </div>
 
-          {/* Users Table */}
+          {/* Categorías Table */}
           <div className="rounded-md border">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Usuario</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Rol</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead>Ciudad</TableHead>
-                  <TableHead>Último Login</TableHead>
+                  <TableHead>Nombre</TableHead>
+                  <TableHead>Descripción</TableHead>
+                  <TableHead>Creado</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8">
+                    <TableCell colSpan={4} className="text-center py-8">
                       <div className="flex items-center justify-center space-x-2">
                         <Loader2 className="h-4 w-4 animate-spin" />
-                        <span>Cargando usuarios...</span>
+                        <span>Cargando categorías...</span>
                       </div>
                     </TableCell>
                   </TableRow>
-                ) : users.length === 0 ? (
+                ) : categorias.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                      No se encontraron usuarios
+                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                      No se encontraron categorías
                     </TableCell>
                   </TableRow>
                 ) : (
-                  users.map((user) => (
-                    <TableRow key={user.id}>
+                  categorias.map((categoria) => (
+                    <TableRow key={categoria.id}>
                       <TableCell>
                         <div className="flex items-center space-x-3">
                           <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                            <span className="text-sm font-medium text-primary">
-                              {user.nombre_completo.split(' ').map(n => n[0]).join('').toUpperCase()}
-                            </span>
+                            <Package className="h-4 w-4 text-primary" />
                           </div>
                           <div>
-                            <div className="font-medium text-foreground">{user.nombre_completo}</div>
+                            <div className="font-medium text-foreground">{categoria.nombre}</div>
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {user.correo_electronico}
-                      </TableCell>
                       <TableCell>
-                        {getRoleBadge(user.rol?.nombre || 'Sin rol')}
-                      </TableCell>
-                      <TableCell>
-                        {getStatusBadge(user.isActive)}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {user.ciudad?.nombre || 'Sin ciudad'}
+                        <div className="max-w-xs">
+                          <p className="text-sm text-muted-foreground line-clamp-2">
+                            {categoria.descripcion || "Sin descripción"}
+                          </p>
+                        </div>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
-                        {user.lastLogin ? new Date(user.lastLogin).toLocaleDateString('es-ES') : 'Nunca'}
+                        {categoria.createdAt ? new Date(categoria.createdAt).toLocaleDateString('es-ES') : 'N/A'}
                       </TableCell>
                       <TableCell className="text-right">
                         <DropdownMenu>
@@ -238,17 +215,13 @@ const Users = () => {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleEditCategoria(categoria)}>
                               <Edit className="mr-2 h-4 w-4" />
-                              Editar Usuario
-                            </DropdownMenuItem>
-                            <DropdownMenuItem>
-                              <UserPlus className="mr-2 h-4 w-4" />
-                              Cambiar Contraseña
+                              Editar Categoría
                             </DropdownMenuItem>
                             <DropdownMenuItem 
                               className="text-destructive"
-                              onClick={() => handleDeleteClick(user)}
+                              onClick={() => handleDeleteClick(categoria)}
                             >
                               <Trash2 className="mr-2 h-4 w-4" />
                               Eliminar
@@ -267,7 +240,7 @@ const Users = () => {
           {totalPages > 1 && (
             <div className="flex items-center justify-between mt-6">
               <div className="text-sm text-muted-foreground">
-                Mostrando {((currentPage - 1) * itemsPerPage) + 1} a {Math.min(currentPage * itemsPerPage, totalUsers)} de {totalUsers} usuarios
+                Mostrando {((currentPage - 1) * itemsPerPage) + 1} a {Math.min(currentPage * itemsPerPage, totalCategorias)} de {totalCategorias} categorías
               </div>
               <Pagination>
                 <PaginationContent>
@@ -310,29 +283,36 @@ const Users = () => {
               Página {currentPage} de {totalPages}
             </div>
             <div className="flex items-center space-x-4">
-              <span>Total usuarios: {totalUsers}</span>
+              <span>Total categorías: {totalCategorias}</span>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      <CreateUserModal 
+      <CreateCategoriaProductoModal 
         open={isCreateModalOpen} 
         onOpenChange={setIsCreateModalOpen}
-        onUserCreated={loadUsers}
+        onCategoriaCreated={loadCategorias}
+      />
+
+      <EditCategoriaProductoModal
+        open={isEditModalOpen}
+        onOpenChange={setIsEditModalOpen}
+        categoria={selectedCategoria}
+        onCategoriaUpdated={loadCategorias}
       />
 
       <ConfirmDeleteModal
         open={isDeleteModalOpen}
         onOpenChange={setIsDeleteModalOpen}
-        onConfirm={handleDeleteUser}
-        itemName={selectedUser?.nombre_completo}
-        itemType="usuario"
-        title="Eliminar Usuario"
-        description={`¿Estás seguro de que deseas eliminar al usuario "${selectedUser?.nombre_completo}"? Esta acción no se puede deshacer y el usuario perderá acceso al sistema.`}
+        onConfirm={handleDeleteCategoria}
+        itemName={selectedCategoria?.nombre}
+        itemType="categoría de producto"
+        title="Eliminar Categoría"
+        description={`¿Estás seguro de que deseas eliminar la categoría "${selectedCategoria?.nombre}"? Esta acción no se puede deshacer y afectará todos los productos asociados.`}
       />
     </div>
   );
 };
 
-export default Users;
+export default CategoriasProducto;

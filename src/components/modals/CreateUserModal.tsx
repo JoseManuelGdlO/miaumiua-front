@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -10,88 +11,144 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { usersService, CreateUserData, Role } from "@/services/usersService";
+import { rolesService } from "@/services/rolesService";
 
 interface CreateUserModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onUserCreated?: () => void;
 }
 
-const CreateUserModal = ({ open, onOpenChange }: CreateUserModalProps) => {
+const CreateUserModal = ({ open, onOpenChange, onUserCreated }: CreateUserModalProps) => {
   const { toast } = useToast();
+  const [loading, setLoading] = useState(false);
+  const [roles, setRoles] = useState<Role[]>([]);
   const [formData, setFormData] = useState({
-    name: "",
-    email: "",
-    role: "",
-    city: "",
-    password: "",
-    confirmPassword: ""
+    nombre_completo: "",
+    correo_electronico: "",
+    contrasena: "",
+    confirmPassword: "",
+    rol_id: "",
+    ciudad_id: ""
   });
 
-  const roles = [
-    "Administrador",
-    "Supervisor Ventas", 
-    "Supervisor Técnico",
-    "Agente Chat",
-    "Inventario",
-    "Marketing"
-  ];
+  // Cargar datos al abrir el modal
+  useEffect(() => {
+    if (open) {
+      loadData();
+    }
+  }, [open]);
 
-  const cities = [
-    "Ciudad de México",
-    "Guadalajara", 
-    "Monterrey",
-    "Puebla",
-    "Tijuana",
-    "León"
-  ];
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (formData.password !== formData.confirmPassword) {
+  const loadData = async () => {
+    try {
+      // Cargar roles
+      const rolesResponse = await rolesService.getAllRoles({ activos: 'true' });
+      if (rolesResponse.success) {
+        setRoles(rolesResponse.data.roles);
+      }
+    } catch (error) {
+      console.error('Error al cargar datos:', error);
       toast({
         title: "Error",
-        description: "Las contraseñas no coinciden",
+        description: "No se pudieron cargar los datos necesarios",
         variant: "destructive"
       });
-      return;
     }
+  };
 
-    if (!formData.name || !formData.email || !formData.role || !formData.city) {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      // Validaciones
+      if (!formData.nombre_completo.trim()) {
+        toast({
+          title: "Error",
+          description: "El nombre completo es requerido",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      if (!formData.correo_electronico.trim()) {
+        toast({
+          title: "Error",
+          description: "El correo electrónico es requerido",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      if (!formData.contrasena.trim()) {
+        toast({
+          title: "Error",
+          description: "La contraseña es requerida",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      if (formData.contrasena !== formData.confirmPassword) {
+        toast({
+          title: "Error",
+          description: "Las contraseñas no coinciden",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      if (!formData.rol_id) {
+        toast({
+          title: "Error",
+          description: "Debe seleccionar un rol",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      const userData: CreateUserData = {
+        nombre_completo: formData.nombre_completo,
+        correo_electronico: formData.correo_electronico,
+        contrasena: formData.contrasena,
+        rol_id: parseInt(formData.rol_id),
+        ciudad_id: formData.ciudad_id ? parseInt(formData.ciudad_id) : undefined
+      };
+
+      const response = await usersService.createUser(userData);
+
+      if (response.success) {
+        toast({
+          title: "Usuario creado",
+          description: `Usuario "${formData.nombre_completo}" creado exitosamente`,
+        });
+
+        // Reset form
+        setFormData({
+          nombre_completo: "",
+          correo_electronico: "",
+          contrasena: "",
+          confirmPassword: "",
+          rol_id: "",
+          ciudad_id: ""
+        });
+
+        onOpenChange(false);
+        onUserCreated?.();
+      }
+    } catch (error) {
+      console.error('Error al crear usuario:', error);
       toast({
-        title: "Error", 
-        description: "Por favor completa todos los campos obligatorios",
+        title: "Error",
+        description: error instanceof Error ? error.message : "Error al crear el usuario",
         variant: "destructive"
       });
-      return;
+    } finally {
+      setLoading(false);
     }
-
-    // Simular creación de usuario
-    console.log("Creando usuario:", formData);
-    
-    toast({
-      title: "Usuario creado",
-      description: `Usuario ${formData.name} creado exitosamente`,
-    });
-    
-    // Reset form y cerrar modal
-    setFormData({
-      name: "",
-      email: "",
-      role: "",
-      city: "",
-      password: "",
-      confirmPassword: ""
-    });
-    onOpenChange(false);
   };
 
   return (
@@ -100,96 +157,87 @@ const CreateUserModal = ({ open, onOpenChange }: CreateUserModalProps) => {
         <DialogHeader>
           <DialogTitle>Crear Nuevo Usuario</DialogTitle>
           <DialogDescription>
-            Completa los datos para crear un nuevo usuario en el sistema Miau Miau
+            Agrega un nuevo usuario al sistema con sus permisos correspondientes.
           </DialogDescription>
         </DialogHeader>
-        
+
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Nombre Completo *</Label>
-              <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                placeholder="Ej: Ana García Mendoza"
-              />
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="nombre_completo">Nombre Completo *</Label>
+            <Input
+              id="nombre_completo"
+              value={formData.nombre_completo}
+              onChange={(e) => setFormData(prev => ({ ...prev, nombre_completo: e.target.value }))}
+              placeholder="Ej: Juan Pérez"
+            />
+          </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="email">Correo Electrónico *</Label>
-              <Input
-                id="email"
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                placeholder="ana.garcia@miaumiau.com"
-              />
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="correo_electronico">Correo Electrónico *</Label>
+            <Input
+              id="correo_electronico"
+              type="email"
+              value={formData.correo_electronico}
+              onChange={(e) => setFormData(prev => ({ ...prev, correo_electronico: e.target.value }))}
+              placeholder="Ej: juan.perez@miaumiau.com"
+            />
+          </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Rol *</Label>
-                <Select value={formData.role} onValueChange={(value) => setFormData(prev => ({ ...prev, role: value }))}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar rol" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {roles.map((role) => (
-                      <SelectItem key={role} value={role}>
-                        {role}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+          <div className="space-y-2">
+            <Label htmlFor="contrasena">Contraseña *</Label>
+            <Input
+              id="contrasena"
+              type="password"
+              value={formData.contrasena}
+              onChange={(e) => setFormData(prev => ({ ...prev, contrasena: e.target.value }))}
+              placeholder="Mínimo 6 caracteres"
+            />
+          </div>
 
-              <div className="space-y-2">
-                <Label>Ciudad *</Label>
-                <Select value={formData.city} onValueChange={(value) => setFormData(prev => ({ ...prev, city: value }))}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar ciudad" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {cities.map((city) => (
-                      <SelectItem key={city} value={city}>
-                        {city}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="confirmPassword">Confirmar Contraseña *</Label>
+            <Input
+              id="confirmPassword"
+              type="password"
+              value={formData.confirmPassword}
+              onChange={(e) => setFormData(prev => ({ ...prev, confirmPassword: e.target.value }))}
+              placeholder="Repite la contraseña"
+            />
+          </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="password">Contraseña Temporal *</Label>
-              <Input
-                id="password"
-                type="password"
-                value={formData.password}
-                onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
-                placeholder="Mínimo 8 caracteres"
-              />
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="rol_id">Rol *</Label>
+            <Select value={formData.rol_id} onValueChange={(value) => setFormData(prev => ({ ...prev, rol_id: value }))}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecciona un rol" />
+              </SelectTrigger>
+              <SelectContent>
+                {roles.map((role) => (
+                  <SelectItem key={role.id} value={role.id.toString()}>
+                    {role.nombre}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirmar Contraseña *</Label>
-              <Input
-                id="confirmPassword"
-                type="password"
-                value={formData.confirmPassword}
-                onChange={(e) => setFormData(prev => ({ ...prev, confirmPassword: e.target.value }))}
-                placeholder="Repetir contraseña"
-              />
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="ciudad_id">Ciudad (Opcional)</Label>
+            <Input
+              id="ciudad_id"
+              type="number"
+              value={formData.ciudad_id}
+              onChange={(e) => setFormData(prev => ({ ...prev, ciudad_id: e.target.value }))}
+              placeholder="ID de la ciudad (opcional)"
+            />
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
               Cancelar
             </Button>
-            <Button type="submit">
-              Crear Usuario
+            <Button type="submit" disabled={loading}>
+              {loading ? "Creando..." : "Crear Usuario"}
             </Button>
           </DialogFooter>
         </form>

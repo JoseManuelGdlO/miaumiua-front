@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -17,172 +17,123 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Search, Plus, MoreHorizontal, Edit, Trash2, Key, Lock } from "lucide-react";
+import { Search, Plus, MoreHorizontal, Edit, Trash2, Key, Lock, Loader2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { permissionsService, Permission } from "@/services/permissionsService";
+import CreatePermissionModal from "@/components/modals/CreatePermissionModal";
+import EditPermissionModal from "@/components/modals/EditPermissionModal";
 
 const Permissions = () => {
+  const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
-  
-  const permissions = [
-    {
-      id: 1,
-      name: "dashboard.view",
-      displayName: "Ver Dashboard",
-      description: "Permite acceder y visualizar el panel principal del sistema",
-      category: "Dashboard",
-      type: "read",
-      roles: ["Administrador", "Supervisor Ventas", "Agente Chat"],
-      critical: false
-    },
-    {
-      id: 2,
-      name: "users.manage",
-      displayName: "Gestionar Usuarios", 
-      description: "Crear, editar y eliminar usuarios del sistema",
-      category: "Usuarios",
-      type: "write",
-      roles: ["Administrador"],
-      critical: true
-    },
-    {
-      id: 3,
-      name: "roles.manage",
-      displayName: "Gestionar Roles",
-      description: "Crear, modificar y asignar roles a usuarios",
-      category: "Seguridad",
-      type: "write", 
-      roles: ["Administrador"],
-      critical: true
-    },
-    {
-      id: 4,
-      name: "agents.configure",
-      displayName: "Configurar Agentes IA",
-      description: "Modificar contexto y configuración de agentes de chatbot",
-      category: "Agentes",
-      type: "write",
-      roles: ["Administrador", "Supervisor Técnico"],
-      critical: false
-    },
-    {
-      id: 5,
-      name: "inventory.manage",
-      displayName: "Gestionar Inventario",
-      description: "Agregar, modificar y eliminar productos del inventario",
-      category: "Inventario",
-      type: "write",
-      roles: ["Administrador", "Inventario", "Supervisor Técnico"],
-      critical: false
-    },
-    {
-      id: 6,
-      name: "customers.view",
-      displayName: "Ver Clientes",
-      description: "Acceder a la base de datos de clientes y su información",
-      category: "Clientes",
-      type: "read",
-      roles: ["Administrador", "Supervisor Ventas", "Agente Chat", "Marketing"],
-      critical: false
-    },
-    {
-      id: 7,
-      name: "customers.edit",
-      displayName: "Editar Clientes",
-      description: "Modificar información y datos de clientes existentes",
-      category: "Clientes", 
-      type: "write",
-      roles: ["Administrador", "Supervisor Ventas"],
-      critical: false
-    },
-    {
-      id: 8,
-      name: "promotions.manage",
-      displayName: "Gestionar Promociones",
-      description: "Crear, editar y eliminar campañas promocionales",
-      category: "Marketing",
-      type: "write",
-      roles: ["Administrador", "Supervisor Ventas", "Marketing"],
-      critical: false
-    },
-    {
-      id: 9,
-      name: "cities.manage", 
-      displayName: "Gestionar Ciudades",
-      description: "Agregar y configurar ciudades disponibles para venta",
-      category: "Configuración",
-      type: "write",
-      roles: ["Administrador"],
-      critical: false
-    },
-    {
-      id: 10,
-      name: "reports.access",
-      displayName: "Acceder Reportes",
-      description: "Generar y visualizar reportes del sistema",
-      category: "Reportes",
-      type: "read", 
-      roles: ["Administrador", "Supervisor Ventas", "Supervisor Técnico"],
-      critical: false
-    },
-    {
-      id: 11,
-      name: "system.configure",
-      displayName: "Configurar Sistema",
-      description: "Modificar configuraciones generales del sistema",
-      category: "Sistema",
-      type: "write",
-      roles: ["Administrador"],
-      critical: true
-    },
-    {
-      id: 12,
-      name: "chat.manage",
-      displayName: "Gestionar Chats",
-      description: "Supervisar y gestionar conversaciones de chatbots",
-      category: "Chatbots",
-      type: "write",
-      roles: ["Administrador", "Supervisor Ventas", "Agente Chat"],
-      critical: false
+  const [permissions, setPermissions] = useState<Permission[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [selectedPermission, setSelectedPermission] = useState<Permission | null>(null);
+
+  // Cargar permisos al montar el componente
+  useEffect(() => {
+    loadPermissions();
+  }, []);
+
+  const loadPermissions = async () => {
+    try {
+      setLoading(true);
+      const response = await permissionsService.getAllPermissions({ activos: 'true' });
+      
+      if (response.success) {
+        setPermissions(response.data.permissions);
+      } else {
+        toast({
+          title: "Error",
+          description: "No se pudieron cargar los permisos",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error('Error al cargar permisos:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Error al cargar los permisos",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
+
+  const handleDeletePermission = async (permission: Permission) => {
+    if (!confirm(`¿Estás seguro de que quieres eliminar el permiso "${permission.nombre}"?`)) {
+      return;
+    }
+
+    try {
+      const response = await permissionsService.deletePermission(permission.id);
+      
+      if (response.success) {
+        toast({
+          title: "Permiso eliminado",
+          description: `Permiso "${permission.nombre}" eliminado exitosamente`,
+        });
+        loadPermissions(); // Recargar la lista
+      }
+    } catch (error) {
+      console.error('Error al eliminar permiso:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Error al eliminar el permiso",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleEditPermission = (permission: Permission) => {
+    setSelectedPermission(permission);
+    setIsEditModalOpen(true);
+  };
 
   const getTypeIcon = (type: string) => {
-    return type === "read" ? "👁️" : "✏️";
-  };
-
-  const getTypeBadge = (type: string) => {
-    return type === "read" 
-      ? <Badge variant="secondary">Lectura</Badge>
-      : <Badge className="bg-warning text-warning-foreground">Escritura</Badge>;
-  };
-
-  const getCategoryBadge = (category: string) => {
-    const categoryColors: Record<string, string> = {
-      "Dashboard": "bg-primary/10 text-primary",
-      "Usuarios": "bg-warning/10 text-warning",
-      "Seguridad": "bg-destructive/10 text-destructive",
-      "Agentes": "bg-success/10 text-success", 
-      "Inventario": "bg-accent/10 text-accent-foreground",
-      "Clientes": "bg-secondary text-secondary-foreground",
-      "Marketing": "bg-primary/20 text-primary",
-      "Configuración": "bg-muted text-muted-foreground",
-      "Reportes": "bg-success/20 text-success",
-      "Sistema": "bg-destructive/20 text-destructive",
-      "Chatbots": "bg-primary/15 text-primary"
+    const icons: Record<string, string> = {
+      "lectura": "👁️",
+      "escritura": "✏️",
+      "eliminacion": "🗑️",
+      "administracion": "⚙️",
+      "especial": "🔐"
     };
-    
-    return (
-      <Badge variant="outline" className={categoryColors[category] || "bg-secondary text-secondary-foreground"}>
-        {category}
-      </Badge>
-    );
+    return icons[type] || "📋";
+  };
+
+  const getTypeColor = (type: string) => {
+    const colors: Record<string, string> = {
+      "lectura": "bg-blue-100 text-blue-800",
+      "escritura": "bg-green-100 text-green-800",
+      "eliminacion": "bg-red-100 text-red-800",
+      "administracion": "bg-purple-100 text-purple-800",
+      "especial": "bg-orange-100 text-orange-800"
+    };
+    return colors[type] || "bg-gray-100 text-gray-800";
   };
 
   const filteredPermissions = permissions.filter(permission =>
-    permission.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    permission.displayName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    permission.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    permission.category.toLowerCase().includes(searchTerm.toLowerCase())
+    permission.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    permission.categoria.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    permission.descripcion?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    permission.tipo.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  if (loading) {
+    return (
+      <div className="p-6 space-y-6 max-w-7xl mx-auto">
+        <div className="flex items-center justify-center h-64">
+          <div className="flex items-center space-x-2">
+            <Loader2 className="h-6 w-6 animate-spin" />
+            <span>Cargando permisos...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
@@ -190,10 +141,10 @@ const Permissions = () => {
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-foreground">Gestión de Permisos</h1>
           <p className="text-muted-foreground">
-            Define y controla los permisos específicos del sistema Miau Miau
+            Administra los permisos del sistema Miau Miau
           </p>
         </div>
-        <Button className="gap-2">
+        <Button className="gap-2" onClick={() => setIsCreateModalOpen(true)}>
           <Key className="h-4 w-4" />
           Nuevo Permiso
         </Button>
@@ -226,56 +177,41 @@ const Permissions = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead>Permiso</TableHead>
-                  <TableHead>Descripción</TableHead>
                   <TableHead>Categoría</TableHead>
                   <TableHead>Tipo</TableHead>
-                  <TableHead>Roles Asignados</TableHead>
+                  <TableHead>Descripción</TableHead>
+                  <TableHead>Creado</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredPermissions.map((permission) => (
-                  <TableRow key={permission.id} className={permission.critical ? "bg-destructive/5" : ""}>
+                  <TableRow key={permission.id}>
                     <TableCell>
                       <div className="flex items-center space-x-3">
-                        <span className="text-lg">{getTypeIcon(permission.type)}</span>
+                        <span className="text-2xl">{getTypeIcon(permission.tipo)}</span>
                         <div>
-                          <div className="font-medium text-foreground flex items-center gap-2">
-                            {permission.displayName}
-                            {permission.critical && <Lock className="h-3 w-3 text-destructive" />}
-                          </div>
-                          <div className="text-xs text-muted-foreground font-mono">
-                            {permission.name}
-                          </div>
+                          <div className="font-medium text-foreground">{permission.nombre}</div>
                         </div>
                       </div>
                     </TableCell>
                     <TableCell>
+                      <Badge variant="outline">{permission.categoria}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge className={getTypeColor(permission.tipo)}>
+                        {permission.tipo.charAt(0).toUpperCase() + permission.tipo.slice(1)}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
                       <div className="max-w-xs">
                         <p className="text-sm text-muted-foreground line-clamp-2">
-                          {permission.description}
+                          {permission.descripcion || "Sin descripción"}
                         </p>
                       </div>
                     </TableCell>
-                    <TableCell>
-                      {getCategoryBadge(permission.category)}
-                    </TableCell>
-                    <TableCell>
-                      {getTypeBadge(permission.type)}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1 max-w-md">
-                        {permission.roles.slice(0, 2).map((role, index) => (
-                          <Badge key={index} variant="outline" className="text-xs">
-                            {role}
-                          </Badge>
-                        ))}
-                        {permission.roles.length > 2 && (
-                          <Badge variant="secondary" className="text-xs">
-                            +{permission.roles.length - 2} más
-                          </Badge>
-                        )}
-                      </div>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {permission.created_at ? new Date(permission.created_at).toLocaleDateString('es-ES') : 'N/A'}
                     </TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>
@@ -285,20 +221,17 @@ const Permissions = () => {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleEditPermission(permission)}>
                             <Edit className="mr-2 h-4 w-4" />
                             Editar Permiso
                           </DropdownMenuItem>
-                          <DropdownMenuItem>
-                            <Key className="mr-2 h-4 w-4" />
-                            Asignar a Roles
+                          <DropdownMenuItem 
+                            className="text-destructive"
+                            onClick={() => handleDeletePermission(permission)}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Eliminar
                           </DropdownMenuItem>
-                          {!permission.critical && (
-                            <DropdownMenuItem className="text-destructive">
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Eliminar
-                            </DropdownMenuItem>
-                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
@@ -314,13 +247,25 @@ const Permissions = () => {
               Mostrando {filteredPermissions.length} de {permissions.length} permisos
             </div>
             <div className="flex items-center space-x-4">
-              <span>Lectura: {permissions.filter(p => p.type === "read").length}</span>
-              <span>Escritura: {permissions.filter(p => p.type === "write").length}</span>
-              <span>Críticos: {permissions.filter(p => p.critical).length}</span>
+              <span>Total permisos: {permissions.length}</span>
+              <span>Permisos activos: {permissions.filter(p => !p.baja_logica).length}</span>
             </div>
           </div>
         </CardContent>
       </Card>
+
+      <CreatePermissionModal 
+        open={isCreateModalOpen} 
+        onOpenChange={setIsCreateModalOpen}
+        onPermissionCreated={loadPermissions}
+      />
+
+      <EditPermissionModal
+        open={isEditModalOpen}
+        onOpenChange={setIsEditModalOpen}
+        permission={selectedPermission}
+        onPermissionUpdated={loadPermissions}
+      />
     </div>
   );
 };

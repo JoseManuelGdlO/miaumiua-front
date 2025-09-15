@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -8,6 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -18,17 +18,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { clientesService } from "@/services/clientesService";
+import { clientesService, Cliente } from "@/services/clientesService";
 import { citiesService } from "@/services/citiesService";
 import { Loader2 } from "lucide-react";
 
-interface CreateCustomerModalProps {
+interface EditCustomerModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onClienteCreated: () => void;
+  cliente: Cliente | null;
+  onClienteUpdated: () => void;
 }
 
-const CreateCustomerModal = ({ open, onOpenChange, onClienteCreated }: CreateCustomerModalProps) => {
+const EditCustomerModal = ({ open, onOpenChange, cliente, onClienteUpdated }: EditCustomerModalProps) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [cities, setCities] = useState<Array<{ id: number; nombre: string; departamento: string }>>([]);
@@ -36,7 +37,7 @@ const CreateCustomerModal = ({ open, onOpenChange, onClienteCreated }: CreateCus
     nombre_completo: "",
     correo_electronico: "",
     ciudad_id: "",
-    contrasena: "cliente123" // Contraseña por defecto
+    contrasena: ""
   });
 
   // Cargar ciudades al abrir el modal
@@ -46,17 +47,17 @@ const CreateCustomerModal = ({ open, onOpenChange, onClienteCreated }: CreateCus
     }
   }, [open]);
 
-  // Reset form cuando se abre el modal
+  // Actualizar formulario cuando cambie el cliente
   useEffect(() => {
-    if (open) {
+    if (cliente && open) {
       setFormData({
-        nombre_completo: "",
-        correo_electronico: "",
-        ciudad_id: "",
-        contrasena: "cliente123"
+        nombre_completo: cliente.nombre_completo,
+        correo_electronico: cliente.correo_electronico,
+        ciudad_id: cliente.ciudad_id.toString(),
+        contrasena: ""
       });
     }
-  }, [open]);
+  }, [cliente, open]);
 
   const loadCities = async () => {
     try {
@@ -71,6 +72,8 @@ const CreateCustomerModal = ({ open, onOpenChange, onClienteCreated }: CreateCus
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!cliente) return;
 
     if (!formData.nombre_completo || !formData.correo_electronico || !formData.ciudad_id) {
       toast({
@@ -93,26 +96,32 @@ const CreateCustomerModal = ({ open, onOpenChange, onClienteCreated }: CreateCus
     try {
       setLoading(true);
 
-      const response = await clientesService.createCliente({
+      const updateData: any = {
         nombre_completo: formData.nombre_completo,
         correo_electronico: formData.correo_electronico,
-        ciudad_id: parseInt(formData.ciudad_id),
-        contrasena: formData.contrasena
-      });
+        ciudad_id: parseInt(formData.ciudad_id)
+      };
+
+      // Solo incluir contraseña si se proporciona
+      if (formData.contrasena.trim()) {
+        updateData.contrasena = formData.contrasena;
+      }
+
+      const response = await clientesService.updateCliente(cliente.id, updateData);
 
       if (response.success) {
         toast({
-          title: "Cliente creado",
-          description: `${formData.nombre_completo} ha sido registrado exitosamente`,
+          title: "Cliente actualizado",
+          description: `${formData.nombre_completo} ha sido actualizado exitosamente`,
         });
-        onClienteCreated();
+        onClienteUpdated();
         onOpenChange(false);
       }
     } catch (error) {
-      console.error('Error al crear cliente:', error);
+      console.error('Error al actualizar cliente:', error);
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Error al crear el cliente",
+        description: error instanceof Error ? error.message : "Error al actualizar el cliente",
         variant: "destructive"
       });
     } finally {
@@ -131,9 +140,9 @@ const CreateCustomerModal = ({ open, onOpenChange, onClienteCreated }: CreateCus
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
-          <DialogTitle>Nuevo Cliente</DialogTitle>
+          <DialogTitle>Editar Cliente</DialogTitle>
           <DialogDescription>
-            Registra un nuevo cliente en el sistema Miau Miau
+            Modifica la información del cliente. Deja la contraseña vacía para mantener la actual.
           </DialogDescription>
         </DialogHeader>
 
@@ -180,17 +189,14 @@ const CreateCustomerModal = ({ open, onOpenChange, onClienteCreated }: CreateCus
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="contrasena">Contraseña</Label>
+            <Label htmlFor="contrasena">Nueva Contraseña</Label>
             <Input
               id="contrasena"
               type="password"
               value={formData.contrasena}
               onChange={(e) => handleInputChange('contrasena', e.target.value)}
-              placeholder="Contraseña del cliente"
+              placeholder="Deja vacío para mantener la actual"
             />
-            <p className="text-xs text-muted-foreground">
-              Si no se especifica, se usará "cliente123" como contraseña por defecto
-            </p>
           </div>
 
           <DialogFooter>
@@ -204,7 +210,7 @@ const CreateCustomerModal = ({ open, onOpenChange, onClienteCreated }: CreateCus
             </Button>
             <Button type="submit" disabled={loading}>
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Crear Cliente
+              Actualizar Cliente
             </Button>
           </DialogFooter>
         </form>
@@ -213,4 +219,4 @@ const CreateCustomerModal = ({ open, onOpenChange, onClienteCreated }: CreateCus
   );
 };
 
-export default CreateCustomerModal;
+export default EditCustomerModal;

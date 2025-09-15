@@ -14,131 +14,79 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { Shield, AlertTriangle } from "lucide-react";
+import { Shield, AlertTriangle, Loader2 } from "lucide-react";
+import { rolesService, Permission } from "@/services/rolesService";
+import { permissionsService } from "@/services/permissionsService";
 
 interface ManageRolePermissionsModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   roleId?: string;
   roleName?: string;
+  onPermissionsUpdated?: () => void;
 }
 
 const ManageRolePermissionsModal = ({ 
   open, 
   onOpenChange, 
   roleId, 
-  roleName 
+  roleName,
+  onPermissionsUpdated
 }: ManageRolePermissionsModalProps) => {
   const { toast } = useToast();
-  const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [allPermissions, setAllPermissions] = useState<Permission[]>([]);
+  const [rolePermissions, setRolePermissions] = useState<Permission[]>([]);
+  const [selectedPermissions, setSelectedPermissions] = useState<number[]>([]);
 
-  const permissionCategories = [
-    {
-      name: "Dashboard & Navegación",
-      icon: "📊",
-      permissions: [
-        { id: "dashboard.view", name: "Ver Dashboard Principal", description: "Acceso al panel principal del sistema", critical: false, currentlyHas: true },
-        { id: "navigation.access", name: "Navegación Completa", description: "Acceso a todas las secciones del menú", critical: false, currentlyHas: false }
-      ]
-    },
-    {
-      name: "Gestión de Usuarios",
-      icon: "👥", 
-      permissions: [
-        { id: "users.view", name: "Ver Lista de Usuarios", description: "Visualizar información de usuarios del sistema", critical: false, currentlyHas: true },
-        { id: "users.create", name: "Crear Usuarios", description: "Agregar nuevos usuarios al sistema", critical: true, currentlyHas: false },
-        { id: "users.edit", name: "Editar Usuarios", description: "Modificar información de usuarios existentes", critical: true, currentlyHas: false },
-        { id: "users.delete", name: "Eliminar Usuarios", description: "Eliminar usuarios del sistema", critical: true, currentlyHas: false }
-      ]
-    },
-    {
-      name: "Roles y Seguridad",
-      icon: "🔐",
-      permissions: [
-        { id: "roles.view", name: "Ver Roles", description: "Visualizar roles del sistema", critical: false, currentlyHas: false },
-        { id: "roles.create", name: "Crear Roles", description: "Crear nuevos roles en el sistema", critical: true, currentlyHas: false },
-        { id: "roles.edit", name: "Editar Roles", description: "Modificar roles existentes", critical: true, currentlyHas: false },
-        { id: "permissions.manage", name: "Gestionar Permisos", description: "Asignar y revocar permisos", critical: true, currentlyHas: false }
-      ]
-    },
-    {
-      name: "Agentes de IA",
-      icon: "🤖",
-      permissions: [
-        { id: "agents.view", name: "Ver Configuración de Agentes", description: "Acceder a la configuración de chatbots", critical: false, currentlyHas: true },
-        { id: "agents.edit", name: "Editar Contexto de Agentes", description: "Modificar prompts y contexto de agentes IA", critical: false, currentlyHas: false },
-        { id: "agents.deploy", name: "Implementar Cambios", description: "Aplicar cambios en agentes activos", critical: true, currentlyHas: false }
-      ]
-    },
-    {
-      name: "Inventario y Productos",
-      icon: "📦",
-      permissions: [
-        { id: "inventory.view", name: "Ver Inventario", description: "Acceso a información de stock y productos", critical: false, currentlyHas: false },
-        { id: "inventory.edit", name: "Editar Inventario", description: "Modificar cantidades y productos", critical: false, currentlyHas: false },
-        { id: "products.manage", name: "Gestionar Productos", description: "Crear, editar y eliminar productos", critical: false, currentlyHas: false }
-      ]
-    },
-    {
-      name: "Clientes y Ventas",
-      icon: "🛒",
-      permissions: [
-        { id: "customers.view", name: "Ver Clientes", description: "Acceder a base de datos de clientes", critical: false, currentlyHas: true },
-        { id: "customers.edit", name: "Editar Clientes", description: "Modificar información de clientes", critical: false, currentlyHas: false },
-        { id: "orders.view", name: "Ver Pedidos", description: "Acceso a historial de pedidos", critical: false, currentlyHas: false },
-        { id: "orders.manage", name: "Gestionar Pedidos", description: "Crear y modificar pedidos", critical: false, currentlyHas: false }
-      ]
-    },
-    {
-      name: "Rutas y Logística",
-      icon: "🚛",
-      permissions: [
-        { id: "routes.view", name: "Ver Rutas", description: "Visualizar planificación de rutas", critical: false, currentlyHas: false },
-        { id: "routes.plan", name: "Planificar Rutas", description: "Crear y optimizar rutas de entrega", critical: false, currentlyHas: false },
-        { id: "routes.assign", name: "Asignar Repartidores", description: "Asignar conductores a rutas", critical: false, currentlyHas: false }
-      ]
-    },
-    {
-      name: "Promociones y Marketing", 
-      icon: "🎯",
-      permissions: [
-        { id: "promotions.view", name: "Ver Promociones", description: "Acceder a campañas promocionales", critical: false, currentlyHas: false },
-        { id: "promotions.create", name: "Crear Promociones", description: "Diseñar nuevas campañas", critical: false, currentlyHas: false },
-        { id: "promotions.edit", name: "Editar Promociones", description: "Modificar campañas existentes", critical: false, currentlyHas: false }
-      ]
-    },
-    {
-      name: "Reportes y Analytics",
-      icon: "📈",
-      permissions: [
-        { id: "reports.view", name: "Ver Reportes", description: "Acceder a reportes del sistema", critical: false, currentlyHas: false },
-        { id: "reports.generate", name: "Generar Reportes", description: "Crear reportes personalizados", critical: false, currentlyHas: false },
-        { id: "analytics.access", name: "Acceder a Analytics", description: "Visualizar métricas avanzadas", critical: false, currentlyHas: false }
-      ]
-    },
-    {
-      name: "Configuración del Sistema",
-      icon: "⚙️",
-      permissions: [
-        { id: "cities.manage", name: "Gestionar Ciudades", description: "Administrar ciudades disponibles", critical: false, currentlyHas: false },
-        { id: "system.configure", name: "Configurar Sistema", description: "Modificar configuraciones generales", critical: true, currentlyHas: false },
-        { id: "system.backup", name: "Gestionar Respaldos", description: "Crear y restaurar respaldos", critical: true, currentlyHas: false }
-      ]
-    }
-  ];
-
-  // Simular carga de permisos actuales del rol
+  // Cargar datos cuando se abre el modal
   useEffect(() => {
     if (open && roleId) {
-      const currentPermissions = permissionCategories
-        .flatMap(cat => cat.permissions)
-        .filter(perm => perm.currentlyHas)
-        .map(perm => perm.id);
-      setSelectedPermissions(currentPermissions);
+      loadData();
     }
   }, [open, roleId]);
 
-  const handlePermissionToggle = (permissionId: string) => {
+  const loadData = async () => {
+    if (!roleId) return;
+    
+    setLoading(true);
+    try {
+      // Cargar todos los permisos disponibles
+      const permissionsResponse = await permissionsService.getAllPermissions({ activos: 'true' });
+      if (permissionsResponse.success) {
+        setAllPermissions(permissionsResponse.data.permissions);
+      }
+
+      // Cargar permisos del rol
+      const rolePermissionsResponse = await rolesService.getRolePermissions(parseInt(roleId));
+      if (rolePermissionsResponse.success) {
+        setRolePermissions(rolePermissionsResponse.data.permissions);
+        setSelectedPermissions(rolePermissionsResponse.data.permissions.map(p => p.id));
+      }
+    } catch (error) {
+      console.error('Error al cargar datos:', error);
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar los permisos",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Agrupar permisos por categoría
+  const permissionCategories = allPermissions.reduce((acc, permission) => {
+    const category = permission.categoria;
+    if (!acc[category]) {
+      acc[category] = [];
+    }
+    acc[category].push(permission);
+    return acc;
+  }, {} as Record<string, Permission[]>);
+
+  const handlePermissionToggle = (permissionId: number) => {
     setSelectedPermissions(prev =>
       prev.includes(permissionId)
         ? prev.filter(id => id !== permissionId)
@@ -146,23 +94,64 @@ const ManageRolePermissionsModal = ({
     );
   };
 
-  const handleSave = () => {
-    console.log("Guardando permisos para rol:", roleId, selectedPermissions);
+  const handleSave = async () => {
+    if (!roleId) return;
     
-    toast({
-      title: "Permisos actualizados",
-      description: `Se han actualizado ${selectedPermissions.length} permisos para el rol "${roleName}"`,
-    });
-    
-    onOpenChange(false);
+    setSaving(true);
+    try {
+      const currentPermissionIds = rolePermissions.map(p => p.id);
+      const permissionsToAdd = selectedPermissions.filter(id => !currentPermissionIds.includes(id));
+      const permissionsToRemove = currentPermissionIds.filter(id => !selectedPermissions.includes(id));
+
+      // Agregar nuevos permisos
+      for (const permissionId of permissionsToAdd) {
+        await rolesService.assignPermission(parseInt(roleId), permissionId);
+      }
+
+      // Remover permisos
+      for (const permissionId of permissionsToRemove) {
+        await rolesService.removePermission(parseInt(roleId), permissionId);
+      }
+
+      toast({
+        title: "Permisos actualizados",
+        description: `Se han actualizado los permisos para el rol "${roleName}"`,
+      });
+
+      onOpenChange(false);
+      onPermissionsUpdated?.();
+    } catch (error) {
+      console.error('Error al actualizar permisos:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Error al actualizar los permisos",
+        variant: "destructive"
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const criticalPermissionsCount = selectedPermissions.filter(id => {
-    const permission = permissionCategories
-      .flatMap(cat => cat.permissions)
-      .find(perm => perm.id === id);
-    return permission?.critical;
+    const permission = allPermissions.find(p => p.id === id);
+    return permission?.tipo === 'administracion';
   }).length;
+
+  const getCategoryIcon = (categoryName: string) => {
+    const icons: Record<string, string> = {
+      "Dashboard": "📊",
+      "Usuarios": "👥",
+      "Roles": "🔐",
+      "Permisos": "🛡️",
+      "Agentes": "🤖",
+      "Inventario": "📦",
+      "Clientes": "👤",
+      "Marketing": "🎯",
+      "Reportes": "📈",
+      "Sistema": "⚙️"
+    };
+    return icons[categoryName] || "📋";
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -173,87 +162,121 @@ const ManageRolePermissionsModal = ({
             Gestionar Permisos - {roleName}
           </DialogTitle>
           <DialogDescription>
-            Configura los permisos específicos que tendrán los usuarios asignados a este rol
+            Asigna o revoca permisos para el rol seleccionado. Los permisos marcados como críticos requieren especial atención.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
-          {/* Resumen de permisos */}
-          <Card className="bg-muted/50">
-            <CardContent className="pt-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <Badge variant="secondary" className="gap-1">
-                    {selectedPermissions.length} permisos seleccionados
-                  </Badge>
-                  {criticalPermissionsCount > 0 && (
-                    <Badge variant="destructive" className="gap-1">
-                      <AlertTriangle className="h-3 w-3" />
-                      {criticalPermissionsCount} críticos
-                    </Badge>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Separator />
-
-          {/* Categorías de permisos */}
-          <div className="space-y-4 max-h-96 overflow-y-auto">
-            {permissionCategories.map((category) => (
-              <Card key={category.name}>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-medium flex items-center gap-2">
-                    <span className="text-lg">{category.icon}</span>
-                    {category.name}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {category.permissions.map((permission) => (
-                      <div key={permission.id} className="space-y-2">
-                        <div className="flex items-start space-x-3">
-                          <Checkbox
-                            id={permission.id}
-                            checked={selectedPermissions.includes(permission.id)}
-                            onCheckedChange={() => handlePermissionToggle(permission.id)}
-                            className="mt-0.5"
-                          />
-                          <div className="flex-1 min-w-0">
-                            <Label 
-                              htmlFor={permission.id} 
-                              className={`text-sm font-medium cursor-pointer block ${
-                                permission.critical ? 'text-destructive' : ''
-                              }`}
-                            >
-                              {permission.name}
-                              {permission.critical && (
-                                <Badge variant="outline" className="ml-2 text-xs text-destructive border-destructive">
-                                  Crítico
-                                </Badge>
-                              )}
-                            </Label>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {permission.description}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+        {loading ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="flex items-center space-x-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>Cargando permisos...</span>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="space-y-6">
+            {/* Resumen de permisos */}
+            <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
+              <div className="flex items-center space-x-4">
+                <div className="text-sm">
+                  <span className="font-medium">{selectedPermissions.length}</span> permisos seleccionados
+                </div>
+                {criticalPermissionsCount > 0 && (
+                  <div className="flex items-center space-x-1 text-destructive">
+                    <AlertTriangle className="h-4 w-4" />
+                    <span className="text-sm font-medium">{criticalPermissionsCount} críticos</span>
+                  </div>
+                )}
+              </div>
+              <Badge variant="outline">
+                {Object.keys(permissionCategories).length} categorías
+              </Badge>
+            </div>
+
+            {/* Lista de permisos por categoría */}
+            <div className="space-y-4">
+              {Object.entries(permissionCategories).map(([categoryName, categoryPermissions]) => (
+                <Card key={categoryName}>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <span className="text-lg">{getCategoryIcon(categoryName)}</span>
+                      {categoryName}
+                      <Badge variant="secondary" className="text-xs">
+                        {categoryPermissions.length} permisos
+                      </Badge>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      {categoryPermissions.map((permission) => {
+                        const isSelected = selectedPermissions.includes(permission.id);
+                        const isCritical = permission.tipo === 'administracion';
+                        
+                        return (
+                          <div key={permission.id} className="flex items-start space-x-3 p-3 rounded-lg border">
+                            <Checkbox
+                              id={permission.id.toString()}
+                              checked={isSelected}
+                              onCheckedChange={() => handlePermissionToggle(permission.id)}
+                              className="mt-1"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <Label 
+                                htmlFor={permission.id.toString()}
+                                className={`text-sm font-medium cursor-pointer ${isCritical ? 'text-destructive' : ''}`}
+                              >
+                                {permission.nombre}
+                                {isCritical && (
+                                  <Badge variant="destructive" className="ml-2 text-xs">
+                                    Crítico
+                                  </Badge>
+                                )}
+                              </Label>
+                              {permission.descripcion && (
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  {permission.descripcion}
+                                </p>
+                              )}
+                              <div className="flex items-center space-x-2 mt-1">
+                                <Badge variant="outline" className="text-xs">
+                                  {permission.tipo}
+                                </Badge>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <Separator />
 
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          <Button 
+            type="button" 
+            variant="outline" 
+            onClick={() => onOpenChange(false)}
+            disabled={saving}
+          >
             Cancelar
           </Button>
-          <Button onClick={handleSave}>
-            Guardar Cambios
+          <Button 
+            onClick={handleSave}
+            disabled={loading || saving}
+          >
+            {saving ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Guardando...
+              </>
+            ) : (
+              "Guardar Cambios"
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>

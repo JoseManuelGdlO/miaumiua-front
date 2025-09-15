@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -18,16 +18,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { citiesService } from "@/services/citiesService";
+import { citiesService, City } from "@/services/citiesService";
 import { Loader2 } from "lucide-react";
 
-interface CreateCityModalProps {
+interface EditCityModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onCityCreated: () => void;
+  city: City | null;
+  onCityUpdated: () => void;
 }
 
-const CreateCityModal = ({ open, onOpenChange, onCityCreated }: CreateCityModalProps) => {
+const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModalProps) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -40,21 +41,25 @@ const CreateCityModal = ({ open, onOpenChange, onCityCreated }: CreateCityModalP
     estado_inicial: "activa" as const
   });
 
-  // Reset form cuando se abre el modal
-  const resetForm = () => {
-    setFormData({
-      nombre: "",
-      departamento: "",
-      direccion_operaciones: "",
-      manager: "",
-      telefono: "",
-      email_contacto: "",
-      estado_inicial: "activa"
-    });
-  };
+  // Actualizar formulario cuando cambie la ciudad
+  useEffect(() => {
+    if (city && open) {
+      setFormData({
+        nombre: city.nombre,
+        departamento: city.departamento,
+        direccion_operaciones: city.direccion_operaciones,
+        manager: city.manager,
+        telefono: city.telefono,
+        email_contacto: city.email_contacto,
+        estado_inicial: city.estado_inicial
+      });
+    }
+  }, [city, open]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!city) return;
 
     if (!formData.nombre || !formData.departamento || !formData.manager || !formData.telefono || !formData.email_contacto) {
       toast({
@@ -86,22 +91,21 @@ const CreateCityModal = ({ open, onOpenChange, onCityCreated }: CreateCityModalP
     try {
       setLoading(true);
 
-      const response = await citiesService.createCity(formData);
+      const response = await citiesService.updateCity(city.id, formData);
 
       if (response.success) {
         toast({
-          title: "Ciudad creada",
-          description: `${formData.nombre} ha sido registrada exitosamente`,
+          title: "Ciudad actualizada",
+          description: `${formData.nombre} ha sido actualizada exitosamente`,
         });
-        onCityCreated();
-        resetForm();
+        onCityUpdated();
         onOpenChange(false);
       }
     } catch (error) {
-      console.error('Error al crear ciudad:', error);
+      console.error('Error al actualizar ciudad:', error);
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Error al crear la ciudad",
+        description: error instanceof Error ? error.message : "Error al actualizar la ciudad",
         variant: "destructive"
       });
     } finally {
@@ -128,9 +132,9 @@ const CreateCityModal = ({ open, onOpenChange, onCityCreated }: CreateCityModalP
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
-          <DialogTitle>Nueva Ciudad</DialogTitle>
+          <DialogTitle>Editar Ciudad</DialogTitle>
           <DialogDescription>
-            Registra una nueva ciudad de operación para Miau Miau
+            Modifica la información de la ciudad de operación
           </DialogDescription>
         </DialogHeader>
 
@@ -227,17 +231,14 @@ const CreateCityModal = ({ open, onOpenChange, onCityCreated }: CreateCityModalP
             <Button
               type="button"
               variant="outline"
-              onClick={() => {
-                resetForm();
-                onOpenChange(false);
-              }}
+              onClick={() => onOpenChange(false)}
               disabled={loading}
             >
               Cancelar
             </Button>
             <Button type="submit" disabled={loading}>
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Crear Ciudad
+              Actualizar Ciudad
             </Button>
           </DialogFooter>
         </form>
@@ -246,4 +247,4 @@ const CreateCityModal = ({ open, onOpenChange, onCityCreated }: CreateCityModalP
   );
 };
 
-export default CreateCityModal;
+export default EditCityModal;

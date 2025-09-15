@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -17,66 +17,54 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Search, Plus, MoreHorizontal, Edit, Trash2, Shield, Users } from "lucide-react";
+import { Search, Plus, MoreHorizontal, Edit, Trash2, Shield, Users, Loader2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { rolesService, Role } from "@/services/rolesService";
 import CreateRoleModal from "@/components/modals/CreateRoleModal";
 import ManageRolePermissionsModal from "@/components/modals/ManageRolePermissionsModal";
 
 const Roles = () => {
+  const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [loading, setLoading] = useState(true);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [permissionsModalOpen, setPermissionsModalOpen] = useState(false);
   const [selectedRole, setSelectedRole] = useState<{ id: string; name: string } | null>(null);
-  
-  const roles = [
-    {
-      id: 1,
-      name: "Administrador",
-      description: "Acceso completo al sistema, gestión de usuarios y configuraciones",
-      permissions: ["Gestión completa", "Usuarios", "Roles", "Inventario", "Reportes", "Configuración"],
-      users: 2,
-      createdAt: "2024-01-10"
-    },
-    {
-      id: 2,
-      name: "Supervisor Ventas",
-      description: "Supervisión de equipos de venta y acceso a métricas comerciales",
-      permissions: ["Ver Dashboard", "Gestión Clientes", "Reportes Ventas", "Promociones"],
-      users: 3,
-      createdAt: "2024-01-10"
-    },
-    {
-      id: 3,
-      name: "Supervisor Técnico",
-      description: "Gestión técnica de agentes IA y configuraciones de chatbots",
-      permissions: ["Contexto Agentes", "Configuración Bots", "Reportes Técnicos", "Inventario"],
-      users: 1,
-      createdAt: "2024-01-10"
-    },
-    {
-      id: 4,
-      name: "Agente Chat",
-      description: "Operación básica de chatbots y atención al cliente",
-      permissions: ["Ver Dashboard", "Gestión Clientes", "Chat Management"],
-      users: 8,
-      createdAt: "2024-01-10"
-    },
-    {
-      id: 5,
-      name: "Inventario",
-      description: "Gestión de stock y productos por ciudad",
-      permissions: ["Gestión Inventario", "Productos", "Reportes Stock", "Ciudades"],
-      users: 2,
-      createdAt: "2024-01-10"
-    },
-    {
-      id: 6,
-      name: "Marketing",
-      description: "Creación y gestión de campañas promocionales",
-      permissions: ["Promociones", "Campañas", "Reportes Marketing", "Clientes"],
-      users: 1,
-      createdAt: "2024-01-12"
+
+  // Cargar roles al montar el componente
+  useEffect(() => {
+    loadRoles();
+  }, []);
+
+  const loadRoles = async () => {
+    try {
+      setLoading(true);
+      const response = await rolesService.getAllRoles({ 
+        activos: 'true',
+        include_permissions: 'true'
+      });
+      
+      if (response.success) {
+        setRoles(response.data.roles);
+      } else {
+        toast({
+          title: "Error",
+          description: "No se pudieron cargar los roles",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error('Error al cargar roles:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Error al cargar los roles",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
 
   const getRoleIcon = (roleName: string) => {
     const icons: Record<string, string> = {
@@ -91,9 +79,9 @@ const Roles = () => {
   };
 
   const filteredRoles = roles.filter(role =>
-    role.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    role.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    role.permissions.some(p => p.toLowerCase().includes(searchTerm.toLowerCase()))
+    role.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (role.descripcion && role.descripcion.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (role.permissions && role.permissions.some(p => p.nombre.toLowerCase().includes(searchTerm.toLowerCase())))
   );
 
   return (
@@ -146,78 +134,100 @@ const Roles = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredRoles.map((role) => (
-                  <TableRow key={role.id}>
-                    <TableCell>
-                      <div className="flex items-center space-x-3">
-                        <span className="text-2xl">{getRoleIcon(role.name)}</span>
-                        <div>
-                          <div className="font-medium text-foreground">{role.name}</div>
-                        </div>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-8">
+                      <div className="flex items-center justify-center space-x-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>Cargando roles...</span>
                       </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="max-w-xs">
-                        <p className="text-sm text-muted-foreground line-clamp-2">
-                          {role.description}
-                        </p>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1 max-w-md">
-                        {role.permissions.slice(0, 3).map((permission, index) => (
-                          <Badge key={index} variant="secondary" className="text-xs">
-                            {permission}
-                          </Badge>
-                        ))}
-                        {role.permissions.length > 3 && (
-                          <Badge variant="outline" className="text-xs">
-                            +{role.permissions.length - 3} más
-                          </Badge>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center space-x-2">
-                        <Users className="h-4 w-4 text-muted-foreground" />
-                        <span className="font-medium">{role.users}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {role.createdAt}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" className="h-8 w-8 p-0">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem>
-                            <Edit className="mr-2 h-4 w-4" />
-                            Editar Rol
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => {
-                            setSelectedRole({ id: role.id.toString(), name: role.name });
-                            setPermissionsModalOpen(true);
-                          }}>
-                            <Shield className="mr-2 h-4 w-4" />
-                            Gestionar Permisos
-                          </DropdownMenuItem>
-                          <DropdownMenuItem>
-                            <Users className="mr-2 h-4 w-4" />
-                            Ver Usuarios
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className="text-destructive">
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Eliminar
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : filteredRoles.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                      No se encontraron roles
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredRoles.map((role) => (
+                    <TableRow key={role.id}>
+                      <TableCell>
+                        <div className="flex items-center space-x-3">
+                          <span className="text-2xl">{getRoleIcon(role.nombre)}</span>
+                          <div>
+                            <div className="font-medium text-foreground">{role.nombre}</div>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="max-w-xs">
+                          <p className="text-sm text-muted-foreground line-clamp-2">
+                            {role.descripcion || "Sin descripción"}
+                          </p>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1 max-w-md">
+                          {role.permissions && role.permissions.slice(0, 3).map((permission, index) => (
+                            <Badge key={index} variant="secondary" className="text-xs">
+                              {permission.nombre}
+                            </Badge>
+                          ))}
+                          {role.permissions && role.permissions.length > 3 && (
+                            <Badge variant="outline" className="text-xs">
+                              +{role.permissions.length - 3} más
+                            </Badge>
+                          )}
+                          {!role.permissions && (
+                            <Badge variant="outline" className="text-xs">
+                              Sin permisos
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center space-x-2">
+                          <Users className="h-4 w-4 text-muted-foreground" />
+                          <span className="font-medium">-</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {role.created_at ? new Date(role.created_at).toLocaleDateString('es-ES') : 'N/A'}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" className="h-8 w-8 p-0">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem>
+                              <Edit className="mr-2 h-4 w-4" />
+                              Editar Rol
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => {
+                              setSelectedRole({ id: role.id.toString(), name: role.nombre });
+                              setPermissionsModalOpen(true);
+                            }}>
+                              <Shield className="mr-2 h-4 w-4" />
+                              Gestionar Permisos
+                            </DropdownMenuItem>
+                            <DropdownMenuItem>
+                              <Users className="mr-2 h-4 w-4" />
+                              Ver Usuarios
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="text-destructive">
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Eliminar
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </div>
@@ -228,7 +238,6 @@ const Roles = () => {
               Mostrando {filteredRoles.length} de {roles.length} roles
             </div>
             <div className="flex items-center space-x-4">
-              <span>Total usuarios: {roles.reduce((acc, role) => acc + role.users, 0)}</span>
               <span>Roles activos: {roles.length}</span>
             </div>
           </div>
@@ -237,7 +246,8 @@ const Roles = () => {
 
       <CreateRoleModal 
         open={isCreateModalOpen} 
-        onOpenChange={setIsCreateModalOpen} 
+        onOpenChange={setIsCreateModalOpen}
+        onRoleCreated={loadRoles}
       />
 
       <ManageRolePermissionsModal
@@ -245,6 +255,7 @@ const Roles = () => {
         onOpenChange={setPermissionsModalOpen}
         roleId={selectedRole?.id}
         roleName={selectedRole?.name}
+        onPermissionsUpdated={loadRoles}
       />
     </div>
   );

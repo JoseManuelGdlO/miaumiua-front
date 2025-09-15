@@ -13,6 +13,8 @@ import {
   Settings,
   Route,
   MessageCircle,
+  Layers,
+  Weight,
 } from "lucide-react";
 import {
   Sidebar,
@@ -51,7 +53,14 @@ const menuItems = [
   { title: "Inventario", url: "/dashboard/inventory", icon: Package },
   { title: "Ciudades", url: "/dashboard/cities", icon: MapPin },
   { title: "Clientes", url: "/dashboard/customers", icon: UserCheck },
-  { title: "Configuración", url: "/dashboard/settings", icon: Settings },
+  {
+    title: "Configuraciones",
+    icon: Settings,
+    submenu: [
+      { title: "Categorías Producto", url: "/dashboard/categorias-producto" },
+      { title: "Pesos", url: "/dashboard/pesos" },
+    ],
+  },
 ];
 
 export function AppSidebar() {

@@ -25,56 +25,67 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Search, Plus, MoreHorizontal, Edit, Trash2, UserPlus, Loader2 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Search, Plus, MoreHorizontal, Edit, Trash2, Weight, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { usersService, User } from "@/services/usersService";
-import CreateUserModal from "@/components/modals/CreateUserModal";
+import { pesosService, Peso } from "@/services/pesosService";
+import CreatePesoModal from "@/components/modals/CreatePesoModal";
+import EditPesoModal from "@/components/modals/EditPesoModal";
 import ConfirmDeleteModal from "@/components/modals/ConfirmDeleteModal";
 
-const Users = () => {
+const Pesos = () => {
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
+  const [unidadFilter, setUnidadFilter] = useState<string>("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const [users, setUsers] = useState<User[]>([]);
+  const [selectedPeso, setSelectedPeso] = useState<Peso | null>(null);
+  const [pesos, setPesos] = useState<Peso[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalPages, setTotalPages] = useState(1);
-  const [totalUsers, setTotalUsers] = useState(0);
+  const [totalPesos, setTotalPesos] = useState(0);
   const itemsPerPage = 8;
 
-  // Cargar usuarios al montar el componente
+  // Cargar pesos al montar el componente
   useEffect(() => {
-    loadUsers();
-  }, [currentPage, searchTerm]);
+    loadPesos();
+  }, [currentPage, searchTerm, unidadFilter]);
 
-  const loadUsers = async () => {
+  const loadPesos = async () => {
     try {
       setLoading(true);
-      const response = await usersService.getAllUsers({
+      const response = await pesosService.getAllPesos({
         activos: 'true',
         search: searchTerm || undefined,
+        unidad_medida: unidadFilter && unidadFilter !== 'all' ? unidadFilter as any : undefined,
         page: currentPage,
         limit: itemsPerPage
       });
       
       if (response.success) {
-        setUsers(response.data.users);
-        setTotalPages(response.data.totalPages);
-        setTotalUsers(response.data.total);
+        setPesos(response.data.pesos);
+        setTotalPages(response.data.pagination.totalPages);
+        setTotalPesos(response.data.pagination.total);
       } else {
         toast({
           title: "Error",
-          description: "No se pudieron cargar los usuarios",
+          description: "No se pudieron cargar los pesos",
           variant: "destructive"
         });
       }
     } catch (error) {
-      console.error('Error al cargar usuarios:', error);
+      console.error('Error al cargar pesos:', error);
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Error al cargar los usuarios",
+        description: error instanceof Error ? error.message : "Error al cargar los pesos",
         variant: "destructive"
       });
     } finally {
@@ -82,51 +93,36 @@ const Users = () => {
     }
   };
 
-  const getStatusBadge = (isActive: boolean) => {
-    return isActive 
-      ? <Badge className="bg-green-100 text-green-800 border-green-200">Activo</Badge>
-      : <Badge variant="destructive">Inactivo</Badge>;
-  };
-
-  const getRoleBadge = (roleName: string) => {
-    const roleColors: Record<string, string> = {
-      "admin": "bg-blue-100 text-blue-800 border-blue-200",
-      "super_admin": "bg-purple-100 text-purple-800 border-purple-200",
-      "supervisor_ventas": "bg-orange-100 text-orange-800 border-orange-200",
-      "supervisor_tecnico": "bg-yellow-100 text-yellow-800 border-yellow-200",
-      "agente_chat": "bg-green-100 text-green-800 border-green-200",
-      "inventario": "bg-gray-100 text-gray-800 border-gray-200",
-      "marketing": "bg-pink-100 text-pink-800 border-pink-200"
-    };
-    
-    return <Badge className={roleColors[roleName] || "bg-gray-100 text-gray-800 border-gray-200"}>{roleName}</Badge>;
-  };
-
-  const handleDeleteUser = async () => {
-    if (!selectedUser) return;
+  const handleDeletePeso = async () => {
+    if (!selectedPeso) return;
     
     try {
-      const response = await usersService.deleteUser(selectedUser.id);
+      const response = await pesosService.deletePeso(selectedPeso.id);
       if (response.success) {
         toast({
-          title: "Usuario eliminado",
-          description: "El usuario ha sido eliminado exitosamente",
+          title: "Peso eliminado",
+          description: "El peso ha sido eliminado exitosamente",
         });
-        loadUsers(); // Recargar la lista
+        loadPesos(); // Recargar la lista
       }
     } catch (error) {
-      console.error('Error al eliminar usuario:', error);
+      console.error('Error al eliminar peso:', error);
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Error al eliminar el usuario",
+        description: error instanceof Error ? error.message : "Error al eliminar el peso",
         variant: "destructive"
       });
     }
   };
 
-  const handleDeleteClick = (user: User) => {
-    setSelectedUser(user);
+  const handleDeleteClick = (peso: Peso) => {
+    setSelectedPeso(peso);
     setIsDeleteModalOpen(true);
+  };
+
+  const handleEditPeso = (peso: Peso) => {
+    setSelectedPeso(peso);
+    setIsEditModalOpen(true);
   };
 
   const handleSearch = (value: string) => {
@@ -134,101 +130,119 @@ const Users = () => {
     setCurrentPage(1); // Reset a la primera página al buscar
   };
 
+  const handleUnidadFilter = (value: string) => {
+    setUnidadFilter(value);
+    setCurrentPage(1); // Reset a la primera página al filtrar
+  };
+
+  const getUnidadBadge = (unidad: string) => {
+    const unidadColors: Record<string, string> = {
+      "kg": "bg-blue-100 text-blue-800 border-blue-200",
+      "g": "bg-green-100 text-green-800 border-green-200",
+      "lb": "bg-orange-100 text-orange-800 border-orange-200",
+      "oz": "bg-purple-100 text-purple-800 border-purple-200",
+      "ton": "bg-red-100 text-red-800 border-red-200"
+    };
+    
+    return <Badge className={unidadColors[unidad] || "bg-gray-100 text-gray-800 border-gray-200"}>{unidad}</Badge>;
+  };
+
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">Gestión de Usuarios</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">Gestión de Pesos</h1>
           <p className="text-muted-foreground">
-            Administra los usuarios del sistema Miau Miau
+            Administra los pesos y unidades de medida del sistema Miau Miau
           </p>
         </div>
         <Button className="gap-2" onClick={() => setIsCreateModalOpen(true)}>
-          <UserPlus className="h-4 w-4" />
-          Nuevo Usuario
+          <Weight className="h-4 w-4" />
+          Nuevo Peso
         </Button>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Usuarios del Sistema</CardTitle>
+          <CardTitle>Pesos del Sistema</CardTitle>
           <CardDescription>
-            Lista de usuarios registrados con sus roles y estados
+            Lista de pesos registrados con sus unidades de medida
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {/* Search */}
+          {/* Search and Filters */}
           <div className="flex items-center space-x-2 mb-6">
             <div className="relative flex-1">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar usuarios por nombre, email, rol o ciudad..."
+                placeholder="Buscar por cantidad..."
                 value={searchTerm}
                 onChange={(e) => handleSearch(e.target.value)}
                 className="pl-8"
+                type="number"
+                step="0.01"
               />
             </div>
+            <Select value={unidadFilter} onValueChange={handleUnidadFilter}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Filtrar por unidad" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas las unidades</SelectItem>
+                <SelectItem value="kg">Kilogramos (kg)</SelectItem>
+                <SelectItem value="g">Gramos (g)</SelectItem>
+                <SelectItem value="lb">Libras (lb)</SelectItem>
+                <SelectItem value="oz">Onzas (oz)</SelectItem>
+                <SelectItem value="ton">Toneladas (ton)</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
-          {/* Users Table */}
+          {/* Pesos Table */}
           <div className="rounded-md border">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Usuario</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Rol</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead>Ciudad</TableHead>
-                  <TableHead>Último Login</TableHead>
+                  <TableHead>Cantidad</TableHead>
+                  <TableHead>Unidad</TableHead>
+                  <TableHead>Creado</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8">
+                    <TableCell colSpan={4} className="text-center py-8">
                       <div className="flex items-center justify-center space-x-2">
                         <Loader2 className="h-4 w-4 animate-spin" />
-                        <span>Cargando usuarios...</span>
+                        <span>Cargando pesos...</span>
                       </div>
                     </TableCell>
                   </TableRow>
-                ) : users.length === 0 ? (
+                ) : pesos.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                      No se encontraron usuarios
+                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                      No se encontraron pesos
                     </TableCell>
                   </TableRow>
                 ) : (
-                  users.map((user) => (
-                    <TableRow key={user.id}>
+                  pesos.map((peso) => (
+                    <TableRow key={peso.id}>
                       <TableCell>
                         <div className="flex items-center space-x-3">
                           <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                            <span className="text-sm font-medium text-primary">
-                              {user.nombre_completo.split(' ').map(n => n[0]).join('').toUpperCase()}
-                            </span>
+                            <Weight className="h-4 w-4 text-primary" />
                           </div>
                           <div>
-                            <div className="font-medium text-foreground">{user.nombre_completo}</div>
+                            <div className="font-medium text-foreground">{peso.cantidad}</div>
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {user.correo_electronico}
-                      </TableCell>
                       <TableCell>
-                        {getRoleBadge(user.rol?.nombre || 'Sin rol')}
-                      </TableCell>
-                      <TableCell>
-                        {getStatusBadge(user.isActive)}
+                        {getUnidadBadge(peso.unidad_medida)}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
-                        {user.ciudad?.nombre || 'Sin ciudad'}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {user.lastLogin ? new Date(user.lastLogin).toLocaleDateString('es-ES') : 'Nunca'}
+                        {peso.createdAt ? new Date(peso.createdAt).toLocaleDateString('es-ES') : 'N/A'}
                       </TableCell>
                       <TableCell className="text-right">
                         <DropdownMenu>
@@ -238,17 +252,13 @@ const Users = () => {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleEditPeso(peso)}>
                               <Edit className="mr-2 h-4 w-4" />
-                              Editar Usuario
-                            </DropdownMenuItem>
-                            <DropdownMenuItem>
-                              <UserPlus className="mr-2 h-4 w-4" />
-                              Cambiar Contraseña
+                              Editar Peso
                             </DropdownMenuItem>
                             <DropdownMenuItem 
                               className="text-destructive"
-                              onClick={() => handleDeleteClick(user)}
+                              onClick={() => handleDeleteClick(peso)}
                             >
                               <Trash2 className="mr-2 h-4 w-4" />
                               Eliminar
@@ -267,7 +277,7 @@ const Users = () => {
           {totalPages > 1 && (
             <div className="flex items-center justify-between mt-6">
               <div className="text-sm text-muted-foreground">
-                Mostrando {((currentPage - 1) * itemsPerPage) + 1} a {Math.min(currentPage * itemsPerPage, totalUsers)} de {totalUsers} usuarios
+                Mostrando {((currentPage - 1) * itemsPerPage) + 1} a {Math.min(currentPage * itemsPerPage, totalPesos)} de {totalPesos} pesos
               </div>
               <Pagination>
                 <PaginationContent>
@@ -310,29 +320,36 @@ const Users = () => {
               Página {currentPage} de {totalPages}
             </div>
             <div className="flex items-center space-x-4">
-              <span>Total usuarios: {totalUsers}</span>
+              <span>Total pesos: {totalPesos}</span>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      <CreateUserModal 
+      <CreatePesoModal 
         open={isCreateModalOpen} 
         onOpenChange={setIsCreateModalOpen}
-        onUserCreated={loadUsers}
+        onPesoCreated={loadPesos}
+      />
+
+      <EditPesoModal
+        open={isEditModalOpen}
+        onOpenChange={setIsEditModalOpen}
+        peso={selectedPeso}
+        onPesoUpdated={loadPesos}
       />
 
       <ConfirmDeleteModal
         open={isDeleteModalOpen}
         onOpenChange={setIsDeleteModalOpen}
-        onConfirm={handleDeleteUser}
-        itemName={selectedUser?.nombre_completo}
-        itemType="usuario"
-        title="Eliminar Usuario"
-        description={`¿Estás seguro de que deseas eliminar al usuario "${selectedUser?.nombre_completo}"? Esta acción no se puede deshacer y el usuario perderá acceso al sistema.`}
+        onConfirm={handleDeletePeso}
+        itemName={`${selectedPeso?.cantidad} ${selectedPeso?.unidad_medida}`}
+        itemType="peso"
+        title="Eliminar Peso"
+        description={`¿Estás seguro de que deseas eliminar el peso de ${selectedPeso?.cantidad} ${selectedPeso?.unidad_medida}? Esta acción no se puede deshacer.`}
       />
     </div>
   );
 };
 
-export default Users;
+export default Pesos;
