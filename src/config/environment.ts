@@ -15,14 +15,14 @@ export const config = {
 
 // Configuraciones específicas para desarrollo
 export const devConfig = {
-  apiBaseUrl: 'http://localhost:3000/api',
+  apiBaseUrl: 'https://intelekia-miaumiau-back.vvggha.easypanel.host/api',
   timeout: 10000, // 10 segundos
   retryAttempts: 3,
 };
 
 // Configuraciones específicas para producción
 export const prodConfig = {
-  apiBaseUrl: 'https://api.miaumiau.com/api',
+  apiBaseUrl: 'https://intelekia-miaumiau-back.vvggha.easypanel.host/api',
   timeout: 15000, // 15 segundos
   retryAttempts: 2,
 };
