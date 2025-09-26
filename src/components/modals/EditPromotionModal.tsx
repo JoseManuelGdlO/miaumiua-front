@@ -30,16 +30,17 @@ import { CalendarIcon } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import { promotionsService } from "@/services/promotionsService";
+import { promotionsService, Promotion } from "@/services/promotionsService";
 import { citiesService, City } from "@/services/citiesService";
 
-interface CreatePromotionModalProps {
+interface EditPromotionModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  promotion: Promotion;
 }
 
-const CreatePromotionModal = ({ isOpen, onClose, onSuccess }: CreatePromotionModalProps) => {
+const EditPromotionModal = ({ isOpen, onClose, onSuccess, promotion }: EditPromotionModalProps) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [cities, setCities] = useState<City[]>([]);
@@ -73,24 +74,24 @@ const CreatePromotionModal = ({ isOpen, onClose, onSuccess }: CreatePromotionMod
     }
   }, [isOpen]);
 
-  // Resetear formulario cuando se abre el modal
+  // Inicializar formulario con datos de la promoción
   useEffect(() => {
-    if (isOpen) {
+    if (promotion && isOpen) {
       setFormData({
-        nombre: "",
-        codigo: "",
-        descripcion: "",
-        tipo_promocion: "",
-        valor_descuento: "",
-        fecha_inicio: undefined,
-        fecha_fin: undefined,
-        limite_uso: "",
-        compra_minima: "",
-        descuento_maximo: "",
-        ciudades: [],
+        nombre: promotion.nombre,
+        codigo: promotion.codigo,
+        descripcion: promotion.descripcion || "",
+        tipo_promocion: promotion.tipo_promocion,
+        valor_descuento: promotion.valor_descuento.toString(),
+        fecha_inicio: new Date(promotion.fecha_inicio),
+        fecha_fin: new Date(promotion.fecha_fin),
+        limite_uso: promotion.limite_uso.toString(),
+        compra_minima: promotion.compra_minima?.toString() || "",
+        descuento_maximo: promotion.descuento_maximo?.toString() || "",
+        ciudades: promotion.ciudades?.map(c => c.id) || [],
       });
     }
-  }, [isOpen]);
+  }, [promotion, isOpen]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -116,7 +117,7 @@ const CreatePromotionModal = ({ isOpen, onClose, onSuccess }: CreatePromotionMod
     try {
       setLoading(true);
       
-      const createData = {
+      const updateData = {
         nombre: formData.nombre,
         codigo: formData.codigo,
         descripcion: formData.descripcion || undefined,
@@ -124,26 +125,26 @@ const CreatePromotionModal = ({ isOpen, onClose, onSuccess }: CreatePromotionMod
         valor_descuento: parseFloat(formData.valor_descuento),
         fecha_inicio: formData.fecha_inicio.toISOString(),
         fecha_fin: formData.fecha_fin.toISOString(),
-        limite_uso: parseInt(formData.limite_uso) || 0,
+        limite_uso: parseInt(formData.limite_uso),
         compra_minima: formData.compra_minima ? parseFloat(formData.compra_minima) : undefined,
         descuento_maximo: formData.descuento_maximo ? parseFloat(formData.descuento_maximo) : undefined,
         ciudades: formData.ciudades,
       };
 
-      await promotionsService.createPromotion(createData);
+      await promotionsService.updatePromotion(promotion.id, updateData);
       
       toast({
         title: "Éxito",
-        description: "Promoción creada correctamente",
+        description: "Promoción actualizada correctamente",
       });
       
       onSuccess();
       onClose();
     } catch (error) {
-      console.error('Error al crear promoción:', error);
+      console.error('Error al actualizar promoción:', error);
       toast({
         title: "Error",
-        description: "No se pudo crear la promoción",
+        description: "No se pudo actualizar la promoción",
         variant: "destructive",
       });
     } finally {
@@ -164,9 +165,9 @@ const CreatePromotionModal = ({ isOpen, onClose, onSuccess }: CreatePromotionMod
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Nueva Promoción</DialogTitle>
+          <DialogTitle>Editar Promoción</DialogTitle>
           <DialogDescription>
-            Crea una nueva promoción para aplicar descuentos a tus productos
+            Modifica los datos de la promoción seleccionada
           </DialogDescription>
         </DialogHeader>
 
@@ -360,7 +361,7 @@ const CreatePromotionModal = ({ isOpen, onClose, onSuccess }: CreatePromotionMod
               Cancelar
             </Button>
             <Button type="submit" disabled={loading}>
-              {loading ? "Creando..." : "Crear Promoción"}
+              {loading ? "Actualizando..." : "Actualizar Promoción"}
             </Button>
           </DialogFooter>
         </form>
@@ -369,4 +370,4 @@ const CreatePromotionModal = ({ isOpen, onClose, onSuccess }: CreatePromotionMod
   );
 };
 
-export default CreatePromotionModal;
+export default EditPromotionModal;

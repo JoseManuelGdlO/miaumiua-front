@@ -12,7 +12,7 @@ import Users from "./pages/Users";
 import Roles from "./pages/Roles";
 import Permissions from "./pages/Permissions";
 import Promotions from "./pages/Promotions";
-import Inventory from "./pages/Inventory";
+import Inventarios from "./pages/Inventarios";
 import Cities from "./pages/Cities";
 import Customers from "./pages/Customers";
 import Orders from "./pages/Orders";
@@ -21,6 +21,7 @@ import Agents from "./pages/Agents";
 import Conversations from "./pages/Conversations";
 import CategoriasProducto from "./pages/CategoriasProducto";
 import Pesos from "./pages/Pesos";
+import Proveedores from "./pages/Proveedores";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 const queryClient = new QueryClient();
@@ -47,12 +48,13 @@ const App = () => (
             <Route path="orders" element={<Orders />} />
             <Route path="routes" element={<RouteManagement />} />
             <Route path="promotions" element={<Promotions />} />
-            <Route path="inventory" element={<Inventory />} />
+            <Route path="inventory" element={<Inventarios />} />
             <Route path="cities" element={<Cities />} />
             <Route path="customers" element={<Customers />} />
             <Route path="agents" element={<Agents />} />
             <Route path="categorias-producto" element={<CategoriasProducto />} />
             <Route path="pesos" element={<Pesos />} />
+            <Route path="proveedores" element={<Proveedores />} />
             <Route path="settings" element={<div className="p-6"><h1 className="text-2xl font-bold">Configuración</h1><p className="text-muted-foreground">Configuración general del sistema</p></div>} />
           </Route>
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

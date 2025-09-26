@@ -1,4 +1,4 @@
-import { authService } from './authService';
+import { config } from '../config/environment';
 
 // Tipos para las categorías de producto
 export interface CategoriaProducto {
@@ -57,6 +57,31 @@ export interface ApiError {
 
 // Clase para manejar las categorías de producto
 class CategoriasProductoService {
+  private makeRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    const token = localStorage.getItem('auth_token');
+    
+    if (!token) {
+      throw new Error('Token de acceso requerido');
+    }
+
+    const requestConfig: RequestInit = {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+        ...options.headers,
+      },
+    };
+
+    return fetch(`${config.apiBaseUrl}${endpoint}`, requestConfig)
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`Error ${response.status}: ${response.statusText}`);
+        }
+        return response.json();
+      });
+  }
+
   // Obtener todas las categorías de producto
   async getAllCategorias(params?: {
     activos?: 'true' | 'false';
@@ -73,7 +98,7 @@ class CategoriasProductoService {
 
       const endpoint = `/categorias-producto${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
       
-      return await authService.authenticatedRequest<CategoriasProductoResponse>(endpoint);
+      return this.makeRequest<CategoriasProductoResponse>(endpoint);
     } catch (error) {
       console.error('Error al obtener categorías de producto:', error);
       throw error;
@@ -83,7 +108,7 @@ class CategoriasProductoService {
   // Obtener categorías activas
   async getActiveCategorias(): Promise<CategoriasProductoResponse> {
     try {
-      return await authService.authenticatedRequest<CategoriasProductoResponse>('/categorias-producto/active');
+      return this.makeRequest<CategoriasProductoResponse>('/categorias-producto/active');
     } catch (error) {
       console.error('Error al obtener categorías activas:', error);
       throw error;
@@ -93,7 +118,7 @@ class CategoriasProductoService {
   // Obtener estadísticas de categorías
   async getCategoriaStats(): Promise<CategoriaProductoStatsResponse> {
     try {
-      return await authService.authenticatedRequest<CategoriaProductoStatsResponse>('/categorias-producto/stats');
+      return this.makeRequest<CategoriaProductoStatsResponse>('/categorias-producto/stats');
     } catch (error) {
       console.error('Error al obtener estadísticas de categorías:', error);
       throw error;
@@ -103,7 +128,7 @@ class CategoriasProductoService {
   // Obtener una categoría por ID
   async getCategoriaById(id: number): Promise<CategoriaProductoResponse> {
     try {
-      return await authService.authenticatedRequest<CategoriaProductoResponse>(`/categorias-producto/${id}`);
+      return this.makeRequest<CategoriaProductoResponse>(`/categorias-producto/${id}`);
     } catch (error) {
       console.error('Error al obtener categoría:', error);
       throw error;
@@ -113,7 +138,7 @@ class CategoriasProductoService {
   // Crear una nueva categoría
   async createCategoria(data: CreateCategoriaProductoData): Promise<CategoriaProductoResponse> {
     try {
-      return await authService.authenticatedRequest<CategoriaProductoResponse>('/categorias-producto', {
+      return this.makeRequest<CategoriaProductoResponse>('/categorias-producto', {
         method: 'POST',
         body: JSON.stringify(data),
       });
@@ -126,7 +151,7 @@ class CategoriasProductoService {
   // Actualizar una categoría
   async updateCategoria(id: number, data: UpdateCategoriaProductoData): Promise<CategoriaProductoResponse> {
     try {
-      return await authService.authenticatedRequest<CategoriaProductoResponse>(`/categorias-producto/${id}`, {
+      return this.makeRequest<CategoriaProductoResponse>(`/categorias-producto/${id}`, {
         method: 'PUT',
         body: JSON.stringify(data),
       });
@@ -139,7 +164,7 @@ class CategoriasProductoService {
   // Eliminar una categoría (baja lógica)
   async deleteCategoria(id: number): Promise<{ success: boolean; message: string }> {
     try {
-      return await authService.authenticatedRequest<{ success: boolean; message: string }>(`/categorias-producto/${id}`, {
+      return this.makeRequest<{ success: boolean; message: string }>(`/categorias-producto/${id}`, {
         method: 'DELETE',
       });
     } catch (error) {
@@ -151,7 +176,7 @@ class CategoriasProductoService {
   // Restaurar una categoría
   async restoreCategoria(id: number): Promise<{ success: boolean; message: string }> {
     try {
-      return await authService.authenticatedRequest<{ success: boolean; message: string }>(`/categorias-producto/${id}/restore`, {
+      return this.makeRequest<{ success: boolean; message: string }>(`/categorias-producto/${id}/restore`, {
         method: 'PATCH',
       });
     } catch (error) {
@@ -163,7 +188,7 @@ class CategoriasProductoService {
   // Buscar categorías
   async searchCategorias(search: string): Promise<CategoriasProductoResponse> {
     try {
-      return await authService.authenticatedRequest<CategoriasProductoResponse>(`/categorias-producto/search?search=${encodeURIComponent(search)}`);
+      return this.makeRequest<CategoriasProductoResponse>(`/categorias-producto/search?search=${encodeURIComponent(search)}`);
     } catch (error) {
       console.error('Error al buscar categorías:', error);
       throw error;

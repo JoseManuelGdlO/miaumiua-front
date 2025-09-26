@@ -59,6 +59,7 @@ const menuItems = [
     submenu: [
       { title: "Categorías Producto", url: "/dashboard/categorias-producto" },
       { title: "Pesos", url: "/dashboard/pesos" },
+      { title: "Proveedores", url: "/dashboard/proveedores" },
     ],
   },
 ];

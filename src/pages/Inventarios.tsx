@@ -26,15 +26,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Search, Plus, MoreHorizontal, Edit, Trash2, Tag, Calendar, Loader2 } from "lucide-react";
-import CreatePromotionModal from "@/components/modals/CreatePromotionModal";
-import EditPromotionModal from "@/components/modals/EditPromotionModal";
+import { Search, Plus, MoreHorizontal, Edit, Trash2, Package, Package2, Loader2, AlertTriangle } from "lucide-react";
+import CreateInventarioModal from "@/components/modals/CreateInventarioModal";
+import EditInventarioModal from "@/components/modals/EditInventarioModal";
 import ConfirmDeleteModal from "@/components/modals/ConfirmDeleteModal";
-import { promotionsService, Promotion } from "@/services/promotionsService";
+import { inventariosService, Inventario } from "@/services/inventariosService";
 import { useToast } from "@/hooks/use-toast";
 
-const Promotions = () => {
-  const [promotions, setPromotions] = useState<Promotion[]>([]);
+const Inventarios = () => {
+  const [inventarios, setInventarios] = useState<Inventario[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -43,30 +43,29 @@ const Promotions = () => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [selectedPromotion, setSelectedPromotion] = useState<Promotion | null>(null);
+  const [selectedInventario, setSelectedInventario] = useState<Inventario | null>(null);
   const itemsPerPage = 8;
   const { toast } = useToast();
 
-  // Cargar promociones
-  const loadPromotions = async () => {
+  // Cargar inventarios
+  const loadInventarios = async () => {
     try {
       setLoading(true);
-      const response = await promotionsService.getAllPromotions({
+      const response = await inventariosService.getAllInventarios({
         page: currentPage,
         limit: itemsPerPage,
         search: searchTerm || undefined,
-        activos: 'true',
-        include_cities: 'true'
+        activos: 'true'
       });
 
-      setPromotions(response.data.promotions);
+      setInventarios(response.data.inventarios);
       setTotalPages(response.data.pagination.totalPages);
       setTotalItems(response.data.pagination.totalItems);
     } catch (error) {
-      console.error('Error al cargar promociones:', error);
+      console.error('Error al cargar inventarios:', error);
       toast({
         title: "Error",
-        description: "No se pudieron cargar las promociones",
+        description: "No se pudieron cargar los inventarios",
         variant: "destructive",
       });
     } finally {
@@ -75,7 +74,7 @@ const Promotions = () => {
   };
 
   useEffect(() => {
-    loadPromotions();
+    loadInventarios();
   }, [currentPage, searchTerm]);
 
   // Manejar búsqueda
@@ -86,25 +85,25 @@ const Promotions = () => {
 
   // Manejar eliminación
   const handleDelete = async () => {
-    if (!selectedPromotion) return;
+    if (!selectedInventario) return;
 
     try {
-      await promotionsService.deletePromotion(selectedPromotion.id);
+      await inventariosService.deleteInventario(selectedInventario.id);
       toast({
         title: "Éxito",
-        description: "Promoción eliminada correctamente",
+        description: "Inventario eliminado correctamente",
       });
-      loadPromotions();
+      loadInventarios();
     } catch (error) {
-      console.error('Error al eliminar promoción:', error);
+      console.error('Error al eliminar inventario:', error);
       toast({
         title: "Error",
-        description: "No se pudo eliminar la promoción",
+        description: "No se pudo eliminar el inventario",
         variant: "destructive",
       });
     } finally {
       setIsDeleteModalOpen(false);
-      setSelectedPromotion(null);
+      setSelectedInventario(null);
     }
   };
 
@@ -113,54 +112,42 @@ const Promotions = () => {
     return new Date(dateString).toLocaleDateString('es-ES');
   };
 
-  // Obtener estado de la promoción
-  const getPromotionStatus = (promotion: Promotion) => {
-    const now = new Date();
-    const startDate = new Date(promotion.fecha_inicio);
-    const endDate = new Date(promotion.fecha_fin);
+  // Formatear precio
+  const formatPrice = (price: number) => {
+    return new Intl.NumberFormat('es-CO', {
+      style: 'currency',
+      currency: 'COP',
+      minimumFractionDigits: 0
+    }).format(price);
+  };
 
-    if (promotion.baja_logica) {
-      return { status: "Eliminada", variant: "secondary" as const };
-    }
-
-    if (now < startDate) {
-      return { status: "Pendiente", variant: "outline" as const };
-    } else if (now > endDate) {
-      return { status: "Expirada", variant: "destructive" as const };
+  // Obtener estado del stock
+  const getStockStatus = (inventario: Inventario) => {
+    if (inventario.stock_inicial <= inventario.stock_minimo) {
+      return { status: "Stock Bajo", variant: "destructive" as const };
+    } else if (inventario.stock_inicial <= inventario.stock_minimo * 1.5) {
+      return { status: "Stock Medio", variant: "secondary" as const };
     } else {
-      return { status: "Activa", variant: "default" as const };
+      return { status: "Stock Alto", variant: "default" as const };
     }
   };
 
-  // Formatear descuento
-  const formatDiscount = (promotion: Promotion) => {
-    switch (promotion.tipo_promocion) {
-      case 'porcentaje':
-        return `${promotion.valor_descuento}%`;
-      case 'monto_fijo':
-        return `$${promotion.valor_descuento.toLocaleString()}`;
-      case 'envio_gratis':
-        return 'Envío Gratis';
-      case 'descuento_especial':
-        return `${promotion.valor_descuento}%`;
-      default:
-        return promotion.valor_descuento.toString();
-    }
-  };
+  // Calcular inventarios con stock bajo
+  const lowStockCount = inventarios.filter(inv => inv.stock_inicial <= inv.stock_minimo).length;
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Promociones</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Inventarios</h1>
           <p className="text-muted-foreground">
-            Gestiona las promociones y descuentos disponibles
+            Gestiona el inventario de productos disponibles
           </p>
         </div>
         <Button onClick={() => setIsCreateModalOpen(true)}>
           <Plus className="mr-2 h-4 w-4" />
-          Nueva Promoción
+          Nuevo Producto
         </Button>
       </div>
 
@@ -168,8 +155,8 @@ const Promotions = () => {
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Promociones</CardTitle>
-            <Tag className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Total Productos</CardTitle>
+            <Package className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{totalItems}</div>
@@ -177,34 +164,30 @@ const Promotions = () => {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Promociones Activas</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Productos Activos</CardTitle>
+            <Package2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {promotions.filter(p => getPromotionStatus(p).status === 'Activa').length}
-            </div>
+            <div className="text-2xl font-bold">{inventarios.length}</div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pendientes</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Stock Bajo</CardTitle>
+            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {promotions.filter(p => getPromotionStatus(p).status === 'Pendiente').length}
-            </div>
+            <div className="text-2xl font-bold text-destructive">{lowStockCount}</div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Expiradas</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Valor Total</CardTitle>
+            <Package className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {promotions.filter(p => getPromotionStatus(p).status === 'Expirada').length}
+              {formatPrice(inventarios.reduce((sum, inv) => sum + (inv.precio_venta * inv.stock_inicial), 0))}
             </div>
           </CardContent>
         </Card>
@@ -213,9 +196,9 @@ const Promotions = () => {
       {/* Search and Filters */}
       <Card>
         <CardHeader>
-          <CardTitle>Promociones</CardTitle>
+          <CardTitle>Inventarios</CardTitle>
           <CardDescription>
-            Lista de todas las promociones del sistema
+            Lista de todos los productos en inventario
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -223,7 +206,7 @@ const Promotions = () => {
             <div className="relative flex-1">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar por nombre o código..."
+                placeholder="Buscar por nombre, SKU o descripción..."
                 value={searchTerm}
                 onChange={(e) => handleSearch(e.target.value)}
                 className="pl-8"
@@ -236,71 +219,82 @@ const Promotions = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Nombre</TableHead>
-                  <TableHead>Código</TableHead>
-                  <TableHead>Descuento</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead>Fechas</TableHead>
-                  <TableHead>Límite</TableHead>
+                  <TableHead>SKU</TableHead>
+                  <TableHead>Producto</TableHead>
+                  <TableHead>Categoría</TableHead>
+                  <TableHead>Stock</TableHead>
+                  <TableHead>Precio</TableHead>
+                  <TableHead>Ciudad</TableHead>
+                  <TableHead>Proveedor</TableHead>
                   <TableHead>Estado</TableHead>
-                  <TableHead>Ciudades</TableHead>
+                  <TableHead>Creado</TableHead>
                   <TableHead className="w-[70px]">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8">
+                    <TableCell colSpan={10} className="text-center py-8">
                       <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
-                      Cargando promociones...
+                      Cargando inventarios...
                     </TableCell>
                   </TableRow>
-                ) : promotions.length === 0 ? (
+                ) : inventarios.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
-                      No se encontraron promociones
+                    <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
+                      No se encontraron inventarios
                     </TableCell>
                   </TableRow>
                 ) : (
-                  promotions.map((promotion) => {
-                    const status = getPromotionStatus(promotion);
+                  inventarios.map((inventario) => {
+                    const stockStatus = getStockStatus(inventario);
                     return (
-                      <TableRow key={promotion.id}>
-                        <TableCell className="font-medium">
-                          {promotion.nombre}
+                      <TableRow key={inventario.id}>
+                        <TableCell className="font-mono text-sm">
+                          {inventario.sku}
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline">{promotion.codigo}</Badge>
-                        </TableCell>
-                        <TableCell className="font-medium">
-                          {formatDiscount(promotion)}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="secondary">
-                            {promotion.tipo_promocion.replace('_', ' ')}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="text-sm">
-                            <div>Inicio: {formatDate(promotion.fecha_inicio)}</div>
-                            <div>Fin: {formatDate(promotion.fecha_fin)}</div>
+                          <div>
+                            <div className="font-medium">{inventario.nombre}</div>
+                            {inventario.descripcion && (
+                              <div className="text-sm text-muted-foreground">
+                                {inventario.descripcion}
+                              </div>
+                            )}
                           </div>
                         </TableCell>
                         <TableCell>
-                          {promotion.limite_uso === 0 ? 'Ilimitado' : promotion.limite_uso}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={status.variant}>
-                            {status.status}
-                          </Badge>
+                          {inventario.categoria?.nombre || 'N/A'}
                         </TableCell>
                         <TableCell>
                           <div className="text-sm">
-                            {promotion.ciudades && promotion.ciudades.length > 0
-                              ? `${promotion.ciudades.length} ciudad${promotion.ciudades.length > 1 ? 'es' : ''}`
-                              : 'Todas'
-                            }
+                            <div>Actual: {inventario.stock_inicial}</div>
+                            <div className="text-muted-foreground">
+                              Mín: {inventario.stock_minimo}
+                            </div>
                           </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-sm">
+                            <div>Venta: {formatPrice(inventario.precio_venta)}</div>
+                            <div className="text-muted-foreground">
+                              Costo: {formatPrice(inventario.costo_unitario)}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {inventario.ciudad?.nombre || 'N/A'}
+                        </TableCell>
+                        <TableCell>
+                          {inventario.proveedor?.nombre || 'N/A'}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={stockStatus.variant}>
+                            {stockStatus.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {formatDate(inventario.created_at)}
                         </TableCell>
                         <TableCell>
                           <DropdownMenu>
@@ -312,7 +306,7 @@ const Promotions = () => {
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem
                                 onClick={() => {
-                                  setSelectedPromotion(promotion);
+                                  setSelectedInventario(inventario);
                                   setIsEditModalOpen(true);
                                 }}
                               >
@@ -321,7 +315,7 @@ const Promotions = () => {
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 onClick={() => {
-                                  setSelectedPromotion(promotion);
+                                  setSelectedInventario(inventario);
                                   setIsDeleteModalOpen(true);
                                 }}
                                 className="text-destructive"
@@ -344,7 +338,7 @@ const Promotions = () => {
           {totalPages > 1 && (
             <div className="flex items-center justify-between space-x-2 py-4">
               <div className="text-sm text-muted-foreground">
-                Mostrando {((currentPage - 1) * itemsPerPage) + 1} a {Math.min(currentPage * itemsPerPage, totalItems)} de {totalItems} promociones
+                Mostrando {((currentPage - 1) * itemsPerPage) + 1} a {Math.min(currentPage * itemsPerPage, totalItems)} de {totalItems} inventarios
               </div>
               <Pagination>
                 <PaginationContent>
@@ -400,21 +394,21 @@ const Promotions = () => {
       </Card>
 
       {/* Modals */}
-      <CreatePromotionModal
+      <CreateInventarioModal
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
-        onSuccess={loadPromotions}
+        onSuccess={loadInventarios}
       />
 
-      {selectedPromotion && (
-        <EditPromotionModal
+      {selectedInventario && (
+        <EditInventarioModal
           isOpen={isEditModalOpen}
           onClose={() => {
             setIsEditModalOpen(false);
-            setSelectedPromotion(null);
+            setSelectedInventario(null);
           }}
-          onSuccess={loadPromotions}
-          promotion={selectedPromotion}
+          onSuccess={loadInventarios}
+          inventario={selectedInventario}
         />
       )}
 
@@ -422,14 +416,14 @@ const Promotions = () => {
         isOpen={isDeleteModalOpen}
         onClose={() => {
           setIsDeleteModalOpen(false);
-          setSelectedPromotion(null);
+          setSelectedInventario(null);
         }}
         onConfirm={handleDelete}
-        title="Eliminar Promoción"
-        description={`¿Estás seguro de que quieres eliminar la promoción "${selectedPromotion?.nombre}"? Esta acción no se puede deshacer.`}
+        title="Eliminar Inventario"
+        description={`¿Estás seguro de que quieres eliminar el inventario "${selectedInventario?.nombre}"? Esta acción no se puede deshacer.`}
       />
     </div>
   );
 };
 
-export default Promotions;
+export default Inventarios;

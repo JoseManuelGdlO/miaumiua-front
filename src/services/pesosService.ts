@@ -1,4 +1,4 @@
-import { authService } from './authService';
+import { config } from '../config/environment';
 
 // Tipos para los pesos
 export interface Peso {
@@ -60,6 +60,31 @@ export interface ApiError {
 
 // Clase para manejar los pesos
 class PesosService {
+  private makeRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    const token = localStorage.getItem('auth_token');
+    
+    if (!token) {
+      throw new Error('Token de acceso requerido');
+    }
+
+    const requestConfig: RequestInit = {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+        ...options.headers,
+      },
+    };
+
+    return fetch(`${config.apiBaseUrl}${endpoint}`, requestConfig)
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`Error ${response.status}: ${response.statusText}`);
+        }
+        return response.json();
+      });
+  }
+
   // Obtener todos los pesos
   async getAllPesos(params?: {
     unidad_medida?: 'kg' | 'g' | 'lb' | 'oz' | 'ton';
@@ -78,7 +103,7 @@ class PesosService {
 
       const endpoint = `/pesos${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
       
-      return await authService.authenticatedRequest<PesosResponse>(endpoint);
+      return this.makeRequest<PesosResponse>(endpoint);
     } catch (error) {
       console.error('Error al obtener pesos:', error);
       throw error;
@@ -88,7 +113,7 @@ class PesosService {
   // Obtener pesos activos
   async getActivePesos(): Promise<PesosResponse> {
     try {
-      return await authService.authenticatedRequest<PesosResponse>('/pesos/active');
+      return this.makeRequest<PesosResponse>('/pesos/active');
     } catch (error) {
       console.error('Error al obtener pesos activos:', error);
       throw error;
@@ -98,7 +123,7 @@ class PesosService {
   // Obtener estadísticas de pesos
   async getPesoStats(): Promise<PesoStatsResponse> {
     try {
-      return await authService.authenticatedRequest<PesoStatsResponse>('/pesos/stats');
+      return this.makeRequest<PesoStatsResponse>('/pesos/stats');
     } catch (error) {
       console.error('Error al obtener estadísticas de pesos:', error);
       throw error;
@@ -108,7 +133,7 @@ class PesosService {
   // Obtener un peso por ID
   async getPesoById(id: number): Promise<PesoResponse> {
     try {
-      return await authService.authenticatedRequest<PesoResponse>(`/pesos/${id}`);
+      return this.makeRequest<PesoResponse>(`/pesos/${id}`);
     } catch (error) {
       console.error('Error al obtener peso:', error);
       throw error;
@@ -118,7 +143,7 @@ class PesosService {
   // Crear un nuevo peso
   async createPeso(data: CreatePesoData): Promise<PesoResponse> {
     try {
-      return await authService.authenticatedRequest<PesoResponse>('/pesos', {
+      return this.makeRequest<PesoResponse>('/pesos', {
         method: 'POST',
         body: JSON.stringify(data),
       });
@@ -131,7 +156,7 @@ class PesosService {
   // Actualizar un peso
   async updatePeso(id: number, data: UpdatePesoData): Promise<PesoResponse> {
     try {
-      return await authService.authenticatedRequest<PesoResponse>(`/pesos/${id}`, {
+      return this.makeRequest<PesoResponse>(`/pesos/${id}`, {
         method: 'PUT',
         body: JSON.stringify(data),
       });
@@ -144,7 +169,7 @@ class PesosService {
   // Eliminar un peso (baja lógica)
   async deletePeso(id: number): Promise<{ success: boolean; message: string }> {
     try {
-      return await authService.authenticatedRequest<{ success: boolean; message: string }>(`/pesos/${id}`, {
+      return this.makeRequest<{ success: boolean; message: string }>(`/pesos/${id}`, {
         method: 'DELETE',
       });
     } catch (error) {
@@ -156,7 +181,7 @@ class PesosService {
   // Restaurar un peso
   async restorePeso(id: number): Promise<{ success: boolean; message: string }> {
     try {
-      return await authService.authenticatedRequest<{ success: boolean; message: string }>(`/pesos/${id}/restore`, {
+      return this.makeRequest<{ success: boolean; message: string }>(`/pesos/${id}/restore`, {
         method: 'PATCH',
       });
     } catch (error) {
@@ -168,7 +193,7 @@ class PesosService {
   // Obtener pesos por unidad de medida
   async getPesosByUnidad(unidad: 'kg' | 'g' | 'lb' | 'oz' | 'ton'): Promise<PesosResponse> {
     try {
-      return await authService.authenticatedRequest<PesosResponse>(`/pesos/unidad/${unidad}`);
+      return this.makeRequest<PesosResponse>(`/pesos/unidad/${unidad}`);
     } catch (error) {
       console.error('Error al obtener pesos por unidad:', error);
       throw error;
@@ -183,7 +208,7 @@ class PesosService {
       queryParams.append('max', max.toString());
       if (unidad) queryParams.append('unidad', unidad);
 
-      return await authService.authenticatedRequest<PesosResponse>(`/pesos/range?${queryParams.toString()}`);
+      return this.makeRequest<PesosResponse>(`/pesos/range?${queryParams.toString()}`);
     } catch (error) {
       console.error('Error al obtener pesos por rango:', error);
       throw error;
