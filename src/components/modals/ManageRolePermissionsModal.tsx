@@ -14,7 +14,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { Shield, AlertTriangle, Loader2 } from "lucide-react";
+import { Shield, AlertTriangle, Loader2, Search } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { rolesService, Permission } from "@/services/rolesService";
 import { permissionsService } from "@/services/permissionsService";
 
@@ -39,11 +40,15 @@ const ManageRolePermissionsModal = ({
   const [allPermissions, setAllPermissions] = useState<Permission[]>([]);
   const [rolePermissions, setRolePermissions] = useState<Permission[]>([]);
   const [selectedPermissions, setSelectedPermissions] = useState<number[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
 
   // Cargar datos cuando se abre el modal
   useEffect(() => {
     if (open && roleId) {
       loadData();
+    } else if (!open) {
+      // Limpiar filtro cuando se cierra el modal
+      setSearchTerm("");
     }
   }, [open, roleId]);
 
@@ -76,8 +81,28 @@ const ManageRolePermissionsModal = ({
     }
   };
 
-  // Agrupar permisos por categoría
-  const permissionCategories = allPermissions.reduce((acc, permission) => {
+  // Filtrar permisos por término de búsqueda
+  const filteredPermissions = allPermissions.filter(permission => {
+    if (!searchTerm) return true;
+    
+    const searchLower = searchTerm.toLowerCase();
+    return (
+      permission.nombre.toLowerCase().includes(searchLower) ||
+      permission.categoria.toLowerCase().includes(searchLower) ||
+      permission.descripcion?.toLowerCase().includes(searchLower) ||
+      permission.tipo.toLowerCase().includes(searchLower) ||
+      // Búsqueda por palabras clave comunes
+      (searchLower.includes('ver') && permission.nombre.toLowerCase().includes('ver')) ||
+      (searchLower.includes('crear') && permission.nombre.toLowerCase().includes('crear')) ||
+      (searchLower.includes('editar') && permission.nombre.toLowerCase().includes('editar')) ||
+      (searchLower.includes('eliminar') && permission.nombre.toLowerCase().includes('eliminar')) ||
+      (searchLower.includes('admin') && permission.nombre.toLowerCase().includes('admin')) ||
+      (searchLower.includes('sistema') && permission.nombre.toLowerCase().includes('sistema'))
+    );
+  });
+
+  // Agrupar permisos filtrados por categoría
+  const permissionCategories = filteredPermissions.reduce((acc, permission) => {
     const category = permission.categoria;
     if (!acc[category]) {
       acc[category] = [];
@@ -175,6 +200,36 @@ const ManageRolePermissionsModal = ({
           </div>
         ) : (
           <div className="space-y-6">
+            {/* Buscador */}
+            <div className="space-y-2">
+              <Label htmlFor="search-permissions">Buscar permisos</Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="search-permissions"
+                  placeholder="Buscar por nombre, categoría, descripción o tipo..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+                {searchTerm && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0"
+                    onClick={() => setSearchTerm("")}
+                  >
+                    ×
+                  </Button>
+                )}
+              </div>
+              {searchTerm && (
+                <div className="text-sm text-muted-foreground">
+                  {filteredPermissions.length} permiso{filteredPermissions.length !== 1 ? 's' : ''} encontrado{filteredPermissions.length !== 1 ? 's' : ''}
+                </div>
+              )}
+            </div>
+
             {/* Resumen de permisos */}
             <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
               <div className="flex items-center space-x-4">
@@ -195,7 +250,26 @@ const ManageRolePermissionsModal = ({
 
             {/* Lista de permisos por categoría */}
             <div className="space-y-4">
-              {Object.entries(permissionCategories).map(([categoryName, categoryPermissions]) => (
+              {Object.keys(permissionCategories).length === 0 ? (
+                <div className="text-center py-8">
+                  <div className="flex flex-col items-center space-y-2">
+                    <Search className="h-8 w-8 text-muted-foreground" />
+                    <div className="text-muted-foreground">
+                      {searchTerm ? `No se encontraron permisos para "${searchTerm}"` : "No hay permisos disponibles"}
+                    </div>
+                    {searchTerm && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setSearchTerm("")}
+                      >
+                        Limpiar búsqueda
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                Object.entries(permissionCategories).map(([categoryName, categoryPermissions]) => (
                 <Card key={categoryName}>
                   <CardHeader className="pb-3">
                     <CardTitle className="flex items-center gap-2 text-base">
@@ -249,7 +323,8 @@ const ManageRolePermissionsModal = ({
                     </div>
                   </CardContent>
                 </Card>
-              ))}
+                ))
+              )}
             </div>
           </div>
         )}

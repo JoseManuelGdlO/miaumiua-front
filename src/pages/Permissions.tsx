@@ -116,12 +116,24 @@ const Permissions = () => {
     return colors[type] || "bg-gray-100 text-gray-800";
   };
 
-  const filteredPermissions = permissions.filter(permission =>
-    permission.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    permission.categoria.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    permission.descripcion?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    permission.tipo.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredPermissions = permissions.filter(permission => {
+    if (!searchTerm) return true;
+    
+    const searchLower = searchTerm.toLowerCase();
+    return (
+      permission.nombre.toLowerCase().includes(searchLower) ||
+      permission.categoria.toLowerCase().includes(searchLower) ||
+      permission.descripcion?.toLowerCase().includes(searchLower) ||
+      permission.tipo.toLowerCase().includes(searchLower) ||
+      // Búsqueda por palabras clave comunes
+      (searchLower.includes('ver') && permission.nombre.toLowerCase().includes('ver')) ||
+      (searchLower.includes('crear') && permission.nombre.toLowerCase().includes('crear')) ||
+      (searchLower.includes('editar') && permission.nombre.toLowerCase().includes('editar')) ||
+      (searchLower.includes('eliminar') && permission.nombre.toLowerCase().includes('eliminar')) ||
+      (searchLower.includes('admin') && permission.nombre.toLowerCase().includes('admin')) ||
+      (searchLower.includes('sistema') && permission.nombre.toLowerCase().includes('sistema'))
+    );
+  });
 
   if (loading) {
     return (
@@ -166,12 +178,27 @@ const Permissions = () => {
             <div className="relative flex-1">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar permisos por nombre, descripción o categoría..."
+                placeholder="Buscar permisos por nombre, descripción, categoría o tipo..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-8"
               />
+              {searchTerm && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-2 top-1.5 h-6 w-6 p-0"
+                  onClick={() => setSearchTerm("")}
+                >
+                  ×
+                </Button>
+              )}
             </div>
+            {searchTerm && (
+              <div className="text-sm text-muted-foreground">
+                {filteredPermissions.length} resultado{filteredPermissions.length !== 1 ? 's' : ''}
+              </div>
+            )}
           </div>
 
           {/* Permissions Table */}
@@ -188,7 +215,28 @@ const Permissions = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredPermissions.map((permission) => (
+                {filteredPermissions.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-8">
+                      <div className="flex flex-col items-center space-y-2">
+                        <Search className="h-8 w-8 text-muted-foreground" />
+                        <div className="text-muted-foreground">
+                          {searchTerm ? `No se encontraron permisos para "${searchTerm}"` : "No hay permisos disponibles"}
+                        </div>
+                        {searchTerm && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setSearchTerm("")}
+                          >
+                            Limpiar búsqueda
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredPermissions.map((permission) => (
                   <TableRow key={permission.id}>
                     <TableCell>
                       <div className="flex items-center space-x-3">
@@ -243,7 +291,8 @@ const Permissions = () => {
                       </DropdownMenu>
                     </TableCell>
                   </TableRow>
-                ))}
+                  ))
+                )}
               </TableBody>
             </Table>
           </div>

@@ -15,6 +15,7 @@ import {
   MessageCircle,
   Layers,
   Weight,
+  Truck,
 } from "lucide-react";
 import { hasSectionAccess } from "@/utils/permissions";
 import {
@@ -50,7 +51,8 @@ const menuItems = [
   { title: "Conversaciones", url: "/dashboard/conversations", icon: MessageCircle, permission: "conversations" },
   { title: "Contexto de Agentes", url: "/dashboard/agents", icon: Bot, permission: null },
   { title: "Pedidos", url: "/dashboard/orders", icon: Package2, permission: "orders" },
-  { title: "Planeación de Rutas", url: "/dashboard/routes", icon: Route, permission: null },
+  { title: "Repartidores", url: "/dashboard/drivers", icon: Truck, permission: "drivers" },
+  { title: "Planeación de Rutas", url: "/dashboard/routes", icon: Route, permission: "routes" },
   { title: "Promociones", url: "/dashboard/promotions", icon: Tag, permission: "promotions" },
   { title: "Inventario", url: "/dashboard/inventory", icon: Package, permission: "inventory" },
   { title: "Ciudades", url: "/dashboard/cities", icon: MapPin, permission: "cities" },

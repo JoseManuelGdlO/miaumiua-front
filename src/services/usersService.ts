@@ -194,6 +194,24 @@ class UsersService {
       throw error;
     }
   }
+
+  async getUsersByRole(roleName: string) {
+    try {
+      return await authService.authenticatedRequest(`/usuarios/rol/${roleName}`);
+    } catch (error) {
+      console.error('Error al obtener usuarios por rol:', error);
+      throw error;
+    }
+  }
+
+  async getDrivers() {
+    try {
+      return await authService.authenticatedRequest('/usuarios/repartidores');
+    } catch (error) {
+      console.error('Error al obtener repartidores:', error);
+      throw error;
+    }
+  }
 }
 
 // Instancia singleton del servicio de usuarios

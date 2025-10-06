@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -19,20 +19,109 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import RouteMap from "@/components/RouteMap";
 import AIRouteOptimizer from "@/components/AIRouteOptimizer";
-import { MapPin, Truck, Plus, Users, MoreHorizontal, Calendar, Navigation, Sparkles } from "lucide-react";
+import { MapPin, Truck, Plus, Users, MoreHorizontal, Calendar, Navigation, Sparkles, Loader2 } from "lucide-react";
+import { routesService, Route, AvailableDriver, AvailableOrder } from "@/services/routesService";
+import { usersService } from "@/services/usersService";
+import { citiesService } from "@/services/citiesService";
+import { useToast } from "@/hooks/use-toast";
+import { canCreate, canEdit, canDelete, canViewStats } from "@/utils/permissions";
 
 const RouteManagement = () => {
+  const { toast } = useToast();
   const [selectedCity, setSelectedCity] = useState("");
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [routes, setRoutes] = useState<{ [key: string]: any[] }>({});
-  const [drivers, setDrivers] = useState([
-    { id: 1, name: "Juan Pérez", vehicle: "Moto 001", phone: "+52 55 1234 5678" },
-    { id: 2, name: "Ana López", vehicle: "Camión 002", phone: "+52 33 2345 6789" },
-    { id: 3, name: "Carlos Ruiz", vehicle: "Moto 003", phone: "+52 81 3456 7890" },
-    { id: 4, name: "María García", vehicle: "Camión 004", phone: "+52 22 4567 8901" },
-  ]);
+  const [routes, setRoutes] = useState<Route[]>([]);
+  const [drivers, setDrivers] = useState<AvailableDriver[]>([]);
+  const [availableOrders, setAvailableOrders] = useState<AvailableOrder[]>([]);
+  const [cities, setCities] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [stats, setStats] = useState<any>(null);
 
-  // Datos de ejemplo de pedidos del día
+  // Cargar datos iniciales
+  useEffect(() => {
+    loadInitialData();
+  }, []);
+
+  // Cargar datos cuando cambian los filtros
+  useEffect(() => {
+    if (selectedCity && selectedDate) {
+      loadRouteData();
+    }
+  }, [selectedCity, selectedDate]);
+
+  const loadInitialData = async () => {
+    try {
+      setLoading(true);
+      
+      // Cargar ciudades
+      const citiesResponse = await citiesService.getAllCities();
+      if (citiesResponse.success) {
+        setCities(citiesResponse.data.cities);
+      }
+
+      // Cargar repartidores (usuarios con rol repartidor)
+      const driversResponse = await usersService.getDrivers();
+      if (driversResponse.success) {
+        setDrivers(driversResponse.data.users);
+      }
+
+      // Cargar estadísticas
+      const statsResponse = await routesService.getRouteStats();
+      if (statsResponse.success) {
+        setStats(statsResponse.data);
+      }
+    } catch (error) {
+      console.error('Error cargando datos iniciales:', error);
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar los datos iniciales",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadRouteData = async () => {
+    if (!selectedCity || !selectedDate) return;
+
+    try {
+      setLoading(true);
+      
+      // Cargar rutas para la ciudad y fecha seleccionada
+      const routesResponse = await routesService.getAllRoutes({
+        ciudad: parseInt(selectedCity),
+        fecha: selectedDate,
+        limit: 100
+      });
+      
+      if (routesResponse.success) {
+        setRoutes(routesResponse.data.routes);
+      }
+
+      // Cargar pedidos disponibles
+      const ordersResponse = await routesService.getAvailableOrders({
+        ciudad: parseInt(selectedCity),
+        fecha: selectedDate,
+        estado: 'pendiente'
+      });
+      
+      if (ordersResponse.success) {
+        setAvailableOrders(ordersResponse.data.orders);
+      }
+    } catch (error) {
+      console.error('Error cargando datos de rutas:', error);
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar las rutas",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Datos de ejemplo de pedidos del día (mantener para compatibilidad con componentes existentes)
   const allOrders = [
     {
       id: 1,
@@ -149,8 +238,7 @@ const RouteManagement = () => {
     }
   ];
 
-  const cities = ["Ciudad de México", "Guadalajara", "Monterrey", "Puebla", "Tijuana"];
-
+  // Variables calculadas para compatibilidad con componentes existentes
   const filteredOrders = useMemo(() => {
     return allOrders.filter(order => 
       selectedCity ? order.city === selectedCity : true
@@ -174,25 +262,6 @@ const RouteManagement = () => {
     }));
   };
 
-  const addOrderToRoute = (orderId: number, routeId: string) => {
-    const order = filteredOrders.find(o => o.id === orderId);
-    if (!order) return;
-
-    // Remove from other routes first
-    const newRoutes = { ...routes };
-    Object.keys(newRoutes).forEach(rId => {
-      newRoutes[rId] = newRoutes[rId].filter(o => o.id !== orderId);
-    });
-
-    // Add to new route
-    if (!newRoutes[routeId]) {
-      newRoutes[routeId] = [];
-    }
-    newRoutes[routeId].push(order);
-    
-    setRoutes(newRoutes);
-  };
-
   const removeOrderFromRoute = (orderId: number) => {
     const newRoutes = { ...routes };
     Object.keys(newRoutes).forEach(routeId => {
@@ -201,18 +270,116 @@ const RouteManagement = () => {
     setRoutes(newRoutes);
   };
 
-  const assignDriverToRoute = (routeId: string, driverId: number) => {
-    const driver = drivers.find(d => d.id === driverId);
-    if (!driver) return;
-    
-    // Aquí podrías actualizar el estado para asignar el conductor
-    console.log(`Asignando ${driver.name} a Ruta ${routeId}`);
+  const assignDriverToRoute = async (routeId: string, driverId: number) => {
+    try {
+      const response = await routesService.updateRoute(parseInt(routeId), {
+        fkid_repartidor: driverId
+      });
+      
+      if (response.success) {
+        toast({
+          title: "Repartidor asignado",
+          description: "El repartidor ha sido asignado a la ruta exitosamente",
+        });
+        loadRouteData(); // Recargar datos
+      }
+    } catch (error) {
+      console.error('Error asignando repartidor:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo asignar el repartidor",
+        variant: "destructive"
+      });
+    }
   };
 
-  const deleteRoute = (routeId: string) => {
-    const newRoutes = { ...routes };
-    delete newRoutes[routeId];
-    setRoutes(newRoutes);
+  const deleteRoute = async (routeId: string) => {
+    try {
+      const response = await routesService.deleteRoute(parseInt(routeId));
+      
+      if (response.success) {
+        toast({
+          title: "Ruta eliminada",
+          description: "La ruta ha sido eliminada exitosamente",
+        });
+        loadRouteData(); // Recargar datos
+      }
+    } catch (error) {
+      console.error('Error eliminando ruta:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo eliminar la ruta",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const createManualRoute = async () => {
+    if (!selectedCity || !selectedDate) {
+      toast({
+        title: "Error",
+        description: "Selecciona una ciudad y fecha",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      const response = await routesService.createRoute({
+        nombre_ruta: `Ruta Manual - ${new Date().toLocaleString()}`,
+        fecha_ruta: selectedDate,
+        fkid_ciudad: parseInt(selectedCity),
+        fkid_repartidor: drivers[0]?.id || 1, // Asignar primer repartidor disponible
+        notas: "Ruta creada manualmente",
+        orden_prioridad: 1
+      });
+      
+      if (response.success) {
+        toast({
+          title: "Ruta creada",
+          description: "La ruta ha sido creada exitosamente",
+        });
+        loadRouteData(); // Recargar datos
+      }
+    } catch (error) {
+      console.error('Error creando ruta:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo crear la ruta",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const addOrderToRoute = async (orderId: number, routeId: string) => {
+    try {
+      const order = availableOrders.find(o => o.id === orderId);
+      if (!order) return;
+
+      const response = await routesService.assignOrderToRoute({
+        fkid_ruta: parseInt(routeId),
+        fkid_pedido: orderId,
+        orden_entrega: 1, // Se puede calcular basado en pedidos existentes
+        lat: 0, // Se puede obtener de geolocalización
+        lng: 0, // Se puede obtener de geolocalización
+        notas_entrega: "Asignado desde planeación de rutas"
+      });
+      
+      if (response.success) {
+        toast({
+          title: "Pedido asignado",
+          description: "El pedido ha sido asignado a la ruta exitosamente",
+        });
+        loadRouteData(); // Recargar datos
+      }
+    } catch (error) {
+      console.error('Error asignando pedido:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo asignar el pedido a la ruta",
+        variant: "destructive"
+      });
+    }
   };
 
   const getRouteStats = (routeOrders: any[]) => {
@@ -231,10 +398,16 @@ const RouteManagement = () => {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button onClick={createNewRoute} variant="outline" className="gap-2">
-            <Plus className="h-4 w-4" />
-            Nueva Ruta Manual
-          </Button>
+          {canCreate('routes') && (
+            <Button onClick={createManualRoute} variant="outline" className="gap-2" disabled={loading}>
+              {loading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Plus className="h-4 w-4" />
+              )}
+              Nueva Ruta Manual
+            </Button>
+          )}
         </div>
       </div>
 
@@ -256,7 +429,7 @@ const RouteManagement = () => {
                 </SelectTrigger>
                 <SelectContent>
                   {cities.map(city => (
-                    <SelectItem key={city} value={city}>{city}</SelectItem>
+                    <SelectItem key={city.id} value={city.id.toString()}>{city.nombre}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -272,8 +445,11 @@ const RouteManagement = () => {
             </div>
             <div className="flex items-end">
               <div className="text-sm text-muted-foreground">
-                <div><strong>{filteredOrders.length}</strong> pedidos encontrados</div>
-                <div><strong>{unassignedOrders.length}</strong> sin asignar</div>
+                <div><strong>{availableOrders.length}</strong> pedidos disponibles</div>
+                <div><strong>{routes.length}</strong> rutas creadas</div>
+                {stats && (
+                  <div><strong>{stats.total_pedidos}</strong> total pedidos</div>
+                )}
               </div>
             </div>
           </div>
@@ -281,9 +457,22 @@ const RouteManagement = () => {
       </Card>
 
       {/* AI Optimizer */}
-      {selectedCity && filteredOrders.length > 0 && (
+      {selectedCity && availableOrders.length > 0 && (
         <AIRouteOptimizer
-          orders={filteredOrders}
+          orders={availableOrders.map(order => ({
+            id: order.id,
+            orderNumber: order.numero_pedido,
+            customer: order.cliente?.nombre_completo || 'Cliente',
+            phone: order.cliente?.telefono || '',
+            address: order.direccion_entrega,
+            city: cities.find(c => c.id === order.fkid_ciudad)?.nombre || 'Ciudad',
+            zone: 'Zona',
+            products: 'Productos',
+            total: order.total,
+            coordinates: { lat: 0, lng: 0 }, // Se puede obtener de geolocalización
+            route: null,
+            driver: null
+          }))}
           city={selectedCity}
           date={selectedDate}
           onRoutesGenerated={(newRoutes) => setRoutes(newRoutes)}
@@ -297,17 +486,22 @@ const RouteManagement = () => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <MapPin className="h-5 w-5" />
-                Pedidos Sin Asignar ({unassignedOrders.length})
+                Pedidos Disponibles ({availableOrders.length})
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 max-h-96 overflow-y-auto">
-              {unassignedOrders.map(order => (
+              {loading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin" />
+                </div>
+              ) : (
+                availableOrders.map(order => (
                 <div key={order.id} className="p-3 border rounded-lg bg-card hover:bg-accent/50 cursor-grab">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
-                      <div className="font-medium text-sm">{order.orderNumber}</div>
-                      <div className="text-sm text-muted-foreground">{order.customer}</div>
-                      <div className="text-xs text-muted-foreground">{order.address}</div>
+                      <div className="font-medium text-sm">{order.numero_pedido}</div>
+                      <div className="text-sm text-muted-foreground">{order.cliente?.nombre_completo || 'Cliente'}</div>
+                      <div className="text-xs text-muted-foreground">{order.direccion_entrega}</div>
                       <div className="text-xs font-medium text-primary mt-1">
                         ${order.total.toLocaleString('es-CO')}
                       </div>
@@ -319,19 +513,20 @@ const RouteManagement = () => {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent>
-                        {Object.keys(routes).map(routeId => (
+                        {routes.map(route => (
                           <DropdownMenuItem
-                            key={routeId}
-                            onClick={() => addOrderToRoute(order.id, routeId)}
+                            key={route.id}
+                            onClick={() => addOrderToRoute(order.id, route.id.toString())}
                           >
-                            Asignar a Ruta {routeId}
+                            Asignar a {route.nombre_ruta}
                           </DropdownMenuItem>
                         ))}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
                 </div>
-              ))}
+                ))
+              )}
             </CardContent>
           </Card>
         </div>
@@ -342,24 +537,32 @@ const RouteManagement = () => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <Navigation className="h-5 w-5" />
-                Rutas Creadas ({Object.keys(routes).length})
+                Rutas Creadas ({routes.length})
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4 max-h-96 overflow-y-auto">
-              {Object.keys(routes).map(routeId => {
-                const routeOrders = routes[routeId];
-                const { totalValue, totalOrders } = getRouteStats(routeOrders);
+              {loading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin" />
+                </div>
+              ) : (
+                routes.map(route => {
+                  const totalOrders = route.total_pedidos || 0;
+                  const totalValue = route.pedidos?.reduce((sum, p) => sum + (p.pedido?.total || 0), 0) || 0;
                 
                 return (
-                  <div key={routeId} className="border rounded-lg p-3 bg-card">
+                  <div key={route.id} className="border rounded-lg p-3 bg-card">
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
                         <Badge className="bg-primary text-primary-foreground">
-                          Ruta {routeId}
+                          {route.nombre_ruta}
                         </Badge>
                         <span className="text-sm text-muted-foreground">
                           {totalOrders} pedidos
                         </span>
+                        <Badge variant="outline" className="text-xs">
+                          {route.estado}
+                        </Badge>
                       </div>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -371,49 +574,55 @@ const RouteManagement = () => {
                           {drivers.map(driver => (
                             <DropdownMenuItem
                               key={driver.id}
-                              onClick={() => assignDriverToRoute(routeId, driver.id)}
+                              onClick={() => assignDriverToRoute(route.id.toString(), driver.id)}
                             >
                               <Users className="mr-2 h-4 w-4" />
-                              Asignar a {driver.name}
+                              Asignar a {driver.nombre_completo}
                             </DropdownMenuItem>
                           ))}
-                          <DropdownMenuItem
-                            onClick={() => deleteRoute(routeId)}
-                            className="text-destructive"
-                          >
-                            Eliminar Ruta
-                          </DropdownMenuItem>
+                          {canDelete('routes') && (
+                            <DropdownMenuItem
+                              onClick={() => deleteRoute(route.id.toString())}
+                              className="text-destructive"
+                            >
+                              Eliminar Ruta
+                            </DropdownMenuItem>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
 
                     <div className="text-xs text-muted-foreground mb-2">
                       Total: ${totalValue.toLocaleString('es-CO')}
+                      {route.repartidor && (
+                        <div>Repartidor: {route.repartidor.nombre_completo}</div>
+                      )}
                     </div>
 
                     <div className="space-y-2 max-h-32 overflow-y-auto">
-                      {routeOrders.map(order => (
-                        <div key={order.id} className="p-2 bg-accent/30 rounded text-xs">
+                      {route.pedidos?.map(routeOrder => (
+                        <div key={routeOrder.id} className="p-2 bg-accent/30 rounded text-xs">
                           <div className="flex items-center justify-between">
                             <div>
-                              <div className="font-medium">{order.orderNumber}</div>
-                              <div className="text-muted-foreground">{order.customer}</div>
+                              <div className="font-medium">{routeOrder.pedido?.numero_pedido}</div>
+                              <div className="text-muted-foreground">{routeOrder.pedido?.cliente?.nombre_completo}</div>
+                              <div className="text-muted-foreground">Orden: {routeOrder.orden_entrega}</div>
                             </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => removeOrderFromRoute(order.id)}
-                              className="h-6 w-6 p-0 text-destructive hover:text-destructive"
-                            >
-                              ×
-                            </Button>
+                            <Badge variant="outline" className="text-xs">
+                              {routeOrder.estado_entrega}
+                            </Badge>
                           </div>
                         </div>
-                      ))}
+                      )) || (
+                        <div className="text-xs text-muted-foreground p-2">
+                          No hay pedidos asignados
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
-              })}
+                })
+              )}
             </CardContent>
           </Card>
         </div>
@@ -428,21 +637,29 @@ const RouteManagement = () => {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              {drivers.map(driver => (
-                <div key={driver.id} className="p-3 border rounded-lg bg-card">
-                  <div className="flex items-center gap-3">
-                    <div className="w-2 h-2 rounded-full bg-success"></div>
-                    <div className="flex-1">
-                      <div className="font-medium text-sm">{driver.name}</div>
-                      <div className="text-xs text-muted-foreground">{driver.vehicle}</div>
-                      <div className="text-xs text-muted-foreground">{driver.phone}</div>
-                    </div>
-                    <Badge variant="outline" className="text-xs">
-                      Disponible
-                    </Badge>
-                  </div>
+              {loading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin" />
                 </div>
-              ))}
+              ) : (
+                drivers.map(driver => (
+                  <div key={driver.id} className="p-3 border rounded-lg bg-card">
+                    <div className="flex items-center gap-3">
+                      <div className="w-2 h-2 rounded-full bg-success"></div>
+                      <div className="flex-1">
+                        <div className="font-medium text-sm">{driver.nombre_completo}</div>
+                        <div className="text-xs text-muted-foreground">{driver.telefono || 'Sin teléfono'}</div>
+                        <div className="text-xs text-muted-foreground">
+                          Rutas asignadas: {driver.rutas_asignadas || 0}
+                        </div>
+                      </div>
+                      <Badge variant="outline" className="text-xs">
+                        {driver.capacidad_disponible > 0 ? 'Disponible' : 'Ocupado'}
+                      </Badge>
+                    </div>
+                  </div>
+                ))
+              )}
             </CardContent>
           </Card>
         </div>
@@ -454,7 +671,7 @@ const RouteManagement = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <MapPin className="h-5 w-5" />
-              Mapa de Rutas - {selectedCity}
+              Mapa de Rutas - {cities.find(c => c.id.toString() === selectedCity)?.nombre || selectedCity}
             </CardTitle>
             <CardDescription>
               Visualización de pedidos y rutas planificadas para {selectedDate}
@@ -462,13 +679,37 @@ const RouteManagement = () => {
           </CardHeader>
           <CardContent>
             <RouteMap 
-              orders={filteredOrders.map(order => ({
-                ...order,
-                route: Object.keys(routes).find(routeId => 
-                  routes[routeId].some(r => r.id === order.id)
-                )
+              orders={availableOrders.map(order => ({
+                id: order.id,
+                orderNumber: order.numero_pedido,
+                customer: order.cliente?.nombre_completo || 'Cliente',
+                phone: order.cliente?.telefono || '',
+                address: order.direccion_entrega,
+                city: cities.find(c => c.id === order.fkid_ciudad)?.nombre || 'Ciudad',
+                zone: 'Zona',
+                products: 'Productos',
+                total: order.total,
+                coordinates: { lat: 0, lng: 0 }, // Se puede obtener de geolocalización
+                route: routes.find(r => r.pedidos?.some(p => p.fkid_pedido === order.id))?.id.toString() || null,
+                driver: null
               }))}
-              routes={routes}
+              routes={routes.reduce((acc, route) => {
+                acc[route.id.toString()] = route.pedidos?.map(p => ({
+                  id: p.pedido?.id || 0,
+                  orderNumber: p.pedido?.numero_pedido || '',
+                  customer: p.pedido?.cliente?.nombre_completo || 'Cliente',
+                  phone: p.pedido?.cliente?.telefono || '',
+                  address: p.pedido?.direccion_entrega || '',
+                  city: 'Ciudad',
+                  zone: 'Zona',
+                  products: 'Productos',
+                  total: 0,
+                  coordinates: { lat: p.lat, lng: p.lng },
+                  route: route.id.toString(),
+                  driver: route.repartidor?.nombre_completo || null
+                })) || [];
+                return acc;
+              }, {} as { [key: string]: any[] })}
               onOrderRouteChange={() => {}}
             />
           </CardContent>

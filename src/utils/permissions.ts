@@ -119,6 +119,25 @@ export const SECTION_PERMISSIONS = {
     base: 'ver_reportes',
     generate: 'generar_reportes',
     export: 'exportar_reportes'
+  },
+  routes: {
+    base: 'ver_rutas',
+    create: 'crear_rutas',
+    edit: 'editar_rutas',
+    delete: 'eliminar_rutas',
+    assign: 'asignar_pedidos_rutas',
+    optimize: 'optimizar_rutas',
+    follow: 'seguir_rutas',
+    complete: 'completar_entregas',
+    stats: 'ver_estadisticas_rutas'
+  },
+  drivers: {
+    base: 'ver_repartidores',
+    create: 'crear_repartidores',
+    edit: 'editar_repartidores',
+    delete: 'eliminar_repartidores',
+    activate: 'activar_desactivar_repartidores',
+    stats: 'ver_estadisticas_repartidores'
   }
 } as const;
 
@@ -204,6 +223,16 @@ export const canBackupSystem = (): boolean => {
 
 export const canRestoreSystem = (): boolean => {
   return hasPermission(SECTION_PERMISSIONS.system.restore);
+};
+
+// Función para verificar si el usuario puede activar/desactivar repartidores
+export const canActivateDriver = (): boolean => {
+  return hasPermission(SECTION_PERMISSIONS.drivers.activate);
+};
+
+// Función para verificar si el usuario puede ver estadísticas de repartidores
+export const canViewDriverStats = (): boolean => {
+  return hasPermission(SECTION_PERMISSIONS.drivers.stats);
 };
 
 // Función para verificar permisos específicos de reportes

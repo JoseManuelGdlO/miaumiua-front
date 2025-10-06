@@ -9,6 +9,7 @@ import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import DashboardLayout from "./pages/DashboardLayout";
 import Users from "./pages/Users";
+import Drivers from "./pages/Drivers";
 import Roles from "./pages/Roles";
 import Permissions from "./pages/Permissions";
 import Promotions from "./pages/Promotions";
@@ -43,6 +44,7 @@ const App = () => (
           }>
             <Route index element={<Dashboard />} />
             <Route path="users" element={<Users />} />
+            <Route path="drivers" element={<Drivers />} />
             <Route path="roles" element={<Roles />} />
             <Route path="permissions" element={<Permissions />} />
             <Route path="conversations" element={<Conversations />} />
