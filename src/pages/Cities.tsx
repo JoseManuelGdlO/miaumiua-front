@@ -33,6 +33,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Search, Plus, MoreHorizontal, Edit, Trash2, MapPin, Loader2, Phone, Mail, Building } from "lucide-react";
+import { canCreate, canEdit, canDelete } from "@/utils/permissions";
 import { useToast } from "@/hooks/use-toast";
 import { citiesService, City } from "@/services/citiesService";
 import CreateCityModal from "@/components/modals/CreateCityModal";
@@ -175,10 +176,12 @@ const Cities = () => {
             Administra las ciudades donde opera Miau Miau y sus zonas de cobertura
           </p>
         </div>
-        <Button className="gap-2" onClick={() => setIsCreateModalOpen(true)}>
-          <MapPin className="h-4 w-4" />
-          Nueva Ciudad
-        </Button>
+        {canCreate('cities') && (
+          <Button className="gap-2" onClick={() => setIsCreateModalOpen(true)}>
+            <MapPin className="h-4 w-4" />
+            Nueva Ciudad
+          </Button>
+        )}
       </div>
 
       <Card>
@@ -294,17 +297,21 @@ const Cities = () => {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleEditCity(city)}>
-                              <Edit className="mr-2 h-4 w-4" />
-                              Editar Ciudad
-                            </DropdownMenuItem>
-                            <DropdownMenuItem 
-                              className="text-destructive"
-                              onClick={() => handleDeleteClick(city)}
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Eliminar
-                            </DropdownMenuItem>
+                            {canEdit('cities') && (
+                              <DropdownMenuItem onClick={() => handleEditCity(city)}>
+                                <Edit className="mr-2 h-4 w-4" />
+                                Editar Ciudad
+                              </DropdownMenuItem>
+                            )}
+                            {canDelete('cities') && (
+                              <DropdownMenuItem 
+                                className="text-destructive"
+                                onClick={() => handleDeleteClick(city)}
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Eliminar
+                              </DropdownMenuItem>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>

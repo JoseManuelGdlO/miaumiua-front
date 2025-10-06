@@ -33,6 +33,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Search, Plus, MoreHorizontal, Edit, Trash2, Weight, Loader2 } from "lucide-react";
+import { canCreate, canEdit, canDelete } from "@/utils/permissions";
 import { useToast } from "@/hooks/use-toast";
 import { pesosService, Peso } from "@/services/pesosService";
 import CreatePesoModal from "@/components/modals/CreatePesoModal";
@@ -156,10 +157,12 @@ const Pesos = () => {
             Administra los pesos y unidades de medida del sistema Miau Miau
           </p>
         </div>
-        <Button className="gap-2" onClick={() => setIsCreateModalOpen(true)}>
-          <Weight className="h-4 w-4" />
-          Nuevo Peso
-        </Button>
+        {canCreate('weights') && (
+          <Button className="gap-2" onClick={() => setIsCreateModalOpen(true)}>
+            <Weight className="h-4 w-4" />
+            Nuevo Peso
+          </Button>
+        )}
       </div>
 
       <Card>
@@ -252,17 +255,21 @@ const Pesos = () => {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleEditPeso(peso)}>
-                              <Edit className="mr-2 h-4 w-4" />
-                              Editar Peso
-                            </DropdownMenuItem>
-                            <DropdownMenuItem 
-                              className="text-destructive"
-                              onClick={() => handleDeleteClick(peso)}
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Eliminar
-                            </DropdownMenuItem>
+                            {canEdit('weights') && (
+                              <DropdownMenuItem onClick={() => handleEditPeso(peso)}>
+                                <Edit className="mr-2 h-4 w-4" />
+                                Editar Peso
+                              </DropdownMenuItem>
+                            )}
+                            {canDelete('weights') && (
+                              <DropdownMenuItem 
+                                className="text-destructive"
+                                onClick={() => handleDeleteClick(peso)}
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Eliminar
+                              </DropdownMenuItem>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>

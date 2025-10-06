@@ -26,6 +26,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Search, Plus, MoreHorizontal, Edit, Trash2, UserPlus, Loader2 } from "lucide-react";
+import { canCreate, canEdit, canDelete } from "@/utils/permissions";
 import { useToast } from "@/hooks/use-toast";
 import { usersService, User } from "@/services/usersService";
 import CreateUserModal from "@/components/modals/CreateUserModal";
@@ -143,10 +144,12 @@ const Users = () => {
             Administra los usuarios del sistema Miau Miau
           </p>
         </div>
-        <Button className="gap-2" onClick={() => setIsCreateModalOpen(true)}>
-          <UserPlus className="h-4 w-4" />
-          Nuevo Usuario
-        </Button>
+        {canCreate('users') && (
+          <Button className="gap-2" onClick={() => setIsCreateModalOpen(true)}>
+            <UserPlus className="h-4 w-4" />
+            Nuevo Usuario
+          </Button>
+        )}
       </div>
 
       <Card>
@@ -238,21 +241,27 @@ const Users = () => {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem>
-                              <Edit className="mr-2 h-4 w-4" />
-                              Editar Usuario
-                            </DropdownMenuItem>
-                            <DropdownMenuItem>
-                              <UserPlus className="mr-2 h-4 w-4" />
-                              Cambiar Contraseña
-                            </DropdownMenuItem>
-                            <DropdownMenuItem 
-                              className="text-destructive"
-                              onClick={() => handleDeleteClick(user)}
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Eliminar
-                            </DropdownMenuItem>
+                            {canEdit('users') && (
+                              <DropdownMenuItem>
+                                <Edit className="mr-2 h-4 w-4" />
+                                Editar Usuario
+                              </DropdownMenuItem>
+                            )}
+                            {canEdit('users') && (
+                              <DropdownMenuItem>
+                                <UserPlus className="mr-2 h-4 w-4" />
+                                Cambiar Contraseña
+                              </DropdownMenuItem>
+                            )}
+                            {canDelete('users') && (
+                              <DropdownMenuItem 
+                                className="text-destructive"
+                                onClick={() => handleDeleteClick(user)}
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Eliminar
+                              </DropdownMenuItem>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>

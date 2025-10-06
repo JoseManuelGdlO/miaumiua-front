@@ -18,6 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Search, Plus, MoreHorizontal, Edit, Trash2, Key, Lock, Loader2 } from "lucide-react";
+import { canCreate, canEdit, canDelete } from "@/utils/permissions";
 import { useToast } from "@/hooks/use-toast";
 import { permissionsService, Permission } from "@/services/permissionsService";
 import CreatePermissionModal from "@/components/modals/CreatePermissionModal";
@@ -144,10 +145,12 @@ const Permissions = () => {
             Administra los permisos del sistema Miau Miau
           </p>
         </div>
-        <Button className="gap-2" onClick={() => setIsCreateModalOpen(true)}>
-          <Key className="h-4 w-4" />
-          Nuevo Permiso
-        </Button>
+        {canCreate('permissions') && (
+          <Button className="gap-2" onClick={() => setIsCreateModalOpen(true)}>
+            <Key className="h-4 w-4" />
+            Nuevo Permiso
+          </Button>
+        )}
       </div>
 
       <Card>
@@ -221,17 +224,21 @@ const Permissions = () => {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => handleEditPermission(permission)}>
-                            <Edit className="mr-2 h-4 w-4" />
-                            Editar Permiso
-                          </DropdownMenuItem>
-                          <DropdownMenuItem 
-                            className="text-destructive"
-                            onClick={() => handleDeletePermission(permission)}
-                          >
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Eliminar
-                          </DropdownMenuItem>
+                          {canEdit('permissions') && (
+                            <DropdownMenuItem onClick={() => handleEditPermission(permission)}>
+                              <Edit className="mr-2 h-4 w-4" />
+                              Editar Permiso
+                            </DropdownMenuItem>
+                          )}
+                          {canDelete('permissions') && (
+                            <DropdownMenuItem 
+                              className="text-destructive"
+                              onClick={() => handleDeletePermission(permission)}
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Eliminar
+                            </DropdownMenuItem>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>

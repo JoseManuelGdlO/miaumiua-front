@@ -7,6 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { MessageCircle, Search, Filter, MoreVertical, AlertTriangle, XCircle, Info } from "lucide-react";
+import { canChangeConversationStatus, canAssignConversation } from "@/utils/permissions";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useNavigate } from "react-router-dom";
 import ErrorDetailsModal from "@/components/ErrorDetailsModal";
@@ -278,7 +279,12 @@ const Conversations = () => {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem onClick={() => navigate(`/dashboard/conversations/${conversation.id}`)}>Ver conversación</DropdownMenuItem>
-                      <DropdownMenuItem>Marcar como resuelto</DropdownMenuItem>
+                      {canChangeConversationStatus() && (
+                        <DropdownMenuItem>Marcar como resuelto</DropdownMenuItem>
+                      )}
+                      {canAssignConversation() && (
+                        <DropdownMenuItem>Asignar agente</DropdownMenuItem>
+                      )}
                       <DropdownMenuItem className="text-destructive">
                         Archivar
                       </DropdownMenuItem>

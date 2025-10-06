@@ -18,6 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Search, Plus, MoreHorizontal, Edit, Trash2, Shield, Users, Loader2 } from "lucide-react";
+import { canCreate, canEdit, canDelete, canAssignPermissions } from "@/utils/permissions";
 import { useToast } from "@/hooks/use-toast";
 import { rolesService, Role } from "@/services/rolesService";
 import CreateRoleModal from "@/components/modals/CreateRoleModal";
@@ -93,10 +94,12 @@ const Roles = () => {
             Define y administra los roles de usuario en el sistema Miau Miau
           </p>
         </div>
-        <Button className="gap-2" onClick={() => setIsCreateModalOpen(true)}>
-          <Shield className="h-4 w-4" />
-          Nuevo Rol
-        </Button>
+        {canCreate('roles') && (
+          <Button className="gap-2" onClick={() => setIsCreateModalOpen(true)}>
+            <Shield className="h-4 w-4" />
+            Nuevo Rol
+          </Button>
+        )}
       </div>
 
       <Card>
@@ -203,25 +206,31 @@ const Roles = () => {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem>
-                              <Edit className="mr-2 h-4 w-4" />
-                              Editar Rol
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => {
-                              setSelectedRole({ id: role.id.toString(), name: role.nombre });
-                              setPermissionsModalOpen(true);
-                            }}>
-                              <Shield className="mr-2 h-4 w-4" />
-                              Gestionar Permisos
-                            </DropdownMenuItem>
+                            {canEdit('roles') && (
+                              <DropdownMenuItem>
+                                <Edit className="mr-2 h-4 w-4" />
+                                Editar Rol
+                              </DropdownMenuItem>
+                            )}
+                            {canAssignPermissions() && (
+                              <DropdownMenuItem onClick={() => {
+                                setSelectedRole({ id: role.id.toString(), name: role.nombre });
+                                setPermissionsModalOpen(true);
+                              }}>
+                                <Shield className="mr-2 h-4 w-4" />
+                                Gestionar Permisos
+                              </DropdownMenuItem>
+                            )}
                             <DropdownMenuItem>
                               <Users className="mr-2 h-4 w-4" />
                               Ver Usuarios
                             </DropdownMenuItem>
-                            <DropdownMenuItem className="text-destructive">
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Eliminar
-                            </DropdownMenuItem>
+                            {canDelete('roles') && (
+                              <DropdownMenuItem className="text-destructive">
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Eliminar
+                              </DropdownMenuItem>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>

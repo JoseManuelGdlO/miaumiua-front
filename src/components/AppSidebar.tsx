@@ -16,6 +16,7 @@ import {
   Layers,
   Weight,
 } from "lucide-react";
+import { hasSectionAccess } from "@/utils/permissions";
 import {
   Sidebar,
   SidebarContent,
@@ -35,31 +36,33 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import miauMiauLogo from "/lovable-uploads/9f868334-2970-46f8-a783-9ab32ecc297b.png";
 
 const menuItems = [
-  { title: "Dashboard", url: "/dashboard", icon: Home },
+  { title: "Dashboard", url: "/dashboard", icon: Home, permission: null },
   {
     title: "Gestión de Usuarios",
     icon: Users,
+    permission: "users",
     submenu: [
-      { title: "Usuarios", url: "/dashboard/users" },
-      { title: "Roles", url: "/dashboard/roles" },
-      { title: "Permisos", url: "/dashboard/permissions" },
+      { title: "Usuarios", url: "/dashboard/users", permission: "users" },
+      { title: "Roles", url: "/dashboard/roles", permission: "roles" },
+      { title: "Permisos", url: "/dashboard/permissions", permission: "permissions" },
     ],
   },
-  { title: "Conversaciones", url: "/dashboard/conversations", icon: MessageCircle },
-  { title: "Contexto de Agentes", url: "/dashboard/agents", icon: Bot },
-  { title: "Pedidos", url: "/dashboard/orders", icon: Package2 },
-  { title: "Planeación de Rutas", url: "/dashboard/routes", icon: Route },
-  { title: "Promociones", url: "/dashboard/promotions", icon: Tag },
-  { title: "Inventario", url: "/dashboard/inventory", icon: Package },
-  { title: "Ciudades", url: "/dashboard/cities", icon: MapPin },
-  { title: "Clientes", url: "/dashboard/customers", icon: UserCheck },
+  { title: "Conversaciones", url: "/dashboard/conversations", icon: MessageCircle, permission: "conversations" },
+  { title: "Contexto de Agentes", url: "/dashboard/agents", icon: Bot, permission: null },
+  { title: "Pedidos", url: "/dashboard/orders", icon: Package2, permission: "orders" },
+  { title: "Planeación de Rutas", url: "/dashboard/routes", icon: Route, permission: null },
+  { title: "Promociones", url: "/dashboard/promotions", icon: Tag, permission: "promotions" },
+  { title: "Inventario", url: "/dashboard/inventory", icon: Package, permission: "inventory" },
+  { title: "Ciudades", url: "/dashboard/cities", icon: MapPin, permission: "cities" },
+  { title: "Clientes", url: "/dashboard/customers", icon: UserCheck, permission: "customers" },
   {
     title: "Configuraciones",
     icon: Settings,
+    permission: "categories",
     submenu: [
-      { title: "Categorías Producto", url: "/dashboard/categorias-producto" },
-      { title: "Pesos", url: "/dashboard/pesos" },
-      { title: "Proveedores", url: "/dashboard/proveedores" },
+      { title: "Categorías Producto", url: "/dashboard/categorias-producto", permission: "categories" },
+      { title: "Pesos", url: "/dashboard/pesos", permission: "weights" },
+      { title: "Proveedores", url: "/dashboard/proveedores", permission: "suppliers" },
     ],
   },
 ];
@@ -123,59 +126,73 @@ export function AppSidebar() {
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu className="space-y-1">
-              {menuItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  {item.submenu ? (
-                    <Collapsible
-                      open={openGroups[item.title] || isGroupActive(item.submenu)}
-                      onOpenChange={() => toggleGroup(item.title)}
-                    >
-                      <CollapsibleTrigger asChild>
-                        <SidebarMenuButton
-                          className={getNavClasses(isGroupActive(item.submenu))}
-                          tooltip={item.title}
+              {menuItems.map((item) => {
+                // Check if user has access to this section
+                if (item.permission && !hasSectionAccess(item.permission as any)) {
+                  return null;
+                }
+
+                return (
+                  <SidebarMenuItem key={item.title}>
+                    {item.submenu ? (
+                      <Collapsible
+                        open={openGroups[item.title] || isGroupActive(item.submenu)}
+                        onOpenChange={() => toggleGroup(item.title)}
+                      >
+                        <CollapsibleTrigger asChild>
+                          <SidebarMenuButton
+                            className={getNavClasses(isGroupActive(item.submenu))}
+                            tooltip={item.title}
+                          >
+                            <item.icon className="h-4 w-4 flex-shrink-0" />
+                            {!isCollapsed && (
+                              <>
+                                <span className="flex-1">{item.title}</span>
+                                <ChevronDown className="h-4 w-4 transition-transform" />
+                              </>
+                            )}
+                          </SidebarMenuButton>
+                        </CollapsibleTrigger>
+                        {!isCollapsed && (
+                          <CollapsibleContent>
+                            <SidebarMenuSub className="ml-4 mt-2 border-l border-sidebar-border pl-4">
+                              {item.submenu.map((subItem) => {
+                                // Check if user has access to this submenu item
+                                if (subItem.permission && !hasSectionAccess(subItem.permission as any)) {
+                                  return null;
+                                }
+
+                                return (
+                                  <SidebarMenuSubItem key={subItem.title}>
+                                    <SidebarMenuSubButton asChild>
+                                      <NavLink
+                                        to={subItem.url}
+                                        className={getNavClasses(isActive(subItem.url))}
+                                      >
+                                        <span className="text-sm">{subItem.title}</span>
+                                      </NavLink>
+                                    </SidebarMenuSubButton>
+                                  </SidebarMenuSubItem>
+                                );
+                              })}
+                            </SidebarMenuSub>
+                          </CollapsibleContent>
+                        )}
+                      </Collapsible>
+                    ) : (
+                      <SidebarMenuButton asChild tooltip={item.title}>
+                        <NavLink
+                          to={item.url}
+                          className={getNavClasses(isActive(item.url))}
                         >
                           <item.icon className="h-4 w-4 flex-shrink-0" />
-                          {!isCollapsed && (
-                            <>
-                              <span className="flex-1">{item.title}</span>
-                              <ChevronDown className="h-4 w-4 transition-transform" />
-                            </>
-                          )}
-                        </SidebarMenuButton>
-                      </CollapsibleTrigger>
-                      {!isCollapsed && (
-                        <CollapsibleContent>
-                          <SidebarMenuSub className="ml-4 mt-2 border-l border-sidebar-border pl-4">
-                            {item.submenu.map((subItem) => (
-                              <SidebarMenuSubItem key={subItem.title}>
-                                <SidebarMenuSubButton asChild>
-                                  <NavLink
-                                    to={subItem.url}
-                                    className={getNavClasses(isActive(subItem.url))}
-                                  >
-                                    <span className="text-sm">{subItem.title}</span>
-                                  </NavLink>
-                                </SidebarMenuSubButton>
-                              </SidebarMenuSubItem>
-                            ))}
-                          </SidebarMenuSub>
-                        </CollapsibleContent>
-                      )}
-                    </Collapsible>
-                  ) : (
-                    <SidebarMenuButton asChild tooltip={item.title}>
-                      <NavLink
-                        to={item.url}
-                        className={getNavClasses(isActive(item.url))}
-                      >
-                        <item.icon className="h-4 w-4 flex-shrink-0" />
-                        {!isCollapsed && <span>{item.title}</span>}
-                      </NavLink>
-                    </SidebarMenuButton>
-                  )}
-                </SidebarMenuItem>
-              ))}
+                          {!isCollapsed && <span>{item.title}</span>}
+                        </NavLink>
+                      </SidebarMenuButton>
+                    )}
+                  </SidebarMenuItem>
+                );
+              })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

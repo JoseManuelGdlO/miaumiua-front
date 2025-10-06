@@ -26,6 +26,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Search, Plus, MoreHorizontal, Edit, Trash2, Package, Loader2 } from "lucide-react";
+import { canCreate, canEdit, canDelete } from "@/utils/permissions";
 import { useToast } from "@/hooks/use-toast";
 import { categoriasProductoService, CategoriaProducto } from "@/services/categoriasProductoService";
 import CreateCategoriaProductoModal from "@/components/modals/CreateCategoriaProductoModal";
@@ -130,10 +131,12 @@ const CategoriasProducto = () => {
             Administra las categorías de productos del sistema Miau Miau
           </p>
         </div>
-        <Button className="gap-2" onClick={() => setIsCreateModalOpen(true)}>
-          <Package className="h-4 w-4" />
-          Nueva Categoría
-        </Button>
+        {canCreate('categories') && (
+          <Button className="gap-2" onClick={() => setIsCreateModalOpen(true)}>
+            <Package className="h-4 w-4" />
+            Nueva Categoría
+          </Button>
+        )}
       </div>
 
       <Card>
@@ -215,17 +218,21 @@ const CategoriasProducto = () => {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleEditCategoria(categoria)}>
-                              <Edit className="mr-2 h-4 w-4" />
-                              Editar Categoría
-                            </DropdownMenuItem>
-                            <DropdownMenuItem 
-                              className="text-destructive"
-                              onClick={() => handleDeleteClick(categoria)}
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Eliminar
-                            </DropdownMenuItem>
+                            {canEdit('categories') && (
+                              <DropdownMenuItem onClick={() => handleEditCategoria(categoria)}>
+                                <Edit className="mr-2 h-4 w-4" />
+                                Editar Categoría
+                              </DropdownMenuItem>
+                            )}
+                            {canDelete('categories') && (
+                              <DropdownMenuItem 
+                                className="text-destructive"
+                                onClick={() => handleDeleteClick(categoria)}
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Eliminar
+                              </DropdownMenuItem>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>

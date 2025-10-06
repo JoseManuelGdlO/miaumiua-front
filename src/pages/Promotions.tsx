@@ -27,6 +27,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Search, Plus, MoreHorizontal, Edit, Trash2, Tag, Calendar, Loader2 } from "lucide-react";
+import { canCreate, canEdit, canDelete } from "@/utils/permissions";
 import CreatePromotionModal from "@/components/modals/CreatePromotionModal";
 import EditPromotionModal from "@/components/modals/EditPromotionModal";
 import ConfirmDeleteModal from "@/components/modals/ConfirmDeleteModal";
@@ -162,10 +163,12 @@ const Promotions = () => {
             Gestiona las promociones y descuentos disponibles
           </p>
         </div>
-        <Button onClick={() => setIsCreateModalOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Nueva Promoción
-        </Button>
+        {canCreate('promotions') && (
+          <Button onClick={() => setIsCreateModalOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Nueva Promoción
+          </Button>
+        )}
       </div>
 
       {/* Stats Cards */}
@@ -314,25 +317,29 @@ const Promotions = () => {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem
-                                onClick={() => {
-                                  setSelectedPromotion(promotion);
-                                  setIsEditModalOpen(true);
-                                }}
-                              >
-                                <Edit className="mr-2 h-4 w-4" />
-                                Editar
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => {
-                                  setSelectedPromotion(promotion);
-                                  setIsDeleteModalOpen(true);
-                                }}
-                                className="text-destructive"
-                              >
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Eliminar
-                              </DropdownMenuItem>
+                              {canEdit('promotions') && (
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    setSelectedPromotion(promotion);
+                                    setIsEditModalOpen(true);
+                                  }}
+                                >
+                                  <Edit className="mr-2 h-4 w-4" />
+                                  Editar
+                                </DropdownMenuItem>
+                              )}
+                              {canDelete('promotions') && (
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    setSelectedPromotion(promotion);
+                                    setIsDeleteModalOpen(true);
+                                  }}
+                                  className="text-destructive"
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Eliminar
+                                </DropdownMenuItem>
+                              )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </TableCell>

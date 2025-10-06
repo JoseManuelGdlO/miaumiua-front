@@ -33,6 +33,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Search, Plus, MoreHorizontal, Edit, Trash2, UserCheck, Star, MessageSquare, Phone, Loader2 } from "lucide-react";
+import { canCreate, canEdit, canDelete, canViewStats } from "@/utils/permissions";
 import { useToast } from "@/hooks/use-toast";
 import { clientesService, Cliente } from "@/services/clientesService";
 import CreateCustomerModal from "@/components/modals/CreateCustomerModal";
@@ -168,10 +169,12 @@ const Customers = () => {
             Base de datos de clientes Miau Miau y programa de lealtad
           </p>
         </div>
-        <Button className="gap-2" onClick={() => setIsCreateModalOpen(true)}>
-          <UserCheck className="h-4 w-4" />
-          Nuevo Cliente
-        </Button>
+        {canCreate('customers') && (
+          <Button className="gap-2" onClick={() => setIsCreateModalOpen(true)}>
+            <UserCheck className="h-4 w-4" />
+            Nuevo Cliente
+          </Button>
+        )}
       </div>
 
       <Card>
@@ -284,17 +287,21 @@ const Customers = () => {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleEditCliente(cliente)}>
-                              <Edit className="mr-2 h-4 w-4" />
-                              Editar Cliente
-                            </DropdownMenuItem>
-                            <DropdownMenuItem 
-                              className="text-destructive"
-                              onClick={() => handleDeleteClick(cliente)}
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Eliminar
-                            </DropdownMenuItem>
+                            {canEdit('customers') && (
+                              <DropdownMenuItem onClick={() => handleEditCliente(cliente)}>
+                                <Edit className="mr-2 h-4 w-4" />
+                                Editar Cliente
+                              </DropdownMenuItem>
+                            )}
+                            {canDelete('customers') && (
+                              <DropdownMenuItem 
+                                className="text-destructive"
+                                onClick={() => handleDeleteClick(cliente)}
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Eliminar
+                              </DropdownMenuItem>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>

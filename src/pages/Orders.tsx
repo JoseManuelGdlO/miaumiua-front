@@ -56,6 +56,16 @@ import {
   TrendingUp,
   Users
 } from "lucide-react";
+import { 
+  canCreate, 
+  canEdit, 
+  canDelete, 
+  canChangeOrderStatus, 
+  canConfirmOrder, 
+  canDeliverOrder, 
+  canCancelOrder,
+  canViewStats 
+} from "@/utils/permissions";
 import { useToast } from "@/hooks/use-toast";
 import { ordersService, Order, OrderStatsResponse } from "@/services/ordersService";
 import { clientesService } from "@/services/clientesService";
@@ -272,10 +282,12 @@ const Orders = () => {
             Gestiona todos los pedidos del sistema
           </p>
         </div>
-        <Button onClick={() => setIsCreateModalOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Nuevo Pedido
-        </Button>
+        {canCreate('orders') && (
+          <Button onClick={() => setIsCreateModalOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Nuevo Pedido
+          </Button>
+        )}
       </div>
 
       {/* Stats Cards */}
@@ -475,50 +487,54 @@ const Orders = () => {
                             <Eye className="mr-2 h-4 w-4" />
                             Ver Detalles
                           </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleEditOrder(order)}>
-                            <Edit className="mr-2 h-4 w-4" />
-                              Editar
-                            </DropdownMenuItem>
-                            {order.estado === 'pendiente' && (
+                            {canEdit('orders') && (
+                              <DropdownMenuItem onClick={() => handleEditOrder(order)}>
+                                <Edit className="mr-2 h-4 w-4" />
+                                Editar
+                              </DropdownMenuItem>
+                            )}
+                            {canConfirmOrder() && order.estado === 'pendiente' && (
                               <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'confirmado')}>
                                 <CheckCircle className="mr-2 h-4 w-4" />
                                 Confirmar
                               </DropdownMenuItem>
                             )}
-                            {order.estado === 'confirmado' && (
+                            {canChangeOrderStatus() && order.estado === 'confirmado' && (
                               <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'en_preparacion')}>
                                 <Package className="mr-2 h-4 w-4" />
                                 En Preparación
-                          </DropdownMenuItem>
+                              </DropdownMenuItem>
                             )}
-                            {order.estado === 'en_preparacion' && (
+                            {canChangeOrderStatus() && order.estado === 'en_preparacion' && (
                               <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'en_camino')}>
-                            <Truck className="mr-2 h-4 w-4" />
+                                <Truck className="mr-2 h-4 w-4" />
                                 En Camino
                               </DropdownMenuItem>
                             )}
-                            {order.estado === 'en_camino' && (
+                            {canDeliverOrder() && order.estado === 'en_camino' && (
                               <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'entregado')}>
                                 <CheckCircle className="mr-2 h-4 w-4" />
                                 Marcar Entregado
-                          </DropdownMenuItem>
+                              </DropdownMenuItem>
                             )}
-                            {order.estado !== 'cancelado' && order.estado !== 'entregado' && (
+                            {canCancelOrder() && order.estado !== 'cancelado' && order.estado !== 'entregado' && (
                               <DropdownMenuItem 
                                 onClick={() => handleStatusChange(order.id, 'cancelado')}
                                 className="text-red-600"
                               >
                                 <XCircle className="mr-2 h-4 w-4" />
                                 Cancelar
-                          </DropdownMenuItem>
+                              </DropdownMenuItem>
                             )}
-                            <DropdownMenuItem 
-                              onClick={() => handleDeleteOrder(order.id)}
-                              className="text-red-600"
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Eliminar
-                            </DropdownMenuItem>
+                            {canDelete('orders') && (
+                              <DropdownMenuItem 
+                                onClick={() => handleDeleteOrder(order.id)}
+                                className="text-red-600"
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Eliminar
+                              </DropdownMenuItem>
+                            )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>

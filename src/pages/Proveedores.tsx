@@ -16,6 +16,7 @@ import { CreateProveedorModal } from "@/components/modals/CreateProveedorModal";
 import { EditProveedorModal } from "@/components/modals/EditProveedorModal";
 import ConfirmDeleteModal from "@/components/modals/ConfirmDeleteModal";
 import { Search, Plus, MoreHorizontal, Edit, Trash2, Loader2 } from "lucide-react";
+import { canCreate, canEdit, canDelete } from "@/utils/permissions";
 
 const Proveedores = () => {
   const { toast } = useToast();
@@ -133,10 +134,12 @@ const Proveedores = () => {
             Gestiona los proveedores del sistema
           </p>
         </div>
-        <Button onClick={() => setIsCreateModalOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Nuevo Proveedor
-        </Button>
+        {canCreate('suppliers') && (
+          <Button onClick={() => setIsCreateModalOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Nuevo Proveedor
+          </Button>
+        )}
       </div>
 
       {/* Estadísticas */}
@@ -241,19 +244,23 @@ const Proveedores = () => {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                              onClick={() => handleEdit(proveedor)}
-                            >
-                              <Edit className="mr-2 h-4 w-4" />
-                              Editar
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => handleDelete(proveedor)}
-                              className="text-destructive"
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Eliminar
-                            </DropdownMenuItem>
+                            {canEdit('suppliers') && (
+                              <DropdownMenuItem
+                                onClick={() => handleEdit(proveedor)}
+                              >
+                                <Edit className="mr-2 h-4 w-4" />
+                                Editar
+                              </DropdownMenuItem>
+                            )}
+                            {canDelete('suppliers') && (
+                              <DropdownMenuItem
+                                onClick={() => handleDelete(proveedor)}
+                                className="text-destructive"
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Eliminar
+                              </DropdownMenuItem>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>

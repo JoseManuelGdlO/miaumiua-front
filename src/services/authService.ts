@@ -16,13 +16,15 @@ export interface LoginResponse {
       id: number;
       nombre_completo: string;
       correo_electronico: string;
-      rol_id: number;
-      ciudad_id: number;
+      rol: {
+        id: number;
+        nombre: string;
+        descripcion: string;
+      };
       isActive: boolean;
       lastLogin: string;
-      createdAt: string;
-      updatedAt: string;
     };
+    permissions: string[];
   };
   error?: string;
 }
@@ -97,6 +99,7 @@ class AuthService {
         localStorage.setItem('auth_token', response.data.token);
         localStorage.setItem('refresh_token', response.data.refreshToken);
         localStorage.setItem('user_data', JSON.stringify(response.data.user));
+        localStorage.setItem('user_permissions', JSON.stringify(response.data.permissions));
       }
 
       return response;
@@ -114,6 +117,7 @@ class AuthService {
     localStorage.removeItem('auth_token');
     localStorage.removeItem('refresh_token');
     localStorage.removeItem('user_data');
+    localStorage.removeItem('user_permissions');
   }
 
   // Función para verificar si el usuario está autenticado
@@ -136,6 +140,12 @@ class AuthService {
   getUserData(): any | null {
     const userData = localStorage.getItem('user_data');
     return userData ? JSON.parse(userData) : null;
+  }
+
+  // Función para obtener los permisos del usuario
+  getUserPermissions(): string[] {
+    const permissions = localStorage.getItem('user_permissions');
+    return permissions ? JSON.parse(permissions) : [];
   }
 
   // Función para hacer peticiones autenticadas

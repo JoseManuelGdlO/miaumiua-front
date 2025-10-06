@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { conversationsService } from "@/services/conversationsService";
+import { hasPermission } from "@/utils/permissions";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
 const ConversationDetail = () => {
@@ -35,6 +36,20 @@ const ConversationDetail = () => {
   const logs = Array.isArray(conversation?.logs) ? conversation.logs : [];
   const pedido = conversation?.pedido || null;
   const productos = Array.isArray(pedido?.productos) ? pedido.productos : [];
+
+  // Guard: require base permission to view conversation detail
+  if (!hasPermission("ver_conversaciones")) {
+    return (
+      <div className="p-6">
+        <Alert>
+          <AlertDescription className="text-destructive">No tienes permisos para ver conversaciones.</AlertDescription>
+        </Alert>
+        <div className="mt-4">
+          <Button variant="outline" onClick={() => navigate(-1)}>Volver</Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">
@@ -162,80 +177,84 @@ const ConversationDetail = () => {
           </AccordionContent>
         </AccordionItem>
 
-        <AccordionItem value="logs">
-          <AccordionTrigger>Ver logs</AccordionTrigger>
-          <AccordionContent>
-            <div className="space-y-2 max-h-80 overflow-auto pr-1">
-              {loading && <div className="text-xs text-muted-foreground">Cargando logs...</div>}
-              {!loading && logs.length === 0 && (
-                <div className="text-xs text-muted-foreground">Sin logs</div>
-              )}
-              {logs.map((log: any) => (
-                <div key={log.id} className="p-2 border rounded">
-                  <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-                    <span className={(log.nivel === 'error' || log.tipo_log === 'error') ? 'text-destructive' : ''}>
-                      {log.tipo_log} ({log.nivel})
-                    </span>
-                    <span>{log.created_at ? new Date(log.created_at).toLocaleString() : `${log.fecha} ${log.hora}`}</span>
+        {hasPermission("ver_conversaciones_logs") && (
+          <AccordionItem value="logs">
+            <AccordionTrigger>Ver logs</AccordionTrigger>
+            <AccordionContent>
+              <div className="space-y-2 max-h-80 overflow-auto pr-1">
+                {loading && <div className="text-xs text-muted-foreground">Cargando logs...</div>}
+                {!loading && logs.length === 0 && (
+                  <div className="text-xs text-muted-foreground">Sin logs</div>
+                )}
+                {logs.map((log: any) => (
+                  <div key={log.id} className="p-2 border rounded">
+                    <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                      <span className={(log.nivel === 'error' || log.tipo_log === 'error') ? 'text-destructive' : ''}>
+                        {log.tipo_log} ({log.nivel})
+                      </span>
+                      <span>{log.created_at ? new Date(log.created_at).toLocaleString() : `${log.fecha} ${log.hora}`}</span>
+                    </div>
+                    <div className="mt-1 text-xs">{log.descripcion}</div>
                   </div>
-                  <div className="mt-1 text-xs">{log.descripcion}</div>
-                </div>
-              ))}
-            </div>
-          </AccordionContent>
-        </AccordionItem>
+                ))}
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        )}
       </Accordion>
 
       {/* Chat al final */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Chats</CardTitle>
-          <CardDescription>Mensajes de la conversación</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            {loading && <div className="text-sm text-muted-foreground">Cargando chats...</div>}
-            {!loading && chats.length === 0 && (
-              <div className="text-sm text-muted-foreground">Sin mensajes</div>
-            )}
-            {chats.map((chat: any) => {
-              const isUser = (chat?.from || '').toLowerCase() === 'usuario';
-              const timestamp = chat.created_at ? new Date(chat.created_at).toLocaleString() : `${chat.fecha} ${chat.hora}`;
-              return (
-                <div key={chat.id} className={`flex ${isUser ? 'justify-start' : 'justify-end'} px-1`}>
-                  <div className={`relative max-w-[75%] px-3 py-2 rounded-2xl shadow-sm ${isUser ? 'bg-gray-200 text-foreground' : 'bg-blue-600 text-white'}`}>
-                    {isUser ? (
-                      <span
-                        className="absolute left-[-6px] bottom-2"
-                        style={{
-                          width: 0,
-                          height: 0,
-                          borderTop: '8px solid transparent',
-                          borderRight: '8px solid rgb(229 231 235)',
-                          borderBottom: '8px solid transparent',
-                        }}
-                      />
-                    ) : (
-                      <span
-                        className="absolute right-[-6px] bottom-2"
-                        style={{
-                          width: 0,
-                          height: 0,
-                          borderTop: '8px solid transparent',
-                          borderLeft: '8px solid rgb(37 99 235)',
-                          borderBottom: '8px solid transparent',
-                        }}
-                      />
-                    )}
-                    <div className="text-base whitespace-pre-wrap break-words">{chat.mensaje}</div>
-                    <div className={`mt-1 text-xs ${isUser ? 'text-muted-foreground' : 'text-blue-100'} text-right`}>{timestamp}</div>
+      {hasPermission("ver_conversaciones_chat") && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Chats</CardTitle>
+            <CardDescription>Mensajes de la conversación</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {loading && <div className="text-sm text-muted-foreground">Cargando chats...</div>}
+              {!loading && chats.length === 0 && (
+                <div className="text-sm text-muted-foreground">Sin mensajes</div>
+              )}
+              {chats.map((chat: any) => {
+                const isUser = (chat?.from || '').toLowerCase() === 'usuario';
+                const timestamp = chat.created_at ? new Date(chat.created_at).toLocaleString() : `${chat.fecha} ${chat.hora}`;
+                return (
+                  <div key={chat.id} className={`flex ${isUser ? 'justify-start' : 'justify-end'} px-1`}>
+                    <div className={`relative max-w-[75%] px-3 py-2 rounded-2xl shadow-sm ${isUser ? 'bg-gray-200 text-foreground' : 'bg-blue-600 text-white'}`}>
+                      {isUser ? (
+                        <span
+                          className="absolute left-[-6px] bottom-2"
+                          style={{
+                            width: 0,
+                            height: 0,
+                            borderTop: '8px solid transparent',
+                            borderRight: '8px solid rgb(229 231 235)',
+                            borderBottom: '8px solid transparent',
+                          }}
+                        />
+                      ) : (
+                        <span
+                          className="absolute right-[-6px] bottom-2"
+                          style={{
+                            width: 0,
+                            height: 0,
+                            borderTop: '8px solid transparent',
+                            borderLeft: '8px solid rgb(37 99 235)',
+                            borderBottom: '8px solid transparent',
+                          }}
+                        />
+                      )}
+                      <div className="text-base whitespace-pre-wrap break-words">{chat.mensaje}</div>
+                      <div className={`mt-1 text-xs ${isUser ? 'text-muted-foreground' : 'text-blue-100'} text-right`}>{timestamp}</div>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };
