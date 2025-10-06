@@ -59,6 +59,82 @@ export interface ApiError {
   details?: any;
 }
 
+// Categorías y acciones predefinidas
+export const PERMISSION_CATEGORIES = {
+  usuarios: {
+    name: "Gestión de usuarios del sistema",
+    actions: ["ver", "crear", "editar", "eliminar", "administrar"]
+  },
+  roles: {
+    name: "Gestión de roles", 
+    actions: ["ver", "crear", "editar", "eliminar", "asignar_permisos"]
+  },
+  permisos: {
+    name: "Gestión de permisos",
+    actions: ["ver", "crear", "editar", "eliminar"]
+  },
+  clientes: {
+    name: "Gestión de clientes",
+    actions: ["ver", "crear", "editar", "eliminar", "ver_stats"]
+  },
+  mascotas: {
+    name: "Gestión de mascotas",
+    actions: ["ver", "crear", "editar", "eliminar"]
+  },
+  pedidos: {
+    name: "Gestión de pedidos",
+    actions: ["ver", "crear", "editar", "eliminar", "cambiar_estado", "confirmar", "entregar", "cancelar", "ver_stats"]
+  },
+  productos_pedido: {
+    name: "Productos en pedidos",
+    actions: ["ver", "crear", "editar", "eliminar"]
+  },
+  inventarios: {
+    name: "Gestión de inventarios",
+    actions: ["ver", "crear", "editar", "eliminar"]
+  },
+  categorias_producto: {
+    name: "Categorías de productos",
+    actions: ["ver", "crear", "editar", "eliminar"]
+  },
+  pesos: {
+    name: "Gestión de pesos",
+    actions: ["ver", "crear", "editar", "eliminar"]
+  },
+  proveedores: {
+    name: "Gestión de proveedores",
+    actions: ["ver", "crear", "editar", "eliminar"]
+  },
+  ciudades: {
+    name: "Gestión de ciudades",
+    actions: ["ver", "crear", "editar", "eliminar"]
+  },
+  promociones: {
+    name: "Gestión de promociones",
+    actions: ["ver", "crear", "editar", "eliminar"]
+  },
+  conversaciones: {
+    name: "Gestión de conversaciones",
+    actions: ["ver", "crear", "editar", "eliminar", "cambiar_estado", "asignar"]
+  },
+  conversaciones_chat: {
+    name: "Mensajes de chat",
+    actions: ["ver", "crear", "editar", "eliminar", "marcar_leido"]
+  },
+  conversaciones_logs: {
+    name: "Logs de conversaciones",
+    actions: ["ver", "crear", "editar", "eliminar"]
+  },
+  sistema: {
+    name: "Gestión del sistema",
+    actions: ["ver_logs", "configurar", "backup", "restore"]
+  },
+  reportes: {
+    name: "Gestión de reportes",
+    actions: ["ver", "generar", "exportar"]
+  }
+} as const;
+
 // Clase para manejar los permisos
 class PermissionsService {
   // Obtener todos los permisos

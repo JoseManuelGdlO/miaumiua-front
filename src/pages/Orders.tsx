@@ -1,8 +1,14 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Table,
   TableBody,
@@ -25,243 +31,359 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Search, Plus, MoreHorizontal, Edit, Eye, Truck, MapPin, Package2 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { 
+  Search, 
+  Plus, 
+  MoreHorizontal, 
+  Edit, 
+  Trash2, 
+  Package, 
+  Truck, 
+  CheckCircle, 
+  Clock, 
+  XCircle,
+  Loader2,
+  Eye,
+  Calendar,
+  DollarSign,
+  TrendingUp,
+  Users
+} from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { ordersService, Order, OrderStatsResponse } from "@/services/ordersService";
+import { clientesService } from "@/services/clientesService";
+import { citiesService } from "@/services/citiesService";
 import CreateOrderModal from "@/components/modals/CreateOrderModal";
-import ReScheduleOrderModal from "@/components/modals/ReScheduleOrderModal";
+import EditOrderModal from "@/components/modals/EditOrderModal";
+
+// Extend the Order interface to match API response
+interface OrderWithAPI extends Order {
+  cliente?: {
+    id: number;
+    nombre_completo: string;
+    telefono: string;
+    email?: string;
+  };
+  ciudad?: {
+    id: number;
+    nombre: string;
+    departamento: string;
+  };
+}
 
 const Orders = () => {
+  const { toast } = useToast();
+  const [orders, setOrders] = useState<OrderWithAPI[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<OrderStatsResponse['data'] | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [paymentMethodFilter, setPaymentMethodFilter] = useState<string>("all");
   const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalOrders, setTotalOrders] = useState(0);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [isReScheduleModalOpen, setIsReScheduleModalOpen] = useState(false);
-  const [selectedOrder, setSelectedOrder] = useState<any>(null);
-  const itemsPerPage = 12;
-  
-  const orders = [
-    {
-      id: 1,
-      orderNumber: "MM-2024-0001",
-      customer: "María González",
-      phone: "+57 320 123 4567",
-      address: "Calle 127 #15-45, Apto 502",
-      city: "Ciudad de México",
-      zone: "Polanco",
-      products: [
-        { name: "Arena Premium 10kg", quantity: 2, price: 45000 }
-      ],
-      total: 90000,
-      status: "Pendiente",
-      orderDate: "2024-01-15",
-      deliveryDate: "2024-01-16",
-      paymentMethod: "Efectivo",
-      deliveryRoute: null,
-      driver: null,
-      coordinates: { lat: 4.7110, lng: -74.0721 }
-    },
-    {
-      id: 2,
-      orderNumber: "MM-2024-0002",
-      customer: "Carlos Ramírez",
-      phone: "+57 315 987 6543", 
-      address: "Carrera 70 #45-12, Casa 15",
-      city: "Guadalajara",
-      zone: "Providencia",
-      products: [
-        { name: "Arena Antibacterial 5kg", quantity: 3, price: 28000 }
-      ],
-      total: 84000,
-      status: "En Ruta",
-      orderDate: "2024-01-14",
-      deliveryDate: "2024-01-15",
-      paymentMethod: "Tarjeta",
-      deliveryRoute: "Ruta A",
-      driver: "Juan Pérez",
-      coordinates: { lat: 6.2442, lng: -75.5812 }
-    },
-    {
-      id: 3,
-      orderNumber: "MM-2024-0003",
-      customer: "Laura Martínez",
-      phone: "+57 301 456 7890",
-      address: "Avenida 6N #28-15, Torre 3",
-      city: "Monterrey",
-      zone: "San Pedro",
-      products: [
-        { name: "Arena Perfumada 15kg", quantity: 1, price: 52000 },
-        { name: "Arena Básica 8kg", quantity: 2, price: 18000 }
-      ],
-      total: 88000,
-      status: "Entregado",
-      orderDate: "2024-01-13",
-      deliveryDate: "2024-01-14",
-      paymentMethod: "Transferencia",
-      deliveryRoute: "Ruta B",
-      driver: "Ana López",
-      coordinates: { lat: 3.4516, lng: -76.5320 }
-    },
-    {
-      id: 4,
-      orderNumber: "MM-2024-0004",
-      customer: "Andrés Torres",
-      phone: "+57 304 234 5678",
-      address: "Calle 84 #51-20, Local 8",
-      city: "Barranquilla",
-      zone: "Riomar",
-      products: [
-        { name: "Arena Básica 8kg", quantity: 4, price: 18000 }
-      ],
-      total: 72000,
-      status: "Cancelado",
-      orderDate: "2024-01-12",
-      deliveryDate: "2024-01-13",
-      paymentMethod: "Efectivo",
-      deliveryRoute: null,
-      driver: null,
-      coordinates: { lat: 10.9685, lng: -74.7813 }
-    },
-    {
-      id: 5,
-      orderNumber: "MM-2024-0005",
-      customer: "Patricia Herrera",
-      phone: "+57 318 345 6789",
-      address: "Bocagrande, Calle 5 #4-32",
-      city: "Cartagena", 
-      zone: "Bocagrande",
-      products: [
-        { name: "Arena Ultra 12kg", quantity: 1, price: 58000 }
-      ],
-      total: 58000,
-      status: "Programado",
-      orderDate: "2024-01-15",
-      deliveryDate: "2024-01-17",
-      paymentMethod: "Tarjeta",
-      deliveryRoute: null,
-      driver: null,
-      coordinates: { lat: 10.3932, lng: -75.4832 }
-    },
-    // Generar más pedidos para paginación
-    ...Array.from({ length: 45 }, (_, i) => {
-      const customers = ['Roberto Silva', 'Carmen Vega', 'Diego Morales', 'Elena Ruiz', 'Fernando Castro'];
-      const cities = ['Ciudad de México', 'Guadalajara', 'Monterrey', 'Puebla', 'Tijuana', 'León'];
-      const zones = {
-        'Ciudad de México': ['Polanco', 'Roma Norte', 'Condesa', 'Centro'],
-        'Guadalajara': ['Providencia', 'Chapultepec', 'Centro', 'Americana'],
-        'Monterrey': ['San Pedro', 'Centro', 'Santa Catarina', 'Valle Oriente'],
-        'Puebla': ['Centro', 'Angelópolis', 'La Paz', 'Reforma'],
-        'Tijuana': ['Zona Río', 'Centro', 'Otay', 'La Mesa'],
-        'León': ['Centro', 'Del Valle', 'Lomas del Campestre', 'San Jerónimo']
-      };
-      const products = ['Arena Premium 10kg', 'Arena Antibacterial 5kg', 'Arena Perfumada 15kg', 'Arena Básica 8kg'];
-      const statuses = ['Pendiente', 'En Ruta', 'Entregado', 'Programado'];
-      const paymentMethods = ['Efectivo', 'Tarjeta', 'Transferencia'];
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState<OrderWithAPI | null>(null);
+  const itemsPerPage = 10;
+
+  // Cargar pedidos y estadísticas al montar el componente
+  useEffect(() => {
+    loadOrders();
+    loadStats();
+  }, [currentPage, searchTerm, statusFilter, paymentMethodFilter]);
+
+  const loadOrders = async () => {
+    try {
+      setLoading(true);
+      const response = await ordersService.getAllOrders({
+        page: currentPage,
+        limit: itemsPerPage,
+        search: searchTerm || undefined,
+        estado: statusFilter === 'all' ? undefined : statusFilter as any,
+        metodo_pago: paymentMethodFilter === 'all' ? undefined : paymentMethodFilter as any,
+        activos: 'true'
+      });
       
-      const city = cities[i % cities.length];
-      const quantity = Math.floor(Math.random() * 3) + 1;
-      const product = products[i % products.length];
-      const price = Math.floor(Math.random() * 40000) + 15000;
+      if (response.success) {
+        setOrders(response.data.pedidos);
+        setTotalPages(response.data.pagination.totalPages);
+        setTotalOrders(response.data.pagination.total);
+      }
+    } catch (error) {
+      console.error('Error al cargar pedidos:', error);
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar los pedidos",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadStats = async () => {
+    try {
+      const response = await ordersService.getOrderStats();
+      if (response.success) {
+        setStats(response.data);
+      }
+    } catch (error) {
+      console.error('Error al cargar estadísticas:', error);
+    }
+  };
+
+  const handleSearch = (value: string) => {
+    setSearchTerm(value);
+    setCurrentPage(1);
+  };
+
+  const handleStatusFilter = (value: string) => {
+    setStatusFilter(value);
+    setCurrentPage(1);
+  };
+
+  const handlePaymentMethodFilter = (value: string) => {
+    setPaymentMethodFilter(value);
+    setCurrentPage(1);
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('es-CO', {
+      style: 'currency',
+      currency: 'COP',
+      minimumFractionDigits: 0,
+    }).format(amount);
+  };
+
+  const formatDate = (dateString: string | null | undefined) => {
+    if (!dateString) return 'N/A';
+    
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'Fecha inválida';
       
-      return {
-        id: 6 + i,
-        orderNumber: `MM-2024-${String(6 + i).padStart(4, '0')}`,
-        customer: customers[i % customers.length],
-        phone: `+57 ${300 + Math.floor(Math.random() * 20)} ${Math.floor(Math.random() * 900 + 100)} ${Math.floor(Math.random() * 9000 + 1000)}`,
-        address: `Dirección ${i + 1}, Ciudad ${city}`,
-        city,
-        zone: zones[city as keyof typeof zones][i % zones[city as keyof typeof zones].length],
-        products: [{ name: product, quantity, price }],
-        total: quantity * price,
-        status: statuses[i % statuses.length],
-        orderDate: "2024-01-15",
-        deliveryDate: "2024-01-16",
-        paymentMethod: paymentMethods[i % paymentMethods.length],
-        deliveryRoute: Math.random() > 0.6 ? `Ruta ${String.fromCharCode(65 + (i % 5))}` : null,
-        driver: Math.random() > 0.6 ? `Conductor ${i % 5 + 1}` : null,
-        coordinates: { lat: Math.random() * 10 + 3, lng: Math.random() * 10 - 80 }
-      };
-    })
-  ];
+      return date.toLocaleDateString('es-ES', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (error) {
+      return 'Fecha inválida';
+    }
+  };
+
+  const handleViewDetails = (order: OrderWithAPI) => {
+    setSelectedOrder(order);
+    setIsDetailsModalOpen(true);
+  };
+
+  const handleEditOrder = (order: OrderWithAPI) => {
+    setSelectedOrder(order);
+    setIsEditModalOpen(true);
+  };
 
   const getStatusBadge = (status: string) => {
-    const statusColors = {
-      "Pendiente": "bg-warning text-warning-foreground",
-      "En Ruta": "bg-primary text-primary-foreground", 
-      "Entregado": "bg-success text-success-foreground",
-      "Programado": "bg-secondary text-secondary-foreground",
-      "Cancelado": "bg-destructive text-destructive-foreground"
+    const statusConfig = {
+      pendiente: { label: 'Pendiente', variant: 'secondary' as const, icon: Clock },
+      confirmado: { label: 'Confirmado', variant: 'default' as const, icon: CheckCircle },
+      en_preparacion: { label: 'En Preparación', variant: 'default' as const, icon: Package },
+      en_camino: { label: 'En Camino', variant: 'default' as const, icon: Truck },
+      entregado: { label: 'Entregado', variant: 'default' as const, icon: CheckCircle },
+      cancelado: { label: 'Cancelado', variant: 'destructive' as const, icon: XCircle }
     };
-    return <Badge className={statusColors[status as keyof typeof statusColors]}>{status}</Badge>;
+
+    const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.pendiente;
+    const Icon = config.icon;
+
+    return (
+      <Badge variant={config.variant} className="flex items-center gap-1">
+        <Icon className="h-3 w-3" />
+        {config.label}
+      </Badge>
+    );
   };
 
-  const filteredOrders = orders.filter(order =>
-    order.orderNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    order.customer.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    order.city.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    order.address.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const getPaymentMethodBadge = (method: string) => {
+    const methodConfig = {
+      efectivo: { label: 'Efectivo', variant: 'secondary' as const },
+      tarjeta: { label: 'Tarjeta', variant: 'default' as const },
+      transferencia: { label: 'Transferencia', variant: 'default' as const },
+      pago_movil: { label: 'Pago Móvil', variant: 'default' as const }
+    };
 
-  const totalPages = Math.ceil(filteredOrders.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedOrders = filteredOrders.slice(startIndex, startIndex + itemsPerPage);
-
-  const handlePageChange = (page: number) => {
-    setCurrentPage(page);
+    const config = methodConfig[method as keyof typeof methodConfig] || methodConfig.efectivo;
+    return <Badge variant={config.variant}>{config.label}</Badge>;
   };
 
-  const handleReSchedule = (order: any) => {
-    const orderForReSchedule = {
-      id: order.id,
-      orderNumber: order.orderNumber,
-      customer: order.customer,
-      phone: order.phone,
-      address: order.address,
-      city: order.city,
-      zone: order.zone,
-      products: order.products,
-      total: order.total,
-      originalDate: order.deliveryDate,
-      cancelReason: "Pedido cancelado previamente"
-    };
-    setSelectedOrder(orderForReSchedule);
-    setIsReScheduleModalOpen(true);
+  const handleStatusChange = async (orderId: number, newStatus: string) => {
+    try {
+      await ordersService.changeOrderStatus(orderId, newStatus);
+      toast({
+        title: "Estado actualizado",
+        description: `El pedido ha sido marcado como ${newStatus}`,
+      });
+      loadOrders();
+    } catch (error) {
+      console.error('Error al cambiar estado:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo cambiar el estado del pedido",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleDeleteOrder = async (orderId: number) => {
+    try {
+      await ordersService.deleteOrder(orderId);
+      toast({
+        title: "Pedido eliminado",
+        description: "El pedido ha sido eliminado correctamente",
+      });
+      loadOrders();
+    } catch (error) {
+      console.error('Error al eliminar pedido:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo eliminar el pedido",
+        variant: "destructive"
+      });
+    }
   };
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">Gestión de Pedidos</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Pedidos</h1>
           <p className="text-muted-foreground">
-            Todos los pedidos realizados y su estado de entrega
+            Gestiona todos los pedidos del sistema
           </p>
         </div>
-        <Button className="gap-2" onClick={() => setIsCreateModalOpen(true)}>
-          <Package2 className="h-4 w-4" />
+        <Button onClick={() => setIsCreateModalOpen(true)}>
+          <Plus className="mr-2 h-4 w-4" />
           Nuevo Pedido
         </Button>
       </div>
 
+      {/* Stats Cards */}
+      {stats && (
+        <div className="grid gap-4 md:grid-cols-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Pedidos</CardTitle>
+              <Package className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.total_pedidos || 0}</div>
+              <p className="text-xs text-muted-foreground">
+                {stats.pedidos_pendientes || 0} pendientes
+              </p>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Ventas Totales</CardTitle>
+              <DollarSign className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{formatCurrency(stats.total_ventas || 0)}</div>
+              <p className="text-xs text-muted-foreground">
+                Promedio: {formatCurrency(stats.promedio_pedido || 0)}
+              </p>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Ventas del Mes</CardTitle>
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{formatCurrency(stats.ventas_mes_actual || 0)}</div>
+              <p className="text-xs text-muted-foreground">
+                {stats.crecimiento_ventas && stats.crecimiento_ventas > 0 ? '+' : ''}{stats.crecimiento_ventas?.toFixed(1) || '0.0'}% vs mes anterior
+              </p>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Entregados</CardTitle>
+              <CheckCircle className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.pedidos_entregados || 0}</div>
+              <p className="text-xs text-muted-foreground">
+                {stats.pedidos_en_camino || 0} en camino
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Orders Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Pedidos Miau Miau</CardTitle>
+          <CardTitle>Pedidos Registrados</CardTitle>
           <CardDescription>
-            Historial completo de pedidos con información de entrega y seguimiento
+            Lista completa de pedidos con filtros y búsqueda
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {/* Search */}
+          {/* Search and Filters */}
           <div className="flex items-center space-x-2 mb-6">
             <div className="relative flex-1">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar pedidos por número, cliente, ciudad o dirección..."
+                placeholder="Buscar por número de pedido..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => handleSearch(e.target.value)}
                 className="pl-8"
               />
             </div>
+            <Select value={statusFilter} onValueChange={handleStatusFilter}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Filtrar por estado" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los estados</SelectItem>
+                <SelectItem value="pendiente">Pendiente</SelectItem>
+                <SelectItem value="confirmado">Confirmado</SelectItem>
+                <SelectItem value="en_preparacion">En Preparación</SelectItem>
+                <SelectItem value="en_camino">En Camino</SelectItem>
+                <SelectItem value="entregado">Entregado</SelectItem>
+                <SelectItem value="cancelado">Cancelado</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={paymentMethodFilter} onValueChange={handlePaymentMethodFilter}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Método de pago" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los métodos</SelectItem>
+                <SelectItem value="efectivo">Efectivo</SelectItem>
+                <SelectItem value="tarjeta">Tarjeta</SelectItem>
+                <SelectItem value="transferencia">Transferencia</SelectItem>
+                <SelectItem value="pago_movil">Pago Móvil</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
-          {/* Orders Table */}
+          {/* Table */}
           <div className="rounded-md border">
             <Table>
               <TableHeader>
@@ -269,72 +391,74 @@ const Orders = () => {
                   <TableHead>Pedido</TableHead>
                   <TableHead>Cliente</TableHead>
                   <TableHead>Dirección</TableHead>
-                  <TableHead>Productos</TableHead>
-                  <TableHead>Total</TableHead>
                   <TableHead>Estado</TableHead>
-                  <TableHead>Entrega</TableHead>
+                  <TableHead>Método Pago</TableHead>
+                  <TableHead>Total</TableHead>
+                  <TableHead>Fecha</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {paginatedOrders.map((order) => (
-                  <TableRow key={order.id}>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center py-8">
+                      <div className="flex items-center justify-center space-x-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>Cargando pedidos...</span>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : orders.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                      No se encontraron pedidos
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  orders.map((order) => (
+                    <TableRow key={order.id}>
                     <TableCell>
-                      <div className="space-y-1">
-                        <div className="font-medium text-foreground">{order.orderNumber}</div>
-                        <div className="text-sm text-muted-foreground">{order.orderDate}</div>
+                        <div className="font-medium">#{order.numero_pedido}</div>
+                        <div className="text-sm text-muted-foreground">
+                          ID: {order.id}
                       </div>
                     </TableCell>
                     <TableCell>
                       <div className="space-y-1">
-                        <div className="font-medium">{order.customer}</div>
-                        <div className="text-sm text-muted-foreground">{order.phone}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="space-y-1">
-                        <div className="font-medium flex items-center gap-1">
-                          <MapPin className="h-3 w-3 text-primary" />
-                          {order.city}
-                        </div>
-                        <div className="text-sm text-muted-foreground max-w-xs">
-                          {order.address}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {order.zone}
+                          <div className="font-medium">{order.cliente?.nombre_completo}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {order.cliente?.telefono}
                         </div>
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="space-y-1">
-                        {order.products.map((product, idx) => (
-                          <div key={idx} className="text-sm">
-                            <span className="font-medium">{product.quantity}x</span> {product.name}
+                        <div className="text-sm">
+                          <div className="font-medium">{order.ciudad?.nombre}</div>
+                          <div className="text-muted-foreground max-w-[200px] truncate">
+                            {order.direccion_entrega}
                           </div>
-                        ))}
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-medium">
-                      ${order.total.toLocaleString('es-CO')}
-                      <div className="text-xs text-muted-foreground mt-1">
-                        {order.paymentMethod}
                       </div>
                     </TableCell>
                     <TableCell>
-                      {getStatusBadge(order.status)}
+                        {getStatusBadge(order.estado)}
+                      </TableCell>
+                      <TableCell>
+                        {getPaymentMethodBadge(order.metodo_pago)}
                     </TableCell>
                     <TableCell>
-                      <div className="space-y-1">
-                        <div className="text-sm font-medium">{order.deliveryDate}</div>
-                        {order.deliveryRoute && (
-                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                            <Truck className="h-3 w-3" />
-                            {order.deliveryRoute}
+                        <div className="font-medium">{formatCurrency(order.total)}</div>
+                        {order.descuento_total > 0 && (
+                          <div className="text-xs text-green-600">
+                            -{formatCurrency(order.descuento_total)} desc.
                           </div>
                         )}
-                        {order.driver && (
-                          <div className="text-xs text-muted-foreground">
-                            {order.driver}
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm">
+                          <div>{formatDate(order.created_at)}</div>
+                          {order.fecha_entrega_estimada && (
+                            <div className="text-muted-foreground">
+                              Entrega: {formatDate(order.fecha_entrega_estimada)}
                           </div>
                         )}
                       </div>
@@ -347,68 +471,85 @@ const Orders = () => {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleViewDetails(order)}>
                             <Eye className="mr-2 h-4 w-4" />
                             Ver Detalles
                           </DropdownMenuItem>
-                          <DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleEditOrder(order)}>
                             <Edit className="mr-2 h-4 w-4" />
-                            Editar Pedido
-                          </DropdownMenuItem>
-                          <DropdownMenuItem>
-                            <Truck className="mr-2 h-4 w-4" />
-                            Asignar Ruta
-                          </DropdownMenuItem>
-                          <DropdownMenuItem>
-                            <MapPin className="mr-2 h-4 w-4" />
-                            Ver en Mapa
-                          </DropdownMenuItem>
-                          {order.status === "Cancelado" && (
-                            <DropdownMenuItem onClick={() => handleReSchedule(order)}>
-                              <Package2 className="mr-2 h-4 w-4" />
-                              Reagendar Pedido
+                              Editar
                             </DropdownMenuItem>
-                          )}
+                            {order.estado === 'pendiente' && (
+                              <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'confirmado')}>
+                                <CheckCircle className="mr-2 h-4 w-4" />
+                                Confirmar
+                              </DropdownMenuItem>
+                            )}
+                            {order.estado === 'confirmado' && (
+                              <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'en_preparacion')}>
+                                <Package className="mr-2 h-4 w-4" />
+                                En Preparación
+                          </DropdownMenuItem>
+                            )}
+                            {order.estado === 'en_preparacion' && (
+                              <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'en_camino')}>
+                            <Truck className="mr-2 h-4 w-4" />
+                                En Camino
+                              </DropdownMenuItem>
+                            )}
+                            {order.estado === 'en_camino' && (
+                              <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'entregado')}>
+                                <CheckCircle className="mr-2 h-4 w-4" />
+                                Marcar Entregado
+                          </DropdownMenuItem>
+                            )}
+                            {order.estado !== 'cancelado' && order.estado !== 'entregado' && (
+                              <DropdownMenuItem 
+                                onClick={() => handleStatusChange(order.id, 'cancelado')}
+                                className="text-red-600"
+                              >
+                                <XCircle className="mr-2 h-4 w-4" />
+                                Cancelar
+                          </DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem 
+                              onClick={() => handleDeleteOrder(order.id)}
+                              className="text-red-600"
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Eliminar
+                            </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
                   </TableRow>
-                ))}
+                  ))
+                )}
               </TableBody>
             </Table>
           </div>
 
           {/* Pagination */}
-          <div className="flex items-center justify-between mt-6">
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between space-x-2 py-4">
             <div className="text-sm text-muted-foreground">
-              Mostrando {startIndex + 1} - {Math.min(startIndex + itemsPerPage, filteredOrders.length)} de {filteredOrders.length} pedidos
+                Mostrando {((currentPage - 1) * itemsPerPage) + 1} a {Math.min(currentPage * itemsPerPage, totalOrders)} de {totalOrders} pedidos
             </div>
-            
             <Pagination>
               <PaginationContent>
                 <PaginationItem>
                   <PaginationPrevious 
-                    onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
-                    className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                      onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                      className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
                   />
                 </PaginationItem>
-                
-                {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
-                  let page;
-                  if (totalPages <= 5) {
-                    page = i + 1;
-                  } else if (currentPage <= 3) {
-                    page = i + 1;
-                  } else if (currentPage >= totalPages - 2) {
-                    page = totalPages - 4 + i;
-                  } else {
-                    page = currentPage - 2 + i;
-                  }
                   
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    const page = i + 1;
                   return (
                     <PaginationItem key={page}>
                       <PaginationLink
-                        onClick={() => handlePageChange(page)}
+                          onClick={() => setCurrentPage(page)}
                         isActive={currentPage === page}
                         className="cursor-pointer"
                       >
@@ -420,26 +561,100 @@ const Orders = () => {
                 
                 <PaginationItem>
                   <PaginationNext 
-                    onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
-                    className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                      onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                      className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
                   />
                 </PaginationItem>
               </PaginationContent>
             </Pagination>
           </div>
+          )}
         </CardContent>
       </Card>
 
+      {/* Modals */}
       <CreateOrderModal 
         open={isCreateModalOpen} 
         onOpenChange={setIsCreateModalOpen} 
+        onOrderCreated={loadOrders}
       />
-
-      <ReScheduleOrderModal
-        open={isReScheduleModalOpen}
-        onOpenChange={setIsReScheduleModalOpen}
+      
+      {/* Order Details Modal */}
+      {selectedOrder && (
+        <Dialog open={isDetailsModalOpen} onOpenChange={setIsDetailsModalOpen}>
+          <DialogContent className="max-w-4xl">
+            <DialogHeader>
+              <DialogTitle>Detalles del Pedido #{selectedOrder.numero_pedido}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-6">
+              {/* Order Info */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <h4 className="font-semibold mb-2">Información del Pedido</h4>
+                  <div className="space-y-1 text-sm">
+                    <p><strong>Número:</strong> {selectedOrder.numero_pedido}</p>
+                    <p><strong>Estado:</strong> {getStatusBadge(selectedOrder.estado)}</p>
+                    <p><strong>Fecha:</strong> {formatDate(selectedOrder.created_at)}</p>
+                    <p><strong>Método de Pago:</strong> {selectedOrder.metodo_pago}</p>
+                    <p><strong>Total:</strong> {formatCurrency(selectedOrder.total)}</p>
+                  </div>
+                </div>
+                <div>
+                  <h4 className="font-semibold mb-2">Cliente</h4>
+                  <div className="space-y-1 text-sm">
+                    <p><strong>Nombre:</strong> {selectedOrder.cliente?.nombre_completo || 'N/A'}</p>
+                    <p><strong>Teléfono:</strong> {selectedOrder.telefono_referencia || 'N/A'}</p>
+                    <p><strong>Email:</strong> {selectedOrder.email_referencia || 'N/A'}</p>
+                    <p><strong>Ciudad:</strong> {selectedOrder.ciudad?.nombre || 'N/A'}</p>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Delivery Info */}
+              <div>
+                <h4 className="font-semibold mb-2">Información de Entrega</h4>
+                <div className="space-y-1 text-sm">
+                  <p><strong>Dirección:</strong> {selectedOrder.direccion_entrega}</p>
+                  <p><strong>Fecha Estimada:</strong> {formatDate(selectedOrder.fecha_entrega_estimada)}</p>
+                  {selectedOrder.notas && (
+                    <p><strong>Notas:</strong> {selectedOrder.notas}</p>
+                  )}
+                </div>
+              </div>
+              
+              {/* Products */}
+              <div>
+                <h4 className="font-semibold mb-2">Productos</h4>
+                <div className="space-y-2">
+                  {selectedOrder.productos?.map((product, index) => (
+                    <div key={index} className="flex justify-between items-center p-3 border rounded">
+                      <div>
+                        <p className="font-medium">{product.producto?.nombre || 'Producto'}</p>
+                        <p className="text-sm text-muted-foreground">
+                          Cantidad: {product.cantidad} | Precio: {formatCurrency(product.precio_unidad)}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-medium">{formatCurrency(product.cantidad * product.precio_unidad)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+      
+      {/* Edit Order Modal */}
+      {selectedOrder && (
+        <EditOrderModal
+          open={isEditModalOpen}
+          onOpenChange={setIsEditModalOpen}
         order={selectedOrder}
+          onOrderUpdated={loadOrders}
       />
+      )}
     </div>
   );
 };

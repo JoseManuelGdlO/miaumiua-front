@@ -150,7 +150,7 @@ const Roles = () => {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredRoles.map((role) => (
+                  filteredRoles.map((role: Role & { users_count?: number }) => (
                     <TableRow key={role.id}>
                       <TableCell>
                         <div className="flex items-center space-x-3">
@@ -189,7 +189,7 @@ const Roles = () => {
                       <TableCell>
                         <div className="flex items-center space-x-2">
                           <Users className="h-4 w-4 text-muted-foreground" />
-                          <span className="font-medium">-</span>
+                          <span className="font-medium">{role.users_count || 0}</span>
                         </div>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">

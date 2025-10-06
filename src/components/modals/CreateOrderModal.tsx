@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -18,237 +18,319 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Calendar } from "@/components/ui/calendar";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { CalendarIcon, Plus, Trash2, User, MapPin } from "lucide-react";
-import { format } from "date-fns";
-import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { ordersService, CreateOrderData } from "@/services/ordersService";
+import { clientesService } from "@/services/clientesService";
+import { citiesService } from "@/services/citiesService";
+import { Inventario } from "@/services/inventariosService";
+import { Promotion } from "@/services/promotionsService";
+import ProductSelector from "@/components/ui/ProductSelector";
+import PromotionSelector from "@/components/ui/PromotionSelector";
+import { Loader2, Plus, Trash2, Package, Calendar, MapPin, Phone, Mail, Tag } from "lucide-react";
 
 interface CreateOrderModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onOrderCreated: () => void;
 }
 
-interface OrderProduct {
-  id: string;
-  name: string;
-  quantity: number;
-  price: number;
+interface ProductFormData {
+  fkid_producto: number;
+  cantidad: number;
+  precio_unidad: number;
+  descuento_producto: number;
+  notas_producto: string;
+  producto?: Inventario; // Para almacenar la información del producto seleccionado
 }
 
-const CreateOrderModal = ({ open, onOpenChange }: CreateOrderModalProps) => {
+interface Cliente {
+  id: number;
+  nombre_completo: string;
+  telefono: string;
+  email?: string;
+  fkid_ciudad: number;
+  direccion_entrega?: string;
+}
+
+const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderModalProps) => {
   const { toast } = useToast();
+  const [loading, setLoading] = useState(false);
+  const [clients, setClients] = useState<Cliente[]>([]);
+  const [cities, setCities] = useState<Array<{ id: number; nombre: string; departamento: string }>>([]);
+  const [products, setProducts] = useState<ProductFormData[]>([]);
+  const [selectedPromotion, setSelectedPromotion] = useState<Promotion | null>(null);
+  
   const [formData, setFormData] = useState({
-    customer: "",
-    phone: "",
-    email: "", 
-    address: "",
-    city: "",
-    zone: "",
-    deliveryDate: undefined as Date | undefined,
-    paymentMethod: "",
-    orderOrigin: "",
-    createdBy: "",
-    comments: "",
-    urgentDelivery: false
+    fkid_cliente: "",
+    telefono_referencia: "",
+    email_referencia: "",
+    direccion_entrega: "",
+    fkid_ciudad: "",
+    fecha_entrega_estimada: "",
+    metodo_pago: "",
+    notas: "",
+    codigo_promocion: ""
   });
 
-  const [products, setProducts] = useState<OrderProduct[]>([
-    { id: "1", name: "", quantity: 1, price: 0 }
-  ]);
+  // Cargar datos al abrir el modal
+  useEffect(() => {
+    if (open) {
+      loadClients();
+      loadCities();
+    }
+  }, [open]);
 
-  const cities = [
-    "Ciudad de México", "Guadalajara", "Monterrey", "Puebla",
-    "Tijuana", "León", "Mérida", "Zapopan"
-  ];
+  // Reset form cuando se abre el modal
+  useEffect(() => {
+    if (open) {
+      setFormData({
+        fkid_cliente: "",
+        telefono_referencia: "",
+        email_referencia: "",
+        direccion_entrega: "",
+        fkid_ciudad: "",
+        fecha_entrega_estimada: "",
+        metodo_pago: "",
+        notas: "",
+        codigo_promocion: ""
+      });
+      setProducts([]);
+      setSelectedPromotion(null);
+    }
+  }, [open]);
 
-  const zones = {
-    "Ciudad de México": ["Polanco", "Roma Norte", "Condesa", "Centro", "Del Valle", "Santa Fe"],
-    "Guadalajara": ["Providencia", "Chapultepec", "Centro", "Americana", "Vallarta Norte"],
-    "Monterrey": ["San Pedro", "Centro", "Santa Catarina", "Valle Oriente", "Cumbres"],
-    "Puebla": ["Centro", "Angelópolis", "La Paz", "Reforma", "Zavaleta"],
-    "Tijuana": ["Zona Río", "Centro", "Otay", "La Mesa", "Playas"],
-    "León": ["Centro", "Del Valle", "Lomas del Campestre", "San Jerónimo", "Jardines"],
-    "Mérida": ["Centro", "Norte", "García Ginerés", "Montejo", "Itzimná"],
-    "Zapopan": ["Centro", "Real del Country", "Puerta de Hierro", "Vallarta", "Plaza del Sol"]
+  const loadClients = async () => {
+    try {
+      const response = await clientesService.getAllClientes({ activos: 'true' });
+      if (response.success) {
+        setClients(response.data.clientes);
+      }
+    } catch (error) {
+      console.error('Error al cargar clientes:', error);
+    }
   };
 
-  const availableProducts = [
-    { name: "Arena Premium 10kg", price: 45000 },
-    { name: "Arena Antibacterial 5kg", price: 28000 },
-    { name: "Arena Perfumada 15kg", price: 52000 },
-    { name: "Arena Básica 8kg", price: 18000 },
-    { name: "Arena Ultra 12kg", price: 58000 },
-    { name: "Arena Control de Olores 10kg", price:35000 },
-    { name: "Arena Natural 5kg", price: 22000 },
-    { name: "Arena Biodegradable 8kg", price: 48000 }
-  ];
-
-  const paymentMethods = [
-    "Efectivo",
-    "Tarjeta de Crédito", 
-    "Tarjeta Débito",
-    "Transferencia Bancaria",
-    "Nequi",
-    "Daviplata",
-    "PSE"
-  ];
-
-  const orderOrigins = [
-    "WhatsApp",
-    "Instagram",
-    "Facebook",
-    "Página Web",
-    "Teléfono",
-    "Presencial", 
-    "Referido",
-    "Chatbot IA",
-    "App Móvil"
-  ];
-
-  const users = [
-    "Ana García (Administrador)",
-    "Carlos Mendoza (Supervisor Ventas)",
-    "Laura Rodríguez (Agente Chat)",
-    "Miguel Torres (Inventario)",
-    "Sofia Valencia (Agente Chat)",
-    "Diego Morales (Supervisor Técnico)"
-  ];
+  const loadCities = async () => {
+    try {
+      const response = await citiesService.getAllCities();
+      if (response.success) {
+        setCities(response.data.cities);
+      }
+    } catch (error) {
+      console.error('Error al cargar ciudades:', error);
+    }
+  };
 
   const addProduct = () => {
-    setProducts(prev => [...prev, { 
-      id: Date.now().toString(), 
-      name: "", 
-      quantity: 1, 
-      price: 0 
+    setProducts([...products, {
+      fkid_producto: 0,
+      cantidad: 1,
+      precio_unidad: 0,
+      descuento_producto: 0,
+      notas_producto: "",
+      producto: undefined
     }]);
   };
 
-  const removeProduct = (id: string) => {
-    setProducts(prev => prev.filter(p => p.id !== id));
+  const removeProduct = (index: number) => {
+    setProducts(products.filter((_, i) => i !== index));
   };
 
-  const updateProduct = (id: string, field: keyof OrderProduct, value: string | number) => {
-    setProducts(prev => prev.map(p => 
-      p.id === id ? { ...p, [field]: value } : p
-    ));
+  const updateProduct = (index: number, field: keyof ProductFormData, value: string | number | Inventario) => {
+    const updatedProducts = [...products];
+    updatedProducts[index] = { ...updatedProducts[index], [field]: value };
+    setProducts(updatedProducts);
   };
 
-  const handleProductSelect = (id: string, productName: string) => {
-    const selectedProduct = availableProducts.find(p => p.name === productName);
-    if (selectedProduct) {
-      updateProduct(id, "name", selectedProduct.name);
-      updateProduct(id, "price", selectedProduct.price);
+  const handleProductSelect = (index: number, product: Inventario | null) => {
+    const updatedProducts = [...products];
+    
+    if (product) {
+      updatedProducts[index] = {
+        ...updatedProducts[index],
+        fkid_producto: product.id,
+        precio_unidad: Number(product.precio_venta || 0),
+        producto: product
+      };
+    } else {
+      updatedProducts[index] = {
+        ...updatedProducts[index],
+        fkid_producto: 0,
+        precio_unidad: 0,
+        producto: undefined
+      };
+    }
+    
+    setProducts(updatedProducts);
+  };
+
+  const handlePromotionSelect = (promotion: Promotion | null) => {
+    setSelectedPromotion(promotion);
+    if (promotion) {
+      setFormData(prev => ({
+        ...prev,
+        codigo_promocion: promotion.codigo
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        codigo_promocion: ""
+      }));
     }
   };
 
-  const calculateTotal = () => {
-    return products.reduce((total, product) => {
-      return total + (product.quantity * product.price);
-    }, 0);
+  const handleClientChange = (clientId: string) => {
+    const client = clients.find(c => c.id.toString() === clientId);
+    if (client) {
+      setFormData(prev => ({
+        ...prev,
+        fkid_cliente: clientId,
+        telefono_referencia: client.telefono,
+        email_referencia: client.email || "",
+        fkid_ciudad: client.fkid_ciudad.toString(),
+        direccion_entrega: client.direccion_entrega || ""
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        fkid_cliente: clientId,
+        telefono_referencia: "",
+        email_referencia: "",
+        fkid_ciudad: "",
+        direccion_entrega: ""
+      }));
+    }
   };
 
-  const generateOrderNumber = () => {
-    const date = new Date();
-    const year = date.getFullYear();
-    const randomNum = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
-    return `MM-${year}-${randomNum}`;
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.customer || !formData.phone || !formData.address || !formData.city) {
+    // Validaciones básicas
+    if (!formData.fkid_cliente || !formData.direccion_entrega || !formData.fkid_ciudad || !formData.metodo_pago) {
       toast({
         title: "Error",
-        description: "Por favor completa los campos obligatorios del cliente",
+        description: "Por favor completa los campos obligatorios: Cliente, Dirección, Ciudad y Método de Pago",
         variant: "destructive"
       });
       return;
     }
 
-    if (!formData.deliveryDate) {
+    // Validar productos
+    if (products.length === 0) {
       toast({
         title: "Error",
-        description: "Selecciona una fecha de entrega",
+        description: "Debes agregar al menos un producto al pedido",
         variant: "destructive"
       });
       return;
     }
 
-    const validProducts = products.filter(p => p.name && p.quantity > 0);
-    if (validProducts.length === 0) {
-      toast({
-        title: "Error",
-        description: "Agrega al menos un producto válido al pedido",
-        variant: "destructive"
+    // Validar cada producto
+    for (let i = 0; i < products.length; i++) {
+      const product = products[i];
+      
+      // Debug: mostrar estado del producto
+      console.log(`Producto ${i + 1}:`, {
+        fkid_producto: product.fkid_producto,
+        cantidad: product.cantidad,
+        precio_unidad: product.precio_unidad,
+        producto: product.producto,
+        hasProducto: !!product.producto
       });
-      return;
+      
+      // Validar que tenga un producto seleccionado
+      if (!product.fkid_producto || !product.producto) {
+        toast({
+          title: "Error",
+          description: `El producto ${i + 1} debe tener un producto seleccionado`,
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      // Validar cantidad
+      if (product.cantidad <= 0) {
+        toast({
+          title: "Error",
+          description: `El producto ${i + 1} debe tener una cantidad válida`,
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      // Validar que el precio sea válido (debe venir del inventario)
+      if (Number(product.producto.precio_venta || 0) <= 0) {
+        toast({
+          title: "Error",
+          description: `El producto ${i + 1} no tiene un precio válido del inventario`,
+          variant: "destructive"
+        });
+        return;
+      }
     }
 
-    if (!formData.paymentMethod || !formData.orderOrigin || !formData.createdBy) {
+    try {
+      setLoading(true);
+
+       const orderData: CreateOrderData = {
+         fkid_cliente: parseInt(formData.fkid_cliente),
+         telefono_referencia: formData.telefono_referencia || undefined,
+         email_referencia: formData.email_referencia || undefined,
+         direccion_entrega: formData.direccion_entrega,
+         fkid_ciudad: parseInt(formData.fkid_ciudad),
+         fecha_entrega_estimada: formData.fecha_entrega_estimada || undefined,
+         metodo_pago: formData.metodo_pago as any,
+         notas: formData.notas || undefined,
+         codigo_promocion: formData.codigo_promocion || undefined,
+         productos: products.map(p => ({
+           fkid_producto: p.fkid_producto,
+           cantidad: p.cantidad,
+           precio_unidad: p.precio_unidad,
+           descuento_producto: p.descuento_producto,
+           notas_producto: p.notas_producto || undefined
+         }))
+       };
+
+      const response = await ordersService.createOrder(orderData);
+
+      if (response.success) {
+        toast({
+          title: "Pedido creado",
+          description: `Pedido #${response.data.pedido.numero_pedido} creado exitosamente`,
+        });
+        onOrderCreated();
+        onOpenChange(false);
+      }
+    } catch (error) {
+      console.error('Error al crear pedido:', error);
       toast({
         title: "Error",
-        description: "Por favor completa la información del pedido",
+        description: error instanceof Error ? error.message : "Error al crear el pedido",
         variant: "destructive"
       });
-      return;
+    } finally {
+      setLoading(false);
     }
-
-    const orderData = {
-      orderNumber: generateOrderNumber(),
-      ...formData,
-      products: validProducts,
-      total: calculateTotal(),
-      orderDate: format(new Date(), "yyyy-MM-dd"),
-      status: "Pendiente",
-      modifiedBy: formData.createdBy, // Initially same as creator
-      modifiedDate: format(new Date(), "yyyy-MM-dd HH:mm:ss")
-    };
-
-    console.log("Creando pedido:", orderData);
-
-    toast({
-      title: "Pedido creado",
-      description: `Pedido ${orderData.orderNumber} creado por ${calculateTotal().toLocaleString('es-CO', { style: 'currency', currency: 'COP' })}`,
-    });
-
-    // Reset form
-    setFormData({
-      customer: "",
-      phone: "",
-      email: "",
-      address: "",
-      city: "",
-      zone: "",
-      deliveryDate: undefined,
-      paymentMethod: "",
-      orderOrigin: "",
-      createdBy: "",
-      comments: "",
-      urgentDelivery: false
-    });
-    setProducts([{ id: "1", name: "", quantity: 1, price: 0 }]);
-    onOpenChange(false);
   };
+
+  const handleInputChange = (field: string, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const selectedClient = clients.find(c => c.id.toString() === formData.fkid_cliente);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <MapPin className="h-5 w-5" />
-            Crear Nuevo Pedido
-          </DialogTitle>
+          <DialogTitle>Nuevo Pedido</DialogTitle>
           <DialogDescription>
-            Registra un nuevo pedido de arena para gatos Miau Miau
+            Crea un nuevo pedido en el sistema
           </DialogDescription>
         </DialogHeader>
 
@@ -256,63 +338,104 @@ const CreateOrderModal = ({ open, onOpenChange }: CreateOrderModalProps) => {
           {/* Información del Cliente */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Información del Cliente</CardTitle>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Package className="h-5 w-5" />
+                Información del Cliente
+              </CardTitle>
+              <CardDescription>
+                Selecciona el cliente y completa la información de contacto
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="fkid_cliente">Cliente *</Label>
+                <Select value={formData.fkid_cliente} onValueChange={handleClientChange}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecciona un cliente" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {clients.map((client) => (
+                      <SelectItem key={client.id} value={client.id.toString()}>
+                        {client.nombre_completo} - {client.telefono}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {selectedClient && (
+                <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                  <div className="flex items-center gap-2 text-sm text-blue-800">
+                    <Package className="h-4 w-4" />
+                    <span className="font-medium">Cliente seleccionado:</span>
+                  </div>
+                  <div className="mt-2 text-sm text-blue-700">
+                    <div><strong>Nombre:</strong> {selectedClient.nombre_completo}</div>
+                    <div><strong>Teléfono:</strong> {selectedClient.telefono}</div>
+                    {selectedClient.email && <div><strong>Email:</strong> {selectedClient.email}</div>}
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="customer">Nombre Completo *</Label>
+                  <Label htmlFor="telefono_referencia">Teléfono de Referencia</Label>
                   <Input
-                    id="customer"
-                    value={formData.customer}
-                    onChange={(e) => setFormData(prev => ({ ...prev, customer: e.target.value }))}
-                    placeholder="María Elena González"
+                    id="telefono_referencia"
+                    value={formData.telefono_referencia}
+                    onChange={(e) => handleInputChange('telefono_referencia', e.target.value)}
+                    placeholder="+584121234567"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="phone">Teléfono *</Label>
+                  <Label htmlFor="email_referencia">Email de Referencia</Label>
                   <Input
-                    id="phone"
-                    value={formData.phone}
-                    onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-                    placeholder="+57 320 123 4567"
+                    id="email_referencia"
+                    type="email"
+                    value={formData.email_referencia}
+                    onChange={(e) => handleInputChange('email_referencia', e.target.value)}
+                    placeholder="cliente@email.com"
                   />
                 </div>
               </div>
+            </CardContent>
+          </Card>
 
+          {/* Información de Entrega */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <MapPin className="h-5 w-5" />
+                Información de Entrega
+              </CardTitle>
+              <CardDescription>
+                Dirección y detalles de entrega
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                  placeholder="maria.gonzalez@gmail.com"
+                <Label htmlFor="direccion_entrega">Dirección de Entrega *</Label>
+                <Textarea
+                  id="direccion_entrega"
+                  value={formData.direccion_entrega}
+                  onChange={(e) => handleInputChange('direccion_entrega', e.target.value)}
+                  placeholder="Av. Principal, Edificio ABC, Piso 2, Apartamento 201"
+                  rows={3}
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="address">Dirección de Entrega *</Label>
-                <Input
-                  id="address"
-                  value={formData.address}
-                  onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
-                  placeholder="Calle 127 #15-45, Apto 502"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Ciudad *</Label>
-                  <Select value={formData.city} onValueChange={(value) => setFormData(prev => ({ ...prev, city: value, zone: "" }))}>
+                  <Label htmlFor="fkid_ciudad">Ciudad *</Label>
+                  <Select value={formData.fkid_ciudad} onValueChange={(value) => handleInputChange('fkid_ciudad', value)}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar ciudad" />
+                      <SelectValue placeholder="Selecciona una ciudad" />
                     </SelectTrigger>
                     <SelectContent>
                       {cities.map((city) => (
-                        <SelectItem key={city} value={city}>
-                          {city}
+                        <SelectItem key={city.id} value={city.id.toString()}>
+                          {city.nombre} - {city.departamento}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -320,25 +443,85 @@ const CreateOrderModal = ({ open, onOpenChange }: CreateOrderModalProps) => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Zona</Label>
-                  <Select 
-                    value={formData.zone} 
-                    onValueChange={(value) => setFormData(prev => ({ ...prev, zone: value }))}
-                    disabled={!formData.city}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar zona" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {formData.city && zones[formData.city as keyof typeof zones]?.map((zone) => (
-                        <SelectItem key={zone} value={zone}>
-                          {zone}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label htmlFor="fecha_entrega_estimada">Fecha de Entrega Estimada</Label>
+                  <Input
+                    id="fecha_entrega_estimada"
+                    type="datetime-local"
+                    value={formData.fecha_entrega_estimada}
+                    onChange={(e) => handleInputChange('fecha_entrega_estimada', e.target.value)}
+                  />
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Información de Pago */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Phone className="h-5 w-5" />
+                Información de Pago
+              </CardTitle>
+              <CardDescription>
+                Método de pago y notas adicionales
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="metodo_pago">Método de Pago *</Label>
+                <Select value={formData.metodo_pago} onValueChange={(value) => handleInputChange('metodo_pago', value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecciona método de pago" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="efectivo">Efectivo</SelectItem>
+                    <SelectItem value="tarjeta">Tarjeta</SelectItem>
+                    <SelectItem value="transferencia">Transferencia</SelectItem>
+                    <SelectItem value="pago_movil">Pago Móvil</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+               <div className="space-y-2">
+                 <Label htmlFor="codigo_promocion">Código de Promoción</Label>
+                 <PromotionSelector
+                   value={formData.codigo_promocion || undefined}
+                   onValueChange={handlePromotionSelect}
+                   placeholder="Buscar y seleccionar promoción..."
+                   disabled={loading}
+                 />
+                 {selectedPromotion && (
+                   <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+                     <div className="flex items-center gap-2 text-sm text-green-800">
+                       <Tag className="h-4 w-4" />
+                       <span className="font-medium">Promoción seleccionada:</span>
+                     </div>
+                     <div className="mt-2 text-sm text-green-700">
+                       <div><strong>Nombre:</strong> {selectedPromotion.nombre}</div>
+                       <div><strong>Código:</strong> {selectedPromotion.codigo}</div>
+                       <div><strong>Descuento:</strong> {
+                         selectedPromotion.tipo_promocion === 'porcentaje' 
+                           ? `${selectedPromotion.valor_descuento}%`
+                           : `$${selectedPromotion.valor_descuento}`
+                       }</div>
+                       {selectedPromotion.compra_minima && (
+                         <div><strong>Compra mínima:</strong> ${selectedPromotion.compra_minima}</div>
+                       )}
+                     </div>
+                   </div>
+                 )}
+               </div>
+
+               <div className="space-y-2">
+                 <Label htmlFor="notas">Notas Adicionales</Label>
+                 <Textarea
+                   id="notas"
+                   value={formData.notas}
+                   onChange={(e) => handleInputChange('notas', e.target.value)}
+                   placeholder="Instrucciones especiales para la entrega..."
+                   rows={3}
+                 />
+               </div>
             </CardContent>
           </Card>
 
@@ -346,195 +529,178 @@ const CreateOrderModal = ({ open, onOpenChange }: CreateOrderModalProps) => {
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
-                <CardTitle className="text-base">Productos del Pedido</CardTitle>
-                <Button type="button" size="sm" onClick={addProduct}>
+                <div>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Package className="h-5 w-5" />
+                    Productos
+                  </CardTitle>
+                  <CardDescription>
+                    Agrega los productos al pedido
+                  </CardDescription>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addProduct}
+                  disabled={loading}
+                >
                   <Plus className="h-4 w-4 mr-2" />
                   Agregar Producto
                 </Button>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              {products.map((product, index) => (
-                <div key={product.id} className="grid grid-cols-12 gap-4 items-end p-4 border rounded-lg">
-                  <div className="col-span-5 space-y-2">
-                    <Label>Producto</Label>
-                    <Select 
-                      value={product.name} 
-                      onValueChange={(value) => handleProductSelect(product.id, value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccionar producto" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {availableProducts.map((p) => (
-                          <SelectItem key={p.name} value={p.name}>
-                            {p.name} - ${p.price.toLocaleString('es-CO')}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="col-span-2 space-y-2">
-                    <Label>Cantidad</Label>
-                    <Input
-                      type="number"
-                      min="1"
-                      value={product.quantity}
-                      onChange={(e) => updateProduct(product.id, "quantity", parseInt(e.target.value) || 1)}
-                    />
-                  </div>
-
-                  <div className="col-span-3 space-y-2">
-                    <Label>Precio Unit.</Label>
-                    <Input
-                      type="number"
-                      value={product.price}
-                      onChange={(e) => updateProduct(product.id, "price", parseInt(e.target.value) || 0)}
-                      placeholder="0"
-                    />
-                  </div>
-
-                  <div className="col-span-1 space-y-2">
-                    <Label>Total</Label>
-                    <div className="font-medium text-sm">
-                      ${(product.quantity * product.price).toLocaleString('es-CO')}
-                    </div>
-                  </div>
-
-                  <div className="col-span-1">
-                    {products.length > 1 && (
-                      <Button 
-                        type="button" 
-                        variant="outline" 
-                        size="sm" 
-                        onClick={() => removeProduct(product.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
+              {products.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>No hay productos agregados</p>
+                  <p className="text-sm">Haz clic en "Agregar Producto" para comenzar</p>
                 </div>
-              ))}
-              
-              <div className="flex justify-end">
-                <div className="text-right">
-                  <div className="text-sm text-muted-foreground">Total del pedido</div>
-                  <div className="text-xl font-bold text-primary">
-                    ${calculateTotal().toLocaleString('es-CO')}
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              ) : (
+                products.map((product, index) => (
+                  <Card key={index} className="border-dashed">
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-base">
+                          Producto {index + 1}
+                        </CardTitle>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeProduct(index)}
+                          disabled={loading}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="space-y-2">
+                        <Label>Producto *</Label>
+                        <ProductSelector
+                          value={product.fkid_producto || undefined}
+                          onValueChange={(selectedProduct) => handleProductSelect(index, selectedProduct)}
+                          placeholder="Buscar y seleccionar producto..."
+                          disabled={loading}
+                        />
+                      </div>
 
-          {/* Información del Pedido */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Detalles del Pedido</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Fecha de Entrega *</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "justify-start text-left font-normal",
-                          !formData.deliveryDate && "text-muted-foreground"
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {formData.deliveryDate ? format(formData.deliveryDate, "PPP") : "Seleccionar fecha"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={formData.deliveryDate}
-                        onSelect={(date) => setFormData(prev => ({ ...prev, deliveryDate: date }))}
-                        disabled={(date) => date < new Date()}
-                        initialFocus
-                        className="p-3 pointer-events-auto"
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>Cantidad *</Label>
+                           <Input
+                             type="number"
+                             min="1"
+                             max={product.producto?.stock_inicial || 999}
+                             value={product.cantidad}
+                             onChange={(e) => updateProduct(index, 'cantidad', parseInt(e.target.value) || 1)}
+                             placeholder="Cantidad"
+                             required
+                           />
+                           {product.producto && (
+                             <p className="text-xs text-muted-foreground">
+                               Stock disponible: {product.producto.stock_inicial}
+                             </p>
+                           )}
+                        </div>
 
-                <div className="space-y-2">
-                  <Label>Método de Pago *</Label>
-                  <Select value={formData.paymentMethod} onValueChange={(value) => setFormData(prev => ({ ...prev, paymentMethod: value }))}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar método" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {paymentMethods.map((method) => (
-                        <SelectItem key={method} value={method}>
-                          {method}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
+                        <div className="space-y-2">
+                          <Label>Precio por Unidad</Label>
+                          {product.producto ? (
+                            <div className="p-2 bg-gray-50 rounded border">
+                              <div className="text-sm font-medium">
+                                ${Number(product.producto.precio_venta || 0).toFixed(2)}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                Precio fijo del inventario
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="p-2 bg-gray-50 rounded border text-sm text-muted-foreground">
+                              Selecciona un producto para ver el precio
+                            </div>
+                          )}
+                        </div>
+                      </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Origen del Pedido *</Label>
-                  <Select value={formData.orderOrigin} onValueChange={(value) => setFormData(prev => ({ ...prev, orderOrigin: value }))}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="¿Desde dónde se creó?" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {orderOrigins.map((origin) => (
-                        <SelectItem key={origin} value={origin}>
-                          {origin}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>Descuento (%)</Label>
+                          <Input
+                            type="number"
+                            min="0"
+                            max="100"
+                            value={product.descuento_producto}
+                            onChange={(e) => updateProduct(index, 'descuento_producto', parseInt(e.target.value) || 0)}
+                            placeholder="0"
+                          />
+                        </div>
 
-                <div className="space-y-2">
-                  <Label>Creado por *</Label>
-                  <Select value={formData.createdBy} onValueChange={(value) => setFormData(prev => ({ ...prev, createdBy: value }))}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar usuario" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {users.map((user) => (
-                        <SelectItem key={user} value={user}>
-                          <div className="flex items-center gap-2">
-                            <User className="h-4 w-4" />
-                            {user}
+                        <div className="space-y-2">
+                          <Label>Stock del Producto</Label>
+                           <div className="p-2 bg-gray-50 rounded text-sm">
+                             {product.producto ? (
+                               <div>
+                                 <strong>Stock:</strong> {product.producto.stock_inicial} unidades
+                                 {product.producto.stock_inicial < product.cantidad && (
+                                   <span className="text-red-600 ml-2">⚠️ Stock insuficiente</span>
+                                 )}
+                               </div>
+                             ) : (
+                               <span className="text-muted-foreground">Selecciona un producto</span>
+                             )}
+                           </div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Notas del Producto</Label>
+                        <Textarea
+                          value={product.notas_producto}
+                          onChange={(e) => updateProduct(index, 'notas_producto', e.target.value)}
+                          placeholder="Notas especiales para este producto..."
+                          rows={2}
+                        />
+                      </div>
+
+                      {product.cantidad > 0 && product.producto && (
+                        <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                          <div className="text-sm">
+                            <div className="flex justify-between items-center mb-1">
+                              <span><strong>Subtotal:</strong></span>
+                              <span className="font-bold text-blue-800">
+                                ${(product.cantidad * Number(product.producto.precio_venta || 0) * (1 - product.descuento_producto / 100)).toFixed(2)}
+                              </span>
+                            </div>
+                            <div className="text-xs text-blue-700">
+                              {product.cantidad} × ${Number(product.producto.precio_venta || 0).toFixed(2)}
+                              {product.descuento_producto > 0 && (
+                                <span> - {product.descuento_producto}% descuento</span>
+                              )}
+                            </div>
                           </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="comments">Comentarios Especiales</Label>
-                <Textarea
-                  id="comments"
-                  value={formData.comments}
-                  onChange={(e) => setFormData(prev => ({ ...prev, comments: e.target.value }))}
-                  placeholder="Instrucciones especiales, horarios preferidos, referencias adicionales..."
-                  rows={3}
-                />
-              </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))
+              )}
             </CardContent>
           </Card>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={loading}
+            >
               Cancelar
             </Button>
-            <Button type="submit">
+            <Button type="submit" disabled={loading}>
+              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Crear Pedido
             </Button>
           </DialogFooter>

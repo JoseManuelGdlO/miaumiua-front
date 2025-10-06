@@ -19,6 +19,7 @@ import Orders from "./pages/Orders";
 import RouteManagement from "./pages/RouteManagement";
 import Agents from "./pages/Agents";
 import Conversations from "./pages/Conversations";
+import ConversationDetail from "./pages/ConversationDetail";
 import CategoriasProducto from "./pages/CategoriasProducto";
 import Pesos from "./pages/Pesos";
 import Proveedores from "./pages/Proveedores";
@@ -45,6 +46,7 @@ const App = () => (
             <Route path="roles" element={<Roles />} />
             <Route path="permissions" element={<Permissions />} />
             <Route path="conversations" element={<Conversations />} />
+            <Route path="conversations/:id" element={<ConversationDetail />} />
             <Route path="orders" element={<Orders />} />
             <Route path="routes" element={<RouteManagement />} />
             <Route path="promotions" element={<Promotions />} />

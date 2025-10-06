@@ -54,10 +54,10 @@ export interface PromotionsResponse {
   data: {
     promotions: Promotion[];
     pagination: {
-      currentPage: number;
+      total: number;
+      page: number;
+      limit: number;
       totalPages: number;
-      totalItems: number;
-      itemsPerPage: number;
     };
   };
 }

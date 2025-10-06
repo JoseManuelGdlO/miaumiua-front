@@ -1,44 +1,55 @@
 import { config } from '@/config/environment';
 
-// Interfaces
+// Interfaces - Updated to match API response
 export interface Cliente {
   id: number;
   nombre_completo: string;
-  correo_electronico: string;
-  rol_id: number;
-  ciudad_id: number;
-  isActive: boolean;
-  lastLogin?: string;
-  createdAt: string;
-  updatedAt: string;
-  rol: {
-    id: number;
-    nombre: string;
-    descripcion: string;
-  };
-  ciudad: {
+  telefono: string;
+  email?: string;
+  fkid_ciudad: number;
+  canal_contacto?: string;
+  direccion_entrega?: string;
+  puntos_lealtad: number;
+  notas_especiales?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  ciudad?: {
     id: number;
     nombre: string;
     departamento: string;
   };
-  totalPedidos: number;
-  ultimoPedido?: string;
-  totalGastado: number;
-  loyaltyPoints: number;
+  mascotas?: Array<{
+    id: number;
+    nombre: string;
+    edad?: number;
+    genero?: string;
+    raza?: string;
+  }>;
+  totalPedidos?: number;
+  ultimoPedido?: string | null;
+  totalGastado?: number;
+  loyaltyPoints?: number;
 }
 
 export interface CreateClienteData {
   nombre_completo: string;
-  correo_electronico: string;
-  ciudad_id: number;
-  contrasena?: string;
+  telefono: string;
+  email?: string;
+  fkid_ciudad: number;
+  canal_contacto?: string;
+  direccion_entrega?: string;
+  notas_especiales?: string;
 }
 
 export interface UpdateClienteData {
   nombre_completo?: string;
-  correo_electronico?: string;
-  ciudad_id?: number;
-  contrasena?: string;
+  telefono?: string;
+  email?: string;
+  fkid_ciudad?: number;
+  canal_contacto?: string;
+  direccion_entrega?: string;
+  notas_especiales?: string;
 }
 
 export interface ClienteResponse {
@@ -90,7 +101,7 @@ export interface ActiveClientesResponse {
 // Parámetros de consulta
 export interface ClientesQueryParams {
   activos?: 'true' | 'false';
-  ciudad_id?: number;
+  fkid_ciudad?: number;
   search?: string;
   page?: number;
   limit?: number;

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,71 +6,69 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { MessageCircle, Plus, Search, Filter, MoreVertical, AlertTriangle, XCircle, Info } from "lucide-react";
+import { MessageCircle, Search, Filter, MoreVertical, AlertTriangle, XCircle, Info } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { useNavigate } from "react-router-dom";
 import ErrorDetailsModal from "@/components/ErrorDetailsModal";
+import { conversationsService } from "@/services/conversationsService";
 
 const Conversations = () => {
   const [searchTerm, setSearchTerm] = useState("");
+  const navigate = useNavigate();
   const [selectedConversation, setSelectedConversation] = useState<any>(null);
   const [showErrorDetails, setShowErrorDetails] = useState(false);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+  const [conversations, setConversations] = useState<any[]>([]);
+  const [statsData, setStatsData] = useState<Record<string, number>>({});
 
-  const conversations = [
-    {
-      id: 1,
-      customer: "María González",
-      avatar: "",
-      lastMessage: "¿Cuándo llegará mi pedido?",
-      timestamp: "hace 2 minutos",
-      status: "error",
-      unread: 3,
-      agent: "Bot Assistant",
-      errorDetails: "Error 500: Timeout en API externa. El servicio de pagos no respondió después de 30 segundos.",
-      failureReason: "API de pagos no disponible",
-      errorCode: "PAYMENT_SERVICE_TIMEOUT"
-    },
-    {
-      id: 2,
-      customer: "Carlos López",
-      avatar: "",
-      lastMessage: "Esto es inaceptable, quiero una solución YA!",
-      timestamp: "hace 15 minutos",
-      status: "escalado",
-      unread: 0,
-      agent: "Ana Martínez",
-      escalationReason: "Cliente insatisfecho - Requiere atención urgente"
-    },
-    {
-      id: 3,
-      customer: "Laura Rodríguez",
-      avatar: "",
-      lastMessage: "Necesito cambiar mi dirección",
-      timestamp: "hace 1 hora",
-      status: "pendiente",
-      unread: 1,
-      agent: "Bot Assistant"
-    },
-    {
-      id: 4,
-      customer: "Pedro Sánchez",
-      avatar: "",
-      lastMessage: "El producto llegó en perfectas condiciones",
-      timestamp: "hace 2 horas",
-      status: "resuelto",
-      unread: 0,
-      agent: "Carlos Morales"
-    },
-    {
-      id: 5,
-      customer: "Ana García",
-      avatar: "",
-      lastMessage: "¿Tienen descuentos disponibles?",
-      timestamp: "hace 3 horas",
-      status: "activo",
-      unread: 2,
-      agent: "Bot Assistant"
-    }
-  ];
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const [listRes, statsRes] = await Promise.all([
+          conversationsService.getConversations({ page: 1, limit: 20 }),
+          conversationsService.getStats(),
+        ]);
+
+        const mapped = (listRes?.data?.conversaciones || []).map((c: any) => {
+          const chats = Array.isArray(c.chats) ? c.chats : [];
+          const lastChat = chats.length > 0 ? chats[chats.length - 1] : null;
+          const unreadCount = chats.filter((chat: any) => chat?.leido === false).length;
+          const customerName = c?.cliente?.nombre_completo || c?.from || `Conversación #${c.id}`;
+          const logs = Array.isArray(c.logs) ? c.logs : [];
+          const errorLog = logs.find((l: any) => l?.tipo_log === 'error' || l?.nivel === 'error');
+          const hasError = Boolean(errorLog);
+
+          return {
+            id: c.id,
+            customer: customerName,
+            avatar: "",
+            lastMessage: lastChat?.mensaje || "",
+            timestamp: lastChat?.created_at
+              ? new Date(lastChat.created_at).toLocaleString()
+              : c?.updatedAt
+                ? new Date(c.updatedAt).toLocaleString()
+                : "",
+            status: hasError ? "error" : (c.status || "pendiente"),
+            unread: unreadCount,
+            agent: c?.agente?.nombre || "Bot Assistant",
+            errorDetails: hasError ? (errorLog?.descripcion || "Error en la conversación") : undefined,
+          };
+        });
+
+        setConversations(mapped);
+        setStatsData(statsRes?.data || {});
+      } catch (e: any) {
+        setError(e?.message || 'Error al cargar conversaciones');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -114,25 +112,25 @@ const Conversations = () => {
   const stats = [
     {
       title: "Conversaciones Activas",
-      value: conversations.filter(c => c.status === "activo").length,
+      value: statsData.activas ?? conversations.filter(c => c.status === "activo" || c.status === "activa").length,
       icon: MessageCircle,
       color: "text-green-600"
     },
     {
       title: "Con Errores",
-      value: conversations.filter(c => c.status === "error").length,
+      value: statsData.errores ?? conversations.filter(c => c.status === "error").length,
       icon: XCircle,
       color: "text-red-600"
     },
     {
       title: "Escaladas",
-      value: conversations.filter(c => c.status === "escalado").length,
+      value: statsData.escaladas ?? conversations.filter(c => c.status === "escalado").length,
       icon: AlertTriangle,
       color: "text-orange-600"
     },
     {
       title: "Resueltas Hoy",
-      value: conversations.filter(c => c.status === "resuelto").length,
+      value: statsData.resueltas_hoy ?? conversations.filter(c => c.status === "resuelto").length,
       icon: MessageCircle,
       color: "text-gray-600"
     }
@@ -148,10 +146,7 @@ const Conversations = () => {
             Gestiona las conversaciones con tus clientes
           </p>
         </div>
-        <Button>
-          <Plus className="mr-2 h-4 w-4" />
-          Nueva Conversación
-        </Button>
+        {/* Botón de crear conversación eliminado por solicitud */}
       </div>
 
       {/* Statistics */}
@@ -204,10 +199,15 @@ const Conversations = () => {
         <CardHeader>
           <CardTitle>Lista de Conversaciones</CardTitle>
           <CardDescription>
-            {filteredConversations.length} conversaciones encontradas
+            {loading ? 'Cargando...' : `${filteredConversations.length} conversaciones encontradas`}
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {error && (
+            <Alert className="mb-4 border-destructive/20 bg-destructive/5">
+              <AlertDescription className="text-destructive">{error}</AlertDescription>
+            </Alert>
+          )}
           <div className="space-y-4">
             {filteredConversations.map((conversation) => (
               <div
@@ -277,8 +277,7 @@ const Conversations = () => {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem>Ver conversación</DropdownMenuItem>
-                      <DropdownMenuItem>Asignar agente</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => navigate(`/dashboard/conversations/${conversation.id}`)}>Ver conversación</DropdownMenuItem>
                       <DropdownMenuItem>Marcar como resuelto</DropdownMenuItem>
                       <DropdownMenuItem className="text-destructive">
                         Archivar

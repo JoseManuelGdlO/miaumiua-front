@@ -36,19 +36,36 @@ import { Search, Plus, MoreHorizontal, Edit, Trash2, UserCheck, Star, MessageSqu
 import { useToast } from "@/hooks/use-toast";
 import { clientesService, Cliente } from "@/services/clientesService";
 import CreateCustomerModal from "@/components/modals/CreateCustomerModal";
+
+// Extend the Cliente interface to match API response
+interface ClienteWithAPI extends Cliente {
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  totalPedidos?: number;
+  ultimoPedido?: string | null;
+  totalGastado?: number;
+  loyaltyPoints?: number;
+  mascotas?: Array<{
+    id: number;
+    nombre: string;
+    edad?: number;
+    genero?: string;
+    raza?: string;
+  }>;
+}
 import EditCustomerModal from "@/components/modals/EditCustomerModal";
 import ConfirmDeleteModal from "@/components/modals/ConfirmDeleteModal";
 
 const Customers = () => {
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
-  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [clientes, setClientes] = useState<ClienteWithAPI[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalPages, setTotalPages] = useState(1);
   const [totalClientes, setTotalClientes] = useState(0);
@@ -57,13 +74,12 @@ const Customers = () => {
   // Cargar clientes al montar el componente
   useEffect(() => {
     loadClientes();
-  }, [currentPage, searchTerm, statusFilter]);
+  }, [currentPage, searchTerm]);
 
   const loadClientes = async () => {
     try {
       setLoading(true);
       const response = await clientesService.getAllClientes({
-        activos: statusFilter === 'all' ? undefined : statusFilter as 'true' | 'false',
         search: searchTerm || undefined,
         page: currentPage,
         limit: itemsPerPage
@@ -129,26 +145,7 @@ const Customers = () => {
     setCurrentPage(1); // Reset a la primera página al buscar
   };
 
-  const handleStatusFilter = (value: string) => {
-    setStatusFilter(value);
-    setCurrentPage(1); // Reset a la primera página al filtrar
-  };
 
-  const getStatusBadge = (cliente: Cliente) => {
-    if (!cliente.isActive) {
-      return <Badge className="bg-red-100 text-red-800 border-red-200">Inactivo</Badge>;
-    }
-    
-    if (cliente.totalGastado >= 1000000) {
-      return <Badge className="bg-purple-100 text-purple-800 border-purple-200">VIP</Badge>;
-    } else if (cliente.totalGastado >= 500000) {
-      return <Badge className="bg-blue-100 text-blue-800 border-blue-200">Premium</Badge>;
-    } else if (cliente.totalPedidos >= 5) {
-      return <Badge className="bg-green-100 text-green-800 border-green-200">Frecuente</Badge>;
-    } else {
-      return <Badge className="bg-gray-100 text-gray-800 border-gray-200">Activo</Badge>;
-    }
-  };
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('es-CO', {
@@ -185,7 +182,7 @@ const Customers = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {/* Search and Filters */}
+          {/* Search */}
           <div className="flex items-center space-x-2 mb-6">
             <div className="relative flex-1">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -196,16 +193,6 @@ const Customers = () => {
                 className="pl-8"
               />
             </div>
-            <Select value={statusFilter} onValueChange={handleStatusFilter}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Filtrar por estado" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos los estados</SelectItem>
-                <SelectItem value="true">Activos</SelectItem>
-                <SelectItem value="false">Inactivos</SelectItem>
-              </SelectContent>
-            </Select>
           </div>
 
           {/* Clientes Table */}
@@ -216,7 +203,6 @@ const Customers = () => {
                   <TableHead>Cliente</TableHead>
                   <TableHead>Contacto</TableHead>
                   <TableHead>Ciudad</TableHead>
-                  <TableHead>Estado</TableHead>
                   <TableHead>Pedidos</TableHead>
                   <TableHead>Total Gastado</TableHead>
                   <TableHead>Puntos</TableHead>
@@ -227,7 +213,7 @@ const Customers = () => {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8">
+                    <TableCell colSpan={8} className="text-center py-8">
                       <div className="flex items-center justify-center space-x-2">
                         <Loader2 className="h-4 w-4 animate-spin" />
                         <span>Cargando clientes...</span>
@@ -236,7 +222,7 @@ const Customers = () => {
                   </TableRow>
                 ) : clientes.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                       No se encontraron clientes
                     </TableCell>
                   </TableRow>
@@ -251,7 +237,7 @@ const Customers = () => {
                           <div>
                             <div className="font-medium text-foreground">{cliente.nombre_completo}</div>
                             <div className="text-sm text-muted-foreground">
-                              Registrado: {formatDate(cliente.createdAt)}
+                              Registrado: {formatDate(cliente.created_at)}
                             </div>
                           </div>
                         </div>
@@ -260,7 +246,7 @@ const Customers = () => {
                         <div className="space-y-1">
                           <div className="flex items-center space-x-2">
                             <MessageSquare className="h-3 w-3 text-muted-foreground" />
-                            <span className="text-sm">{cliente.correo_electronico}</span>
+                            <span className="text-sm">{cliente.email}</span>
                           </div>
                         </div>
                       </TableCell>
@@ -269,9 +255,6 @@ const Customers = () => {
                           <div className="font-medium">{cliente.ciudad.nombre}</div>
                           <div className="text-muted-foreground">{cliente.ciudad.departamento}</div>
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        {getStatusBadge(cliente)}
                       </TableCell>
                       <TableCell>
                         <div className="text-center">

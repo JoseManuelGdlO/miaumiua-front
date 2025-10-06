@@ -51,17 +51,21 @@ const Promotions = () => {
   const loadPromotions = async () => {
     try {
       setLoading(true);
-      const response = await promotionsService.getAllPromotions({
+      const queryParams = {
         page: currentPage,
         limit: itemsPerPage,
         search: searchTerm || undefined,
-        activos: 'true',
+        // activos: 'true', // Temporarily commented to see all promotions
         include_cities: 'true'
-      });
+      };
+      
+      console.log('Fetching promotions with params:', queryParams);
+      const response = await promotionsService.getAllPromotions(queryParams);
+      console.log('Promotions response:', response);
 
       setPromotions(response.data.promotions);
       setTotalPages(response.data.pagination.totalPages);
-      setTotalItems(response.data.pagination.totalItems);
+      setTotalItems(response.data.pagination.total);
     } catch (error) {
       console.error('Error al cargar promociones:', error);
       toast({
