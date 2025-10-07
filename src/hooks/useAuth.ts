@@ -54,16 +54,19 @@ export const useAuth = () => {
         // Redirigir al dashboard después del login exitoso
         navigate('/dashboard');
       } else {
+        // Asegurar que el error se muestre correctamente
+        const errorMessage = response.error || 'Credenciales incorrectas. Verifica tu email y contraseña.';
+        console.log('Error en login:', errorMessage);
         setAuthState(prev => ({
           ...prev,
           isLoading: false,
-          error: response.error || 'Error en el login',
+          error: errorMessage,
         }));
       }
 
       return response;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
+      const errorMessage = error instanceof Error ? error.message : 'Error de conexión. Verifica tu conexión a internet.';
       setAuthState(prev => ({
         ...prev,
         isLoading: false,

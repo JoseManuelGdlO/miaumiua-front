@@ -22,10 +22,13 @@ const Login = () => {
     }
   }, [isAuthenticated, navigate]);
 
-  // Limpiar errores cuando el usuario empiece a escribir
+  // Limpiar errores cuando el usuario empiece a escribir (solo si hay error)
   useEffect(() => {
-    if (error) {
-      clearError();
+    if (error && (email || password)) {
+      const timer = setTimeout(() => {
+        clearError();
+      }, 100); // Pequeño delay para evitar limpiar inmediatamente
+      return () => clearTimeout(timer);
     }
   }, [email, password, error, clearError]);
 
@@ -36,10 +39,12 @@ const Login = () => {
       return;
     }
 
-    await login({
+    console.log('Intentando login con:', { email, password: '***' });
+    const result = await login({
       correo_electronico: email,
       contrasena: password,
     });
+    console.log('Resultado del login:', result);
   };
 
   return (
@@ -78,8 +83,10 @@ const Login = () => {
             <form onSubmit={handleLogin} className="space-y-6">
               {/* Mostrar errores */}
               {error && (
-                <Alert variant="destructive">
-                  <AlertDescription>{error}</AlertDescription>
+                <Alert variant="destructive" className="border-red-500 bg-red-50 dark:bg-red-950/20">
+                  <AlertDescription className="text-red-700 dark:text-red-300 font-medium">
+                    {error}
+                  </AlertDescription>
                 </Alert>
               )}
 

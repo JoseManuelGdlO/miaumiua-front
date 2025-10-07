@@ -8,7 +8,12 @@
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint . ",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "docker:build": "docker build -f dockerizer/Dockerfile -t catmate-control-center:latest .",
+    "docker:build:clean": "bash dockerizer/build.sh",
+    "docker:deploy": "bash dockerizer/deploy.sh",
+    "docker:clean": "docker system prune -af && docker builder prune -af",
+    "clean": "rm -rf node_modules dist .vite && npm cache clean --force"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

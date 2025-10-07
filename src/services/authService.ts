@@ -68,7 +68,20 @@ class AuthService {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        const error = new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+        let errorMessage = errorData.message || `HTTP ${response.status}: ${response.statusText}`;
+        
+        // Manejar errores específicos de autenticación
+        if (response.status === 401) {
+          errorMessage = 'Credenciales incorrectas. Verifica tu email y contraseña.';
+        } else if (response.status === 403) {
+          errorMessage = 'Acceso denegado. Tu cuenta puede estar desactivada.';
+        } else if (response.status === 404) {
+          errorMessage = 'Usuario no encontrado.';
+        } else if (response.status >= 500) {
+          errorMessage = 'Error del servidor. Inténtalo más tarde.';
+        }
+        
+        const error = new Error(errorMessage);
         (error as any).response = {
           status: response.status,
           data: errorData
