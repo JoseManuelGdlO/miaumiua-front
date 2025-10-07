@@ -1,8 +1,17 @@
-# Welcome to your Lovable project
+# Miau Miau Center
 
-## Project info
+Sistema de gestión integral para la distribución de arena aglutinante para gatos. Administra pedidos, rutas, conductores, inventario y clientes de manera eficiente.
 
-**URL**: https://lovable.dev/projects/6edda64b-b235-438d-8e34-57c05fb211f2
+## Características principales
+
+- 🚚 **Gestión de Rutas**: Optimización automática de rutas de entrega
+- 📦 **Control de Inventario**: Seguimiento en tiempo real del stock
+- 👥 **Gestión de Conductores**: Administración completa del personal de entrega
+- 🛒 **Gestión de Pedidos**: Procesamiento y seguimiento de órdenes
+- 👤 **Gestión de Clientes**: Base de datos completa de clientes
+- 📊 **Dashboard Analítico**: Métricas y reportes en tiempo real
+- 🗺️ **Mapas Interactivos**: Visualización de rutas y ubicaciones
+- 🔐 **Sistema de Autenticación**: Control de acceso por roles y permisos
 
 ## How can I edit this code?
 
@@ -50,19 +59,49 @@ npm run dev
 - Click on "New codespace" to launch a new Codespace environment.
 - Edit files directly within the Codespace and commit and push your changes once you're done.
 
-## What technologies are used for this project?
+## Tecnologías utilizadas
 
-This project is built with:
+Este proyecto está construido con:
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+- **Frontend**: React 18 + TypeScript
+- **Build Tool**: Vite
+- **UI Framework**: shadcn/ui + Tailwind CSS
+- **Estado**: React Query (TanStack Query)
+- **Formularios**: React Hook Form + Zod
+- **Mapas**: Mapbox GL JS
+- **Drag & Drop**: @dnd-kit
+- **Iconos**: Lucide React
+- **Gráficos**: Recharts
 
-## How can I deploy this project?
+## Despliegue
 
-Simply open [Lovable](https://lovable.dev/projects/6edda64b-b235-438d-8e34-57c05fb211f2) and click on Share -> Publish.
+### Desarrollo local
+
+```bash
+# Instalar dependencias
+npm install
+
+# Ejecutar en modo desarrollo
+npm run dev
+```
+
+### Despliegue con Docker
+
+```bash
+# Build con limpieza de cache
+npm run docker:build:clean
+
+# Despliegue completo
+npm run docker:deploy
+```
+
+### Scripts disponibles
+
+- `npm run dev` - Servidor de desarrollo
+- `npm run build` - Build de producción
+- `npm run docker:build` - Build de imagen Docker
+- `npm run docker:deploy` - Despliegue completo con Docker
+- `npm run clean` - Limpiar cache local
 
 ## Can I connect a custom domain to my Lovable project?
 

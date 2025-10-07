@@ -9,6 +9,10 @@ export default defineConfig(({ mode }) => ({
     host: "::",
     port: 8080,
   },
+  define: {
+    __APP_TITLE__: JSON.stringify("Miau Miau Center"),
+    __APP_DESCRIPTION__: JSON.stringify("Sistema de gestión integral para la distribución de arena aglutinante para gatos"),
+  },
   plugins: [
     react(),
     mode === 'development' &&

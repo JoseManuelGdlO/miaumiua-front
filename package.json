@@ -1,5 +1,5 @@
 {
-  "name": "vite_react_shadcn_ts",
+  "name": "miau-miau-center",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -9,7 +9,7 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint . ",
     "preview": "vite preview",
-    "docker:build": "docker build -f dockerizer/Dockerfile -t catmate-control-center:latest .",
+    "docker:build": "docker build -f dockerizer/Dockerfile -t miau-miau-center:latest .",
     "docker:build:clean": "bash dockerizer/build.sh",
     "docker:deploy": "bash dockerizer/deploy.sh",
     "docker:clean": "docker system prune -af && docker builder prune -af",

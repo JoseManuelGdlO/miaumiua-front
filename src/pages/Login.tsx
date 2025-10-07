@@ -22,15 +22,23 @@ const Login = () => {
     }
   }, [isAuthenticated, navigate]);
 
-  // Limpiar errores cuando el usuario empiece a escribir (solo si hay error)
+  // Limpiar errores solo cuando el usuario empiece a escribir DESPUÉS de un error
   useEffect(() => {
-    if (error && (email || password)) {
+    if (error) {
       const timer = setTimeout(() => {
         clearError();
-      }, 100); // Pequeño delay para evitar limpiar inmediatamente
+      }, 5000); // 5 segundos para que el usuario pueda leer el error
       return () => clearTimeout(timer);
     }
-  }, [email, password, error, clearError]);
+  }, [error, clearError]);
+
+  const handleInputChange = (setter: (value: string) => void) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Limpiar error cuando el usuario empiece a escribir
+    if (error) {
+      clearError();
+    }
+    setter(e.target.value);
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,12 +47,10 @@ const Login = () => {
       return;
     }
 
-    console.log('Intentando login con:', { email, password: '***' });
-    const result = await login({
+    await login({
       correo_electronico: email,
       contrasena: password,
     });
-    console.log('Resultado del login:', result);
   };
 
   return (
@@ -83,8 +89,11 @@ const Login = () => {
             <form onSubmit={handleLogin} className="space-y-6">
               {/* Mostrar errores */}
               {error && (
-                <Alert variant="destructive" className="border-red-500 bg-red-50 dark:bg-red-950/20">
-                  <AlertDescription className="text-red-700 dark:text-red-300 font-medium">
+                <Alert variant="destructive" className="border-red-500 bg-red-50 dark:bg-red-950/20 animate-in slide-in-from-top-2 duration-300">
+                  <AlertDescription className="text-red-700 dark:text-red-300 font-medium flex items-center gap-2">
+                    <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                    </svg>
                     {error}
                   </AlertDescription>
                 </Alert>
@@ -99,7 +108,7 @@ const Login = () => {
                   type="email"
                   placeholder="admin@miaumiau.com"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={handleInputChange(setEmail)}
                   required
                   disabled={isLoading}
                   className="h-11"
@@ -115,7 +124,7 @@ const Login = () => {
                   type="password"
                   placeholder="••••••••"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={handleInputChange(setPassword)}
                   required
                   disabled={isLoading}
                   className="h-11"

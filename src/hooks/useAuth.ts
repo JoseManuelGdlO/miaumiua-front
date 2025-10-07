@@ -56,7 +56,6 @@ export const useAuth = () => {
       } else {
         // Asegurar que el error se muestre correctamente
         const errorMessage = response.error || 'Credenciales incorrectas. Verifica tu email y contraseña.';
-        console.log('Error en login:', errorMessage);
         setAuthState(prev => ({
           ...prev,
           isLoading: false,

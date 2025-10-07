@@ -19,20 +19,20 @@ docker volume prune -f
 
 # Construir imagen sin cache
 echo "🔨 Construyendo imagen Docker sin cache..."
-docker build --no-cache -f dockerizer/Dockerfile -t catmate-control-center:latest .
+docker build --no-cache -f dockerizer/Dockerfile -t miau-miau-center:latest .
 
 # Parar contenedores existentes
 echo "⏹️ Parando contenedores existentes..."
-docker stop catmate-control-center 2>/dev/null || true
-docker rm catmate-control-center 2>/dev/null || true
+docker stop miau-miau-center 2>/dev/null || true
+docker rm miau-miau-center 2>/dev/null || true
 
 # Ejecutar nuevo contenedor
 echo "▶️ Ejecutando nuevo contenedor..."
 docker run -d \
-  --name catmate-control-center \
+  --name miau-miau-center \
   -p 80:80 \
   --restart unless-stopped \
-  catmate-control-center:latest
+  miau-miau-center:latest
 
 echo "✅ Despliegue completado con cache completamente limpio!"
 echo "🌐 Aplicación disponible en: http://localhost"

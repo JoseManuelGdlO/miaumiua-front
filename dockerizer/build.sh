@@ -17,6 +17,6 @@ docker builder prune -f
 
 # Construir la imagen
 echo "🔨 Construyendo imagen Docker..."
-docker build -f dockerizer/Dockerfile -t catmate-control-center:latest .
+docker build -f dockerizer/Dockerfile -t miau-miau-center:latest .
 
 echo "✅ Build completado con cache limpio!"
