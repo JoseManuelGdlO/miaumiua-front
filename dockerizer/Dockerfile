@@ -1,5 +1,5 @@
 # build stage
-FROM node:20 as build
+FROM node:20 AS build
 WORKDIR /app
 
 # Limpiar cache de npm y apt
@@ -25,7 +25,7 @@ RUN rm -rf node_modules/.cache dist && \
     npm prune --production
 
 # production stage
-FROM nginx:stable as production
+FROM nginx:stable AS production
 
 # Limpiar cache de nginx
 RUN rm -rf /var/cache/nginx/* /tmp/* /var/tmp/*
