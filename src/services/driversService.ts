@@ -148,7 +148,15 @@ export interface DriversResponse {
 
 export interface DriverResponse {
   success: boolean;
-  data: Driver;
+  data?: Driver;
+  message?: string;
+  errors?: Array<{
+    type: string;
+    value: any;
+    msg: string;
+    path: string;
+    location: string;
+  }>;
 }
 
 export interface DriverStatsResponse {

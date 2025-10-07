@@ -38,51 +38,80 @@ interface City {
 
 const EditDriverModal = ({ isOpen, onClose, onSuccess, driver }: EditDriverModalProps) => {
   const [loading, setLoading] = useState(false);
+  const [loadingData, setLoadingData] = useState(false);
   const [cities, setCities] = useState<City[]>([]);
   const [formData, setFormData] = useState<UpdateDriverData>({});
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const { toast } = useToast();
 
   useEffect(() => {
     if (isOpen && driver) {
-      loadCities();
-      setFormData({
-        codigo_repartidor: driver.codigo_repartidor,
-        nombre_completo: driver.nombre_completo,
-        telefono: driver.telefono,
-        email: driver.email,
-        fkid_ciudad: driver.fkid_ciudad,
-        tipo_vehiculo: driver.tipo_vehiculo,
-        capacidad_carga: driver.capacidad_carga,
-        estado: driver.estado,
-        tarifa_base: driver.tarifa_base,
-        comision_porcentaje: driver.comision_porcentaje,
-        fecha_ingreso: driver.fecha_ingreso,
-        fecha_nacimiento: driver.fecha_nacimiento,
-        direccion: driver.direccion,
-        documento_identidad: driver.documento_identidad,
-        licencia_conducir: driver.licencia_conducir,
-        seguro_vehiculo: driver.seguro_vehiculo,
-        notas: driver.notas,
-      });
+      // Cargar ciudades primero, luego setear formData
+      loadCitiesAndSetFormData();
     }
   }, [isOpen, driver]);
 
-  const loadCities = async () => {
+  const loadCitiesAndSetFormData = async () => {
+    if (!driver) return;
+    
     try {
+      setLoadingData(true);
+      
+      // Cargar ciudades primero
       const response = await citiesService.getAllCities();
       if (response.success) {
-        setCities(response.data.cities || []);
+        const citiesData = response.data.cities || [];
+        setCities(citiesData);
+        
+        // Ahora setear formData con la ciudad correcta
+        const ciudadId = parseInt(driver.ciudad?.id?.toString() || driver.fkid_ciudad?.toString() || "0");
+        
+        setFormData({
+          codigo_repartidor: driver.codigo_repartidor || "",
+          nombre_completo: driver.nombre_completo || "",
+          telefono: driver.telefono || "",
+          email: driver.email || "",
+          fkid_ciudad: ciudadId,
+          tipo_vehiculo: driver.tipo_vehiculo || "moto",
+          capacidad_carga: driver.capacidad_carga || 0,
+          estado: driver.estado || "activo",
+          zona_cobertura: driver.zona_cobertura,
+          horario_trabajo: driver.horario_trabajo,
+          tarifa_base: driver.tarifa_base || 0,
+          comision_porcentaje: driver.comision_porcentaje || 0,
+          fecha_ingreso: driver.fecha_ingreso || "",
+          fecha_nacimiento: driver.fecha_nacimiento || "",
+          direccion: driver.direccion || "",
+          documento_identidad: driver.documento_identidad || "",
+          licencia_conducir: driver.licencia_conducir || "",
+          seguro_vehiculo: driver.seguro_vehiculo || "",
+          notas: driver.notas || "",
+        });
       }
     } catch (error) {
       console.error("Error al cargar ciudades:", error);
+    } finally {
+      setLoadingData(false);
     }
   };
 
-  const handleInputChange = (field: keyof UpdateDriverData, value: string | number) => {
+
+
+
+  const handleInputChange = (field: keyof UpdateDriverData, value: any) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
     }));
+    
+    // Limpiar error del campo cuando el usuario lo modifica
+    if (fieldErrors[field as string]) {
+      setFieldErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[field as string];
+        return newErrors;
+      });
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -92,6 +121,8 @@ const EditDriverModal = ({ isOpen, onClose, onSuccess, driver }: EditDriverModal
 
     try {
       setLoading(true);
+      setFieldErrors({}); // Limpiar errores previos
+      
       const response = await driversService.updateDriver(driver.id, formData);
       
       if (response.success) {
@@ -102,28 +133,83 @@ const EditDriverModal = ({ isOpen, onClose, onSuccess, driver }: EditDriverModal
         onSuccess();
         onClose();
       } else {
+        // Manejar errores de validación
+        if (response.errors && Array.isArray(response.errors)) {
+          const errors: Record<string, string> = {};
+          response.errors.forEach((error: any) => {
+            if (error.path && error.msg) {
+              errors[error.path] = error.msg;
+            }
+          });
+          setFieldErrors(errors);
+          
+          toast({
+            title: "Errores de validación",
+            description: "Por favor corrige los errores en el formulario",
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Error",
+            description: response.message || "No se pudo actualizar el repartidor",
+            variant: "destructive",
+          });
+        }
+      }
+    } catch (error: any) {
+      console.error("Error al actualizar repartidor:", error);
+      
+      // Manejar errores de la respuesta
+      if (error.response?.data) {
+        const errorData = error.response.data;
+        
+        // Verificar si es un error 400 con errores de validación
+        if (error.response.status === 400 && errorData.errors && Array.isArray(errorData.errors)) {
+          const errors: Record<string, string> = {};
+          errorData.errors.forEach((err: any) => {
+            if (err.path && err.msg) {
+              errors[err.path] = err.msg;
+            }
+          });
+          setFieldErrors(errors);
+          
+          // Crear mensaje con errores específicos
+          const errorMessages = Object.values(errors).join(", ");
+          toast({
+            title: "Errores de validación",
+            description: errorMessages || errorData.message || "Por favor corrige los errores en el formulario",
+            variant: "destructive",
+          });
+        } else {
+          // Otros errores
+          toast({
+            title: "Error",
+            description: errorData.message || "No se pudo actualizar el repartidor",
+            variant: "destructive",
+          });
+        }
+      } else {
+        // Error de red o sin respuesta
         toast({
           title: "Error",
           description: "No se pudo actualizar el repartidor",
           variant: "destructive",
         });
       }
-    } catch (error) {
-      console.error("Error al actualizar repartidor:", error);
-      toast({
-        title: "Error",
-        description: "No se pudo actualizar el repartidor",
-        variant: "destructive",
-      });
     } finally {
       setLoading(false);
     }
   };
 
   const handleClose = () => {
-    if (!loading) {
+    if (!loading && !loadingData) {
+      setFieldErrors({}); // Limpiar errores al cerrar
       onClose();
     }
+  };
+
+  const getFieldError = (fieldName: string) => {
+    return fieldErrors[fieldName];
   };
 
   if (!driver) return null;
@@ -140,6 +226,15 @@ const EditDriverModal = ({ isOpen, onClose, onSuccess, driver }: EditDriverModal
             Modifica la información del repartidor {driver.nombre_completo}
           </DialogDescription>
         </DialogHeader>
+
+        {loadingData ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="flex items-center space-x-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>Cargando datos del repartidor...</span>
+            </div>
+          </div>
+        ) : (
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Información Básica */}
@@ -158,7 +253,11 @@ const EditDriverModal = ({ isOpen, onClose, onSuccess, driver }: EditDriverModal
                   onChange={(e) => handleInputChange("codigo_repartidor", e.target.value)}
                   placeholder="REP-001"
                   required
+                  className={getFieldError("codigo_repartidor") ? "border-red-500" : ""}
                 />
+                {getFieldError("codigo_repartidor") && (
+                  <p className="text-sm text-red-500">{getFieldError("codigo_repartidor")}</p>
+                )}
               </div>
               
               <div className="space-y-2">
@@ -169,7 +268,11 @@ const EditDriverModal = ({ isOpen, onClose, onSuccess, driver }: EditDriverModal
                   onChange={(e) => handleInputChange("nombre_completo", e.target.value)}
                   placeholder="Juan Carlos Pérez"
                   required
+                  className={getFieldError("nombre_completo") ? "border-red-500" : ""}
                 />
+                {getFieldError("nombre_completo") && (
+                  <p className="text-sm text-red-500">{getFieldError("nombre_completo")}</p>
+                )}
               </div>
               
               <div className="space-y-2">
@@ -180,7 +283,11 @@ const EditDriverModal = ({ isOpen, onClose, onSuccess, driver }: EditDriverModal
                   onChange={(e) => handleInputChange("telefono", e.target.value)}
                   placeholder="555-1234"
                   required
+                  className={getFieldError("telefono") ? "border-red-500" : ""}
                 />
+                {getFieldError("telefono") && (
+                  <p className="text-sm text-red-500">{getFieldError("telefono")}</p>
+                )}
               </div>
               
               <div className="space-y-2">
@@ -192,7 +299,11 @@ const EditDriverModal = ({ isOpen, onClose, onSuccess, driver }: EditDriverModal
                   onChange={(e) => handleInputChange("email", e.target.value)}
                   placeholder="juan.perez@miaumiau.com"
                   required
+                  className={getFieldError("email") ? "border-red-500" : ""}
                 />
+                {getFieldError("email") && (
+                  <p className="text-sm text-red-500">{getFieldError("email")}</p>
+                )}
               </div>
             </div>
           </div>
@@ -253,7 +364,11 @@ const EditDriverModal = ({ isOpen, onClose, onSuccess, driver }: EditDriverModal
                   onChange={(e) => handleInputChange("capacidad_carga", parseFloat(e.target.value) || 0)}
                   placeholder="25.0"
                   required
+                  className={getFieldError("capacidad_carga") ? "border-red-500" : ""}
                 />
+                {getFieldError("capacidad_carga") && (
+                  <p className="text-sm text-red-500">{getFieldError("capacidad_carga")}</p>
+                )}
               </div>
             </div>
           </div>
@@ -269,8 +384,11 @@ const EditDriverModal = ({ isOpen, onClose, onSuccess, driver }: EditDriverModal
               <div className="space-y-2">
                 <Label htmlFor="fkid_ciudad">Ciudad</Label>
                 <Select
-                  value={formData.fkid_ciudad?.toString() || ""}
-                  onValueChange={(value) => handleInputChange("fkid_ciudad", parseInt(value))}
+                  value={formData.fkid_ciudad ? formData.fkid_ciudad.toString() : ""}
+                  onValueChange={(value) => {
+                    console.log("City changed to:", value);
+                    handleInputChange("fkid_ciudad", parseInt(value));
+                  }}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Selecciona una ciudad" />
@@ -296,6 +414,7 @@ const EditDriverModal = ({ isOpen, onClose, onSuccess, driver }: EditDriverModal
                 />
               </div>
             </div>
+            
           </div>
 
           {/* Información Laboral */}
@@ -361,6 +480,61 @@ const EditDriverModal = ({ isOpen, onClose, onSuccess, driver }: EditDriverModal
                 onChange={(e) => handleInputChange("fecha_nacimiento", e.target.value)}
                 required
               />
+            </div>
+          </div>
+
+          {/* Horarios de Trabajo */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-medium flex items-center space-x-2">
+              <Calendar className="h-4 w-4" />
+              <span>Horarios de Trabajo</span>
+            </h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'].map((dia) => (
+                <div key={dia} className="space-y-2">
+                  <Label htmlFor={`horario_${dia}`} className="capitalize">
+                    {dia === 'miercoles' ? 'Miércoles' : 
+                     dia === 'sabado' ? 'Sábado' : 
+                     dia === 'domingo' ? 'Domingo' : 
+                     dia.charAt(0).toUpperCase() + dia.slice(1)}
+                  </Label>
+                  <div className="flex space-x-2">
+                    <Input
+                      id={`horario_${dia}_inicio`}
+                      type="time"
+                      placeholder="Inicio"
+                      value={formData.horario_trabajo?.[dia]?.inicio || ""}
+                      onChange={(e) => {
+                        const newHorario = {
+                          ...formData.horario_trabajo,
+                          [dia]: {
+                            ...(formData.horario_trabajo?.[dia] || {}),
+                            inicio: e.target.value
+                          }
+                        };
+                        handleInputChange("horario_trabajo", newHorario);
+                      }}
+                    />
+                    <Input
+                      id={`horario_${dia}_fin`}
+                      type="time"
+                      placeholder="Fin"
+                      value={formData.horario_trabajo?.[dia]?.fin || ""}
+                      onChange={(e) => {
+                        const newHorario = {
+                          ...formData.horario_trabajo,
+                          [dia]: {
+                            ...(formData.horario_trabajo?.[dia] || {}),
+                            fin: e.target.value
+                          }
+                        };
+                        handleInputChange("horario_trabajo", newHorario);
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -436,6 +610,7 @@ const EditDriverModal = ({ isOpen, onClose, onSuccess, driver }: EditDriverModal
             </Button>
           </DialogFooter>
         </form>
+        )}
       </DialogContent>
     </Dialog>
   );

@@ -68,7 +68,12 @@ class AuthService {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+        const error = new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+        (error as any).response = {
+          status: response.status,
+          data: errorData
+        };
+        throw error;
       }
 
       return await response.json();

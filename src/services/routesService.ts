@@ -14,18 +14,26 @@ export interface Route {
   distancia_estimada: number;
   tiempo_estimado: number;
   notas?: string;
-  orden_prioridad: number;
-  baja_logica: boolean;
-  created_at: string;
-  updated_at: string;
+  orden_prioridad?: number;
+  baja_logica?: boolean;
+  created_at?: string;
+  updated_at?: string;
+  fecha_creacion?: string;
+  fecha_inicio?: string;
+  fecha_fin?: string;
   repartidor?: {
     id: number;
+    codigo_repartidor?: string;
     nombre_completo: string;
     telefono?: string;
+    tipo_vehiculo?: string;
+    capacidad_carga?: number;
+    estado?: string;
   };
   ciudad?: {
     id: number;
     nombre: string;
+    departamento?: string;
   };
   pedidos?: RouteOrder[];
 }
@@ -46,6 +54,7 @@ export interface RouteOrder {
     id: number;
     numero_pedido: string;
     direccion_entrega: string;
+    total?: number;
     cliente?: {
       id: number;
       nombre_completo: string;
@@ -106,16 +115,90 @@ export interface AvailableDriver {
 
 export interface AvailableOrder {
   id: number;
-  numero_pedido: string;
-  direccion_entrega: string;
-  fkid_ciudad: number;
+  numero_pedido?: string;
+  direccion_entrega?: string;
+  fkid_ciudad?: number;
   total: number;
   estado: string;
+  fecha_pedido?: string;
+  fecha_entrega?: string;
   cliente?: {
     id: number;
     nombre_completo: string;
     telefono: string;
+    direccion_entrega?: string;
+    lat?: number;
+    lng?: number;
   };
+  productos?: Array<{
+    id: number;
+    nombre: string;
+    cantidad: number;
+    precio: number;
+  }>;
+}
+
+export interface CreateRouteData {
+  nombre_ruta: string;
+  fecha_ruta: string;
+  fkid_ciudad: number;
+  fkid_repartidor: number;
+  estado?: string;
+  notas?: string;
+}
+
+export interface UpdateRouteData {
+  nombre_ruta?: string;
+  fecha_ruta?: string;
+  fkid_ciudad?: number;
+  fkid_repartidor?: number;
+  estado?: string;
+  notas?: string;
+}
+
+export interface AssignOrdersToRouteData {
+  pedidos: Array<{
+    fkid_pedido: number;
+    orden_entrega: number;
+    lat?: number;
+    lng?: number;
+    link_ubicacion?: string;
+    notas_entrega?: string;
+  }>;
+}
+
+export interface ReorderRouteOrdersData {
+  orden_pedidos: Array<{
+    ruta_pedido_id: number;
+    nuevo_orden: number;
+  }>;
+}
+
+export interface RouteStats {
+  fecha: string;
+  ciudad: {
+    id: number;
+    nombre: string;
+  };
+  estadisticas: {
+    total_rutas: number;
+    rutas_planificadas: number;
+    rutas_en_progreso: number;
+    rutas_completadas: number;
+    rutas_canceladas: number;
+    total_pedidos: number;
+    pedidos_entregados: number;
+    pedidos_pendientes: number;
+    distancia_total: number;
+    tiempo_total: number;
+  };
+  por_repartidor: Array<{
+    repartidor_id: number;
+    nombre: string;
+    rutas_asignadas: number;
+    pedidos_entregados: number;
+    distancia_recorrida: number;
+  }>;
 }
 
 class RoutesService {
@@ -140,7 +223,7 @@ class RoutesService {
   }
 
   // Rutas principales
-  async createRoute(data: CreateRouteRequest) {
+  async createRoute(data: CreateRouteData) {
     return this.makeRequest('/rutas', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -151,9 +234,9 @@ class RoutesService {
     page?: number;
     limit?: number;
     estado?: string;
-    fecha?: string;
-    ciudad?: number;
-    repartidor?: number;
+    fecha_ruta?: string;
+    fkid_ciudad?: number;
+    fkid_repartidor?: number;
     search?: string;
   } = {}) {
     const queryParams = new URLSearchParams();
@@ -340,6 +423,85 @@ class RoutesService {
   async getRoutesDashboard(fecha?: string) {
     const queryParams = fecha ? `?fecha=${fecha}` : '';
     return this.makeRequest(`/rutas/dashboard${queryParams}`);
+  }
+
+  // Nuevos métodos según los endpoints actualizados del backend
+  async getRoutesByDate(fecha: string, ciudad?: number, estado?: string) {
+    const queryParams = new URLSearchParams();
+    if (ciudad) queryParams.append('fkid_ciudad', ciudad.toString());
+    if (estado) queryParams.append('estado', estado);
+    
+    const queryString = queryParams.toString();
+    return this.makeRequest(`/rutas/fecha/${fecha}${queryString ? `?${queryString}` : ''}`);
+  }
+
+  async getUnassignedOrdersByDate(fecha: string, ciudad: number, page: number = 1, limit: number = 50) {
+    const queryParams = new URLSearchParams();
+    queryParams.append('fkid_ciudad', ciudad.toString());
+    queryParams.append('page', page.toString());
+    queryParams.append('limit', limit.toString());
+    
+    return this.makeRequest(`/rutas/pedidos-sin-asignar/${fecha}?${queryParams.toString()}`);
+  }
+
+  async assignOrdersToRoute(rutaId: number, data: AssignOrdersToRouteData) {
+    return this.makeRequest(`/rutas/${rutaId}/pedidos`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async reorderRouteOrders(rutaId: number, data: ReorderRouteOrdersData) {
+    return this.makeRequest(`/rutas/${rutaId}/pedidos/orden`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getRouteStats(fecha?: string, ciudad?: number) {
+    const queryParams = new URLSearchParams();
+    if (fecha) queryParams.append('fecha', fecha);
+    if (ciudad) queryParams.append('ciudad', ciudad.toString());
+    
+    const queryString = queryParams.toString();
+    return this.makeRequest(`/rutas/estadisticas${queryString ? `?${queryString}` : ''}`);
+  }
+
+  async getRoutesByDriver(driverId: number, fecha?: string) {
+    const queryParams = fecha ? `?fecha=${fecha}` : '';
+    return this.makeRequest(`/rutas/repartidor/${driverId}${queryParams}`);
+  }
+
+  async updateRoute(id: number, data: UpdateRouteData) {
+    return this.makeRequest(`/rutas/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteRoute(id: number) {
+    return this.makeRequest(`/rutas/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async changeRouteStatus(id: number, estado: string) {
+    return this.makeRequest(`/rutas/${id}/estado`, {
+      method: 'PATCH',
+      body: JSON.stringify({ estado }),
+    });
+  }
+
+  async removeOrderFromRoute(rutaId: number, pedidoId: number) {
+    return this.makeRequest(`/rutas/${rutaId}/pedidos/${pedidoId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async unassignDriverFromRoute(rutaId: number) {
+    return this.makeRequest(`/rutas/${rutaId}/repartidor`, {
+      method: 'DELETE',
+    });
   }
 }
 

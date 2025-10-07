@@ -138,6 +138,14 @@ export const SECTION_PERMISSIONS = {
     delete: 'eliminar_repartidores',
     activate: 'activar_desactivar_repartidores',
     stats: 'ver_estadisticas_repartidores'
+  },
+  agents: {
+    base: 'ver_agentes',
+    create: 'crear_agentes',
+    edit: 'editar_agentes',
+    delete: 'eliminar_agentes',
+    activate: 'activar_desactivar_agentes',
+    stats: 'ver_estadisticas_agentes'
   }
 } as const;
 
@@ -233,6 +241,16 @@ export const canActivateDriver = (): boolean => {
 // Función para verificar si el usuario puede ver estadísticas de repartidores
 export const canViewDriverStats = (): boolean => {
   return hasPermission(SECTION_PERMISSIONS.drivers.stats);
+};
+
+// Función para verificar si el usuario puede activar/desactivar agentes
+export const canActivateAgent = (): boolean => {
+  return hasPermission(SECTION_PERMISSIONS.agents.activate);
+};
+
+// Función para verificar si el usuario puede ver estadísticas de agentes
+export const canViewAgentStats = (): boolean => {
+  return hasPermission(SECTION_PERMISSIONS.agents.stats);
 };
 
 // Función para verificar permisos específicos de reportes

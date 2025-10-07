@@ -49,7 +49,7 @@ const menuItems = [
     ],
   },
   { title: "Conversaciones", url: "/dashboard/conversations", icon: MessageCircle, permission: "conversations" },
-  { title: "Contexto de Agentes", url: "/dashboard/agents", icon: Bot, permission: null },
+  { title: "Contexto de Agentes", url: "/dashboard/agents", icon: Bot, permission: "agents" },
   { title: "Pedidos", url: "/dashboard/orders", icon: Package2, permission: "orders" },
   { title: "Repartidores", url: "/dashboard/drivers", icon: Truck, permission: "drivers" },
   { title: "Planeación de Rutas", url: "/dashboard/routes", icon: Route, permission: "routes" },
