@@ -10,8 +10,8 @@ RUN npm cache clean --force && \
 # Copiar archivos de dependencias
 COPY package*.json ./
 
-# Instalar dependencias con cache limpio
-RUN npm ci --only=production --no-audit --no-fund && \
+# Instalar todas las dependencias (incluyendo devDependencies para el build)
+RUN npm ci --no-audit --no-fund && \
     npm cache clean --force
 
 # Copiar código fuente
@@ -20,7 +20,9 @@ COPY . .
 # Limpiar cache de build y construir
 RUN rm -rf node_modules/.cache dist && \
     npm run build && \
-    npm cache clean --force
+    npm cache clean --force && \
+    # Eliminar devDependencies después del build para reducir tamaño
+    npm prune --production
 
 # production stage
 FROM nginx:stable as production
