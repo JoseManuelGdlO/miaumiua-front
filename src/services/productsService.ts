@@ -1,4 +1,5 @@
 import { config } from '../config/environment';
+import { authService } from './authService';
 
 // Interfaces para Productos
 export interface Product {
@@ -89,8 +90,11 @@ class ProductsService {
     };
 
     return fetch(`${config.apiBaseUrl}${endpoint}`, requestConfig)
-      .then(response => {
+      .then(async response => {
         if (!response.ok) {
+          // Manejar errores de autenticación (401/403) y desloguear automáticamente
+          authService.handleAuthError(response);
+          
           throw new Error(`Error ${response.status}: ${response.statusText}`);
         }
         return response.json();

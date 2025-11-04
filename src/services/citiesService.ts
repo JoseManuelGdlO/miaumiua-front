@@ -112,6 +112,10 @@ class CitiesService {
     const response = await fetch(url, requestConfig);
     
     if (!response.ok) {
+      // Manejar errores de autenticación (401/403) y desloguear automáticamente
+      const { authService } = await import('./authService');
+      authService.handleAuthError(response);
+      
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
     }

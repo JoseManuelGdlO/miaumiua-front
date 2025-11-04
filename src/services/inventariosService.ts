@@ -148,8 +148,12 @@ class InventariosService {
     };
 
     return fetch(`${config.apiBaseUrl}${endpoint}`, requestConfig)
-      .then(response => {
+      .then(async response => {
         if (!response.ok) {
+          // Manejar errores de autenticación (401/403) y desloguear automáticamente
+          const { authService } = await import('./authService');
+          authService.handleAuthError(response);
+          
           throw new Error(`Error ${response.status}: ${response.statusText}`);
         }
         return response.json();

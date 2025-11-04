@@ -1,4 +1,5 @@
 import { config } from '../config/environment';
+import { authService } from './authService';
 
 export interface Conversation {
 	id: number;
@@ -63,6 +64,9 @@ class ConversationsService {
 		return fetch(`${config.apiBaseUrl}${endpoint}`, { ...options, headers })
 			.then(async (response) => {
 				if (!response.ok) {
+					// Manejar errores de autenticación (401/403) y desloguear automáticamente
+					authService.handleAuthError(response);
+					
 					let message = `Error ${response.status}: ${response.statusText}`;
 					try {
 						const err = await response.json();

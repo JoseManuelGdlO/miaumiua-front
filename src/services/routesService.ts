@@ -215,6 +215,9 @@ class RoutesService {
     });
 
     if (!response.ok) {
+      // Manejar errores de autenticación (401/403) y desloguear automáticamente
+      authService.handleAuthError(response);
+      
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
     }

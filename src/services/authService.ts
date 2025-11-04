@@ -67,6 +67,9 @@ class AuthService {
       clearTimeout(timeoutId);
 
       if (!response.ok) {
+        // Manejar errores de autenticación (401/403) antes de procesar el error
+        this.handleAuthError(response);
+        
         const errorData = await response.json().catch(() => ({}));
         let errorMessage = errorData.message || `HTTP ${response.status}: ${response.statusText}`;
         
@@ -138,6 +141,20 @@ class AuthService {
     localStorage.removeItem('user_permissions');
   }
 
+  // Función para manejar errores de autenticación (401/403) y desloguear automáticamente
+  handleAuthError(response: Response): void {
+    if (response.status === 401 || response.status === 403) {
+      // Desloguear al usuario
+      this.logout();
+      
+      // Redirigir a la página de login
+      // Usar window.location para redirigir fuera del contexto de React Router
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
+    }
+  }
+
   // Función para verificar si el usuario está autenticado
   isAuthenticated(): boolean {
     const token = localStorage.getItem('auth_token');
@@ -184,6 +201,26 @@ class AuthService {
         'Authorization': `Bearer ${token}`,
       },
     });
+  }
+
+  // Función helper para procesar respuestas HTTP y manejar errores de autenticación
+  // Esta función puede ser usada por otros servicios para manejar respuestas de manera consistente
+  async processResponse<T>(response: Response): Promise<T> {
+    // Manejar errores de autenticación antes de procesar
+    this.handleAuthError(response);
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const errorMessage = errorData.message || `Error ${response.status}: ${response.statusText}`;
+      const error = new Error(errorMessage);
+      (error as any).response = {
+        status: response.status,
+        data: errorData
+      };
+      throw error;
+    }
+    
+    return await response.json();
   }
 }
 
