@@ -1,6 +1,15 @@
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Bot,
   Users,
@@ -12,9 +21,109 @@ import {
   Activity,
   BarChart3,
   Settings,
+  Loader2,
 } from "lucide-react";
+import { notificationsService } from "@/services/notificationsService";
+import { useToast } from "@/hooks/use-toast";
+
+interface RecentActivity {
+  id: string;
+  type: string;
+  description: string;
+  time: string;
+  status: string;
+  actionUrl?: string;
+}
 
 const Dashboard = () => {
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
+  const [loadingActivity, setLoadingActivity] = useState(true);
+  const [activityFilter, setActivityFilter] = useState<string>("all");
+
+  // Cargar actividades recientes
+  useEffect(() => {
+    loadRecentActivity();
+    
+    // Recargar cada 30 segundos
+    const interval = setInterval(loadRecentActivity, 30000);
+    return () => clearInterval(interval);
+  }, [activityFilter]);
+
+  const loadRecentActivity = async () => {
+    try {
+      setLoadingActivity(true);
+      
+      const params: any = {
+        limit: 20,
+      };
+      
+      if (activityFilter === 'conversacion') {
+        params.tipo = 'conversacion';
+      } else if (activityFilter === 'venta') {
+        params.tipo = 'venta';
+      }
+
+      const activities = await notificationsService.getMappedRecentActivity(params);
+      
+      // Convertir las notificaciones a actividades recientes
+      const mappedActivities: RecentActivity[] = activities.map(notif => {
+        // Determinar el tipo de actividad basado en el tipo de notificación
+        let activityType = notif.title;
+        let status = 'activa';
+        
+        if (notif.type === 'conversation') {
+          activityType = 'Nueva conversación';
+          status = 'activa';
+        } else if (notif.type === 'order') {
+          activityType = 'Venta completada';
+          status = 'completada';
+        } else if (notif.type === 'stock') {
+          activityType = 'Inventario bajo';
+          status = 'alerta';
+        } else if (notif.type === 'error') {
+          activityType = 'Error en sistema';
+          status = 'alerta';
+        }
+        
+        // Formatear el tiempo relativo
+        const formatTime = (timestamp: string) => {
+          const now = new Date();
+          const activityTime = new Date(timestamp);
+          const diffInMinutes = Math.floor((now.getTime() - activityTime.getTime()) / (1000 * 60));
+          
+          if (diffInMinutes < 1) return 'Hace un momento';
+          if (diffInMinutes < 60) return `Hace ${diffInMinutes} ${diffInMinutes === 1 ? 'minuto' : 'minutos'}`;
+          const hours = Math.floor(diffInMinutes / 60);
+          if (hours < 24) return `Hace ${hours} ${hours === 1 ? 'hora' : 'horas'}`;
+          const days = Math.floor(hours / 24);
+          return `Hace ${days} ${days === 1 ? 'día' : 'días'}`;
+        };
+        
+        return {
+          id: notif.id,
+          type: activityType,
+          description: notif.message,
+          time: formatTime(notif.timestamp),
+          status: status,
+          actionUrl: notif.actionUrl,
+        };
+      });
+      
+      setRecentActivity(mappedActivities);
+    } catch (error) {
+      console.error('Error al cargar actividades recientes:', error);
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar las actividades recientes",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingActivity(false);
+    }
+  };
+
   const stats = [
     {
       title: "Conversaciones Activas",
@@ -44,13 +153,6 @@ const Dashboard = () => {
       icon: ShoppingCart,
       color: "text-primary",
     },
-  ];
-
-  const recentActivity = [
-    { id: 1, type: "Nueva conversación", description: "Cliente en Ciudad de México - Consulta sobre arena premium Miau Miau", time: "Hace 5 min", status: "activa" },
-    { id: 2, type: "Venta completada", description: "Pedido #MM-2024-001 - Arena antibacterial Miau Miau 10kg", time: "Hace 15 min", status: "completada" },
-    { id: 3, type: "Inventario bajo", description: "Arena perfumada Miau Miau en Guadalajara - Solo 5 unidades", time: "Hace 30 min", status: "alerta" },
-    { id: 4, type: "Cliente nuevo", description: "Registro completado vía WhatsApp - Interesado en arena Miau Miau", time: "Hace 1 hora", status: "nuevo" },
   ];
 
   const getStatusColor = (status: string) => {
@@ -107,32 +209,68 @@ const Dashboard = () => {
                   Últimas interacciones y eventos del sistema
                 </CardDescription>
               </div>
-              <Button variant="outline" size="sm">
-                Ver todas
-              </Button>
+              <div className="flex items-center gap-2">
+                <Select value={activityFilter} onValueChange={setActivityFilter}>
+                  <SelectTrigger className="w-[140px]">
+                    <SelectValue placeholder="Filtrar" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas</SelectItem>
+                    <SelectItem value="conversacion">Conversaciones</SelectItem>
+                    <SelectItem value="venta">Ventas</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => navigate('/dashboard/notifications')}
+                >
+                  Ver todas
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            {recentActivity.map((activity) => (
-              <div key={activity.id} className="flex items-start space-x-3 p-3 rounded-lg bg-accent/10 border border-accent/20">
-                <div className="flex-1 space-y-1">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium text-foreground">
-                      {activity.type}
-                    </p>
-                    <Badge variant="secondary" className={getStatusColor(activity.status)}>
-                      {activity.status}
-                    </Badge>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    {activity.description}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {activity.time}
-                  </p>
-                </div>
+            {loadingActivity ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                <span className="ml-2 text-sm text-muted-foreground">Cargando actividades...</span>
               </div>
-            ))}
+            ) : recentActivity.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <Activity className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">No hay actividades recientes</p>
+              </div>
+            ) : (
+              recentActivity.map((activity) => (
+                <div 
+                  key={activity.id} 
+                  className="flex items-start space-x-3 p-3 rounded-lg bg-accent/10 border border-accent/20 hover:bg-accent/20 transition-colors cursor-pointer"
+                  onClick={() => {
+                    if (activity.actionUrl) {
+                      navigate(activity.actionUrl);
+                    }
+                  }}
+                >
+                  <div className="flex-1 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium text-foreground">
+                        {activity.type}
+                      </p>
+                      <Badge variant="secondary" className={getStatusColor(activity.status)}>
+                        {activity.status}
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      {activity.description}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {activity.time}
+                    </p>
+                  </div>
+                </div>
+              ))
+            )}
           </CardContent>
         </Card>
 

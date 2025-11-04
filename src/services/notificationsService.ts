@@ -276,6 +276,35 @@ class NotificationsService {
     const response = await this.getRecentNotifications(limit);
     return response.data.map(notif => this.mapNotification(notif));
   }
+
+  // Obtener actividades recientes
+  async getRecentActivity(params?: {
+    limit?: number;
+    tipo?: 'conversacion' | 'venta';
+  }): Promise<NotificationsResponse> {
+    const queryParams = new URLSearchParams();
+    
+    if (params?.limit) {
+      queryParams.append('limit', params.limit.toString());
+    }
+    if (params?.tipo) {
+      queryParams.append('tipo', params.tipo);
+    }
+
+    const queryString = queryParams.toString();
+    const endpoint = `/notificaciones/actividad-reciente${queryString ? `?${queryString}` : ''}`;
+    
+    return this.makeRequest<NotificationsResponse>(endpoint);
+  }
+
+  // Helper para obtener actividades recientes mapeadas
+  async getMappedRecentActivity(params?: {
+    limit?: number;
+    tipo?: 'conversacion' | 'venta';
+  }): Promise<Notification[]> {
+    const response = await this.getRecentActivity(params);
+    return response.data.map(notif => this.mapNotification(notif));
+  }
 }
 
 export const notificationsService = new NotificationsService();
