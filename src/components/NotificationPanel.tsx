@@ -1,5 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { notificationsService, Notification } from "@/services/notificationsService";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -24,140 +26,32 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-interface Notification {
-  id: string;
-  type: 'stock' | 'order' | 'promotion' | 'route' | 'error' | 'conversation';
-  title: string;
-  message: string;
-  timestamp: string;
-  priority: 'high' | 'medium' | 'low';
-  read: boolean;
-  actionUrl?: string;
-  errorDetails?: string;
-  conversationId?: string;
-}
-
-const mockNotifications: Notification[] = [
-  {
-    id: 'bot-error-1',
-    type: 'error',
-    title: '🤖 Bot Falló - Sistema Caído',
-    message: 'El bot dejó de responder en múltiples conversaciones. Error crítico detectado.',
-    timestamp: '2024-01-15 16:30',
-    priority: 'high',
-    read: false,
-    actionUrl: '/dashboard/conversations',
-    errorDetails: 'Error crítico en el sistema del bot. El servicio de procesamiento de lenguaje natural falló. Code: BOT_CRITICAL_ERROR. Afecta a 15 conversaciones activas.',
-    conversationId: 'multiple'
-  },
-  {
-    id: '0',
-    type: 'error',
-    title: 'Error en Conversación - Bot Falló',
-    message: 'El bot no pudo procesar la solicitud de María González. Requiere intervención humana.',
-    timestamp: '2024-01-15 15:15',
-    priority: 'high',
-    read: false,
-    actionUrl: '/dashboard/conversations',
-    errorDetails: 'Error 500: Timeout en API externa. El servicio de pagos no respondió después de 30 segundos. Stack trace: PaymentService.processPayment() -> ConnectionTimeout',
-    conversationId: '1'
-  },
-  {
-    id: '00',
-    type: 'conversation',
-    title: 'Cliente Insatisfecho - Conversación Escalada',
-    message: 'Carlos López expresó su molestia. La conversación necesita atención prioritaria.',
-    timestamp: '2024-01-15 14:45',
-    priority: 'high',
-    read: false,
-    actionUrl: '/dashboard/conversations',
-    conversationId: '2'
-  },
-  {
-    id: '1',
-    type: 'stock',
-    title: 'Stock Bajo - Arena Premium',
-    message: 'Quedan solo 15 unidades de Arena Premium 10kg en Ciudad de México. Stock mínimo: 50.',
-    timestamp: '2024-01-15 14:30',
-    priority: 'high',
-    read: false,
-    actionUrl: '/dashboard/inventory'
-  },
-  {
-    id: '2',
-    type: 'order',
-    title: 'Pedido Cancelado',
-    message: 'Pedido MM-2024-0045 cancelado por María González. Motivo: Cambio de dirección.',
-    timestamp: '2024-01-15 13:45',
-    priority: 'medium',
-    read: false,
-    actionUrl: '/dashboard/orders'
-  },
-  {
-    id: '3',
-    type: 'route',
-    title: 'Rutas Sin Planificar',
-    message: 'Hay 12 pedidos para mañana 16/01 en Guadalajara sin ruta asignada.',
-    timestamp: '2024-01-15 12:00',
-    priority: 'high',
-    read: false,
-    actionUrl: '/dashboard/routes'
-  },
-  {
-    id: '4',
-    type: 'promotion',
-    title: 'Promoción Por Vencer',
-    message: 'La promoción "BIENVENIDO15" finaliza en 3 días. 245 usos de 1000.',
-    timestamp: '2024-01-15 11:15',
-    priority: 'medium',
-    read: true,
-    actionUrl: '/dashboard/promotions'
-  },
-  {
-    id: '5',
-    type: 'stock',
-    title: 'Stock Crítico - Arena Antibacterial',
-    message: 'Sin stock de Arena Antibacterial 5kg en Monterrey. Últimas 0 unidades.',
-    timestamp: '2024-01-15 10:30',
-    priority: 'high',
-    read: false,
-    actionUrl: '/dashboard/inventory'
-  },
-  {
-    id: '6',
-    type: 'order',
-    title: 'Pedido Reagendado',
-    message: 'Pedido MM-2024-0032 reagendado por Carlos Mendoza para el 17/01.',
-    timestamp: '2024-01-15 09:20',
-    priority: 'low',
-    read: true,
-    actionUrl: '/dashboard/orders'
-  },
-  {
-    id: '7',
-    type: 'route',
-    title: 'Optimización de Rutas',
-    message: 'Se pueden optimizar las rutas del 16/01 en Puebla (8 pedidos pendientes).',
-    timestamp: '2024-01-15 08:45',
-    priority: 'medium',
-    read: false,
-    actionUrl: '/dashboard/routes'
-  },
-  {
-    id: '8',
-    type: 'promotion',
-    title: 'Promoción Finalizada',
-    message: 'La promoción "BLACKFRIDAY30" ha finalizado. 892 usos de 1000.',
-    timestamp: '2024-01-14 23:59',
-    priority: 'low',
-    read: true,
-    actionUrl: '/dashboard/promotions'
-  }
-];
-
 const NotificationPanel = () => {
-  const [notifications, setNotifications] = useState<Notification[]>(mockNotifications);
+  const navigate = useNavigate();
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
+
+  // Cargar notificaciones recientes del backend
+  useEffect(() => {
+    loadNotifications();
+    
+    // Recargar cada 30 segundos
+    const interval = setInterval(loadNotifications, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const loadNotifications = async () => {
+    try {
+      const recentNotifications = await notificationsService.getMappedRecentNotifications(10);
+      setNotifications(recentNotifications);
+    } catch (error) {
+      console.error('Error al cargar notificaciones:', error);
+      // En caso de error, mantener las notificaciones actuales
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
@@ -182,6 +76,8 @@ const NotificationPanel = () => {
 
   const getPriorityColor = (priority: Notification['priority']) => {
     switch (priority) {
+      case 'urgent':
+        return 'text-red-600';
       case 'high':
         return 'text-destructive';
       case 'medium':
@@ -212,20 +108,35 @@ const NotificationPanel = () => {
     }
   };
 
-  const markAsRead = (id: string) => {
-    setNotifications(prev =>
-      prev.map(n => n.id === id ? { ...n, read: true } : n)
-    );
+  const markAsRead = async (id: string) => {
+    try {
+      await notificationsService.markAsRead(parseInt(id));
+      setNotifications(prev =>
+        prev.map(n => n.id === id ? { ...n, read: true } : n)
+      );
+    } catch (error) {
+      console.error('Error al marcar como leída:', error);
+    }
   };
 
-  const markAllAsRead = () => {
-    setNotifications(prev =>
-      prev.map(n => ({ ...n, read: true }))
-    );
+  const markAllAsRead = async () => {
+    try {
+      await notificationsService.markAllAsRead();
+      setNotifications(prev =>
+        prev.map(n => ({ ...n, read: true }))
+      );
+    } catch (error) {
+      console.error('Error al marcar todas como leídas:', error);
+    }
   };
 
-  const removeNotification = (id: string) => {
-    setNotifications(prev => prev.filter(n => n.id !== id));
+  const removeNotification = async (id: string) => {
+    try {
+      await notificationsService.deleteNotification(parseInt(id));
+      setNotifications(prev => prev.filter(n => n.id !== id));
+    } catch (error) {
+      console.error('Error al eliminar notificación:', error);
+    }
   };
 
   const getRelativeTime = (timestamp: string) => {
@@ -279,7 +190,12 @@ const NotificationPanel = () => {
         </div>
 
         <ScrollArea className="h-[400px]">
-          {notifications.length === 0 ? (
+          {loading ? (
+            <div className="p-8 text-center text-muted-foreground">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto mb-2"></div>
+              <p className="text-sm">Cargando...</p>
+            </div>
+          ) : notifications.length === 0 ? (
             <div className="p-8 text-center text-muted-foreground">
               <Bell className="h-8 w-8 mx-auto mb-2 opacity-50" />
               <p className="text-sm">No hay notificaciones</p>
@@ -295,9 +211,9 @@ const NotificationPanel = () => {
                     )}
                     onClick={() => {
                       markAsRead(notification.id);
+                      setOpen(false);
                       if (notification.actionUrl) {
-                        // Navigation would happen here
-                        console.log('Navigate to:', notification.actionUrl);
+                        navigate(notification.actionUrl);
                       }
                     }}
                   >
@@ -341,6 +257,7 @@ const NotificationPanel = () => {
                             <div className="flex items-center gap-2">
                               <div className={cn(
                                 "h-2 w-2 rounded-full",
+                                notification.priority === 'urgent' ? 'bg-red-600' :
                                 notification.priority === 'high' ? 'bg-destructive' :
                                 notification.priority === 'medium' ? 'bg-warning' : 'bg-success'
                               )} />
@@ -348,7 +265,8 @@ const NotificationPanel = () => {
                                 "text-xs capitalize",
                                 getPriorityColor(notification.priority)
                               )}>
-                                {notification.priority === 'high' ? 'Alta' :
+                                {notification.priority === 'urgent' ? 'Urgente' :
+                                 notification.priority === 'high' ? 'Alta' :
                                  notification.priority === 'medium' ? 'Media' : 'Baja'}
                               </span>
                             </div>
@@ -378,7 +296,7 @@ const NotificationPanel = () => {
             size="sm"
             onClick={() => {
               setOpen(false);
-              console.log('Navigate to notifications settings');
+              navigate('/dashboard/notifications');
             }}
           >
             <Bell className="h-4 w-4 mr-2" />
