@@ -35,12 +35,31 @@ interface RecentActivity {
   actionUrl?: string;
 }
 
+interface KPIStat {
+  title: string;
+  value: string;
+  change: string;
+  icon: any;
+  color: string;
+}
+
 const Dashboard = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
   const [loadingActivity, setLoadingActivity] = useState(true);
   const [activityFilter, setActivityFilter] = useState<string>("all");
+  const [stats, setStats] = useState<KPIStat[]>([]);
+  const [loadingStats, setLoadingStats] = useState(true);
+
+  // Cargar KPIs del dashboard
+  useEffect(() => {
+    loadDashboardKPIs();
+    
+    // Recargar cada 60 segundos
+    const interval = setInterval(loadDashboardKPIs, 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Cargar actividades recientes
   useEffect(() => {
@@ -50,6 +69,89 @@ const Dashboard = () => {
     const interval = setInterval(loadRecentActivity, 30000);
     return () => clearInterval(interval);
   }, [activityFilter]);
+
+  const loadDashboardKPIs = async () => {
+    try {
+      setLoadingStats(true);
+      const response = await notificationsService.getDashboardKPIs();
+      
+      if (response.success) {
+        const kpis: KPIStat[] = [
+          {
+            title: "Conversaciones Activas",
+            value: response.data.conversacionesActivas.valor.toLocaleString(),
+            change: response.data.conversacionesActivas.cambioFormato,
+            icon: MessageSquare,
+            color: "text-primary",
+          },
+          {
+            title: "Clientes Registrados",
+            value: response.data.clientesRegistrados.valor.toLocaleString(),
+            change: response.data.clientesRegistrados.cambioFormato,
+            icon: Users,
+            color: "text-success",
+          },
+          {
+            title: "Ciudades Activas",
+            value: response.data.ciudadesActivas.valor.toLocaleString(),
+            change: response.data.ciudadesActivas.cambioFormato,
+            icon: MapPin,
+            color: "text-warning",
+          },
+          {
+            title: "Ventas del Mes",
+            value: response.data.ventasDelMes.formatoMoneda,
+            change: response.data.ventasDelMes.cambioFormato,
+            icon: ShoppingCart,
+            color: "text-primary",
+          },
+        ];
+        
+        setStats(kpis);
+      }
+    } catch (error) {
+      console.error('Error al cargar KPIs del dashboard:', error);
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar las estadísticas del dashboard",
+        variant: "destructive",
+      });
+      
+      // Usar valores por defecto en caso de error
+      setStats([
+        {
+          title: "Conversaciones Activas",
+          value: "0",
+          change: "N/A",
+          icon: MessageSquare,
+          color: "text-primary",
+        },
+        {
+          title: "Clientes Registrados",
+          value: "0",
+          change: "N/A",
+          icon: Users,
+          color: "text-success",
+        },
+        {
+          title: "Ciudades Activas",
+          value: "0",
+          change: "N/A",
+          icon: MapPin,
+          color: "text-warning",
+        },
+        {
+          title: "Ventas del Mes",
+          value: "$0.00",
+          change: "N/A",
+          icon: ShoppingCart,
+          color: "text-primary",
+        },
+      ]);
+    } finally {
+      setLoadingStats(false);
+    }
+  };
 
   const loadRecentActivity = async () => {
     try {
@@ -124,36 +226,6 @@ const Dashboard = () => {
     }
   };
 
-  const stats = [
-    {
-      title: "Conversaciones Activas",
-      value: "1,234",
-      change: "+12%",
-      icon: MessageSquare,
-      color: "text-primary",
-    },
-    {
-      title: "Clientes Registrados",
-      value: "8,967",
-      change: "+5.2%",
-      icon: Users,
-      color: "text-success",
-    },
-    {
-      title: "Ciudades Activas",
-      value: "15",
-      change: "+2",
-      icon: MapPin,
-      color: "text-warning",
-    },
-    {
-      title: "Ventas del Mes",
-      value: "$45,678",
-      change: "+18%",
-      icon: ShoppingCart,
-      color: "text-primary",
-    },
-  ];
 
   const getStatusColor = (status: string) => {
     const colors = {
@@ -177,22 +249,40 @@ const Dashboard = () => {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {stats.map((stat, index) => (
-          <Card key={index} className="relative overflow-hidden bg-gradient-to-br from-card to-card/80 border shadow-sm hover:shadow-md transition-all duration-300">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-card-foreground">
-                {stat.title}
-              </CardTitle>
-              <stat.icon className={`h-5 w-5 ${stat.color}`} />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-card-foreground">{stat.value}</div>
-              <p className="text-xs text-muted-foreground">
-                <span className="text-success font-medium">{stat.change}</span> desde el mes pasado
-              </p>
-            </CardContent>
-          </Card>
-        ))}
+        {loadingStats ? (
+          // Mostrar skeletons mientras carga
+          Array.from({ length: 4 }).map((_, index) => (
+            <Card key={index} className="relative overflow-hidden bg-gradient-to-br from-card to-card/80 border shadow-sm">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-card-foreground">
+                  <div className="h-4 w-32 bg-muted animate-pulse rounded" />
+                </CardTitle>
+                <div className="h-5 w-5 bg-muted animate-pulse rounded" />
+              </CardHeader>
+              <CardContent>
+                <div className="h-8 w-24 bg-muted animate-pulse rounded mb-2" />
+                <div className="h-3 w-40 bg-muted animate-pulse rounded" />
+              </CardContent>
+            </Card>
+          ))
+        ) : (
+          stats.map((stat, index) => (
+            <Card key={index} className="relative overflow-hidden bg-gradient-to-br from-card to-card/80 border shadow-sm hover:shadow-md transition-all duration-300">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-card-foreground">
+                  {stat.title}
+                </CardTitle>
+                <stat.icon className={`h-5 w-5 ${stat.color}`} />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-card-foreground">{stat.value}</div>
+                <p className="text-xs text-muted-foreground">
+                  <span className="text-success font-medium">{stat.change}</span>
+                </p>
+              </CardContent>
+            </Card>
+          ))
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

@@ -52,6 +52,45 @@ export interface NotificationStatsResponse {
   };
 }
 
+export interface DashboardKPIsResponse {
+  success: boolean;
+  data: {
+    conversacionesActivas: {
+      valor: number;
+      cambio: number;
+      cambioFormato: string;
+    };
+    clientesRegistrados: {
+      valor: number;
+      cambio: number;
+      cambioFormato: string;
+    };
+    ciudadesActivas: {
+      valor: number;
+      cambio: number;
+      cambioFormato: string;
+    };
+    ventasDelMes: {
+      valor: number;
+      cambio: number;
+      cambioFormato: string;
+      formatoMoneda: string;
+    };
+  };
+  periodo: {
+    mesActual: {
+      inicio: string;
+      fin: string;
+      nombre: string;
+    };
+    mesAnterior: {
+      inicio: string;
+      fin: string;
+      nombre: string;
+    };
+  };
+}
+
 export interface NotificationsQueryParams {
   page?: number;
   limit?: number;
@@ -206,6 +245,11 @@ class NotificationsService {
   // Obtener estadísticas
   async getStats(): Promise<NotificationStatsResponse> {
     return this.makeRequest<NotificationStatsResponse>('/notificaciones/stats');
+  }
+
+  // Obtener KPIs del dashboard
+  async getDashboardKPIs(): Promise<DashboardKPIsResponse> {
+    return this.makeRequest<DashboardKPIsResponse>('/notificaciones/dashboard-kpis');
   }
 
   // Crear nueva notificación
