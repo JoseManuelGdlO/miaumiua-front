@@ -19,7 +19,6 @@ import {
   MessageSquare,
   ShoppingCart,
   Activity,
-  BarChart3,
   Settings,
   Loader2,
 } from "lucide-react";
@@ -377,21 +376,29 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
-              <Button variant="outline" className="h-20 flex-col gap-2 hover:bg-primary/5">
+              <Button 
+                variant="outline" 
+                className="h-20 flex-col gap-2 hover:bg-primary/5 transition-colors"
+                onClick={() => navigate('/dashboard/agents')}
+              >
                 <Bot className="h-6 w-6" />
                 <span className="text-sm">Configurar Agente</span>
               </Button>
-              <Button variant="outline" className="h-20 flex-col gap-2 hover:bg-primary/5">
+              <Button 
+                variant="outline" 
+                className="h-20 flex-col gap-2 hover:bg-primary/5 transition-colors"
+                onClick={() => navigate('/dashboard/inventory')}
+              >
                 <Package className="h-6 w-6" />
                 <span className="text-sm">Gestionar Inventario</span>
               </Button>
-              <Button variant="outline" className="h-20 flex-col gap-2 hover:bg-primary/5">
+              <Button 
+                variant="outline" 
+                className="h-20 flex-col gap-2 hover:bg-primary/5 transition-colors"
+                onClick={() => navigate('/dashboard/customers')}
+              >
                 <Users className="h-6 w-6" />
                 <span className="text-sm">Ver Clientes</span>
-              </Button>
-              <Button variant="outline" className="h-20 flex-col gap-2 hover:bg-primary/5">
-                <BarChart3 className="h-6 w-6" />
-                <span className="text-sm">Reportes</span>
               </Button>
             </div>
           </CardContent>
@@ -412,7 +419,7 @@ const Dashboard = () => {
         <CardContent>
           <div className="h-64 bg-gradient-to-r from-primary/5 to-accent/5 rounded-lg border-2 border-dashed border-primary/20 flex items-center justify-center">
             <div className="text-center space-y-2">
-              <BarChart3 className="h-8 w-8 text-primary mx-auto" />
+              <TrendingUp className="h-8 w-8 text-primary mx-auto" />
               <p className="text-muted-foreground">Gráfico de rendimiento será implementado aquí</p>
             </div>
           </div>
