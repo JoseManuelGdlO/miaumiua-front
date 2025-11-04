@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -6,7 +6,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Save, Bot, Workflow, Settings, Plus, MoreHorizontal, Edit, Trash2, Power, PowerOff, Loader2 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Save, Bot, Workflow, Settings, Plus, MoreHorizontal, Edit, Trash2, Power, PowerOff, Loader2, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { agentsService, Agent } from "@/services/agentsService";
@@ -56,11 +64,23 @@ export default function Agents() {
   const [activeAgent, setActiveAgent] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [lastSavedAgent, setLastSavedAgent] = useState<Agent | null>(null);
   const { toast } = useToast();
+  const debounceTimer = useRef<NodeJS.Timeout | null>(null);
 
   // Cargar agentes al montar el componente
   useEffect(() => {
     loadAgents();
+  }, []);
+
+  // Limpiar el timer cuando el componente se desmonte
+  useEffect(() => {
+    return () => {
+      if (debounceTimer.current) {
+        clearTimeout(debounceTimer.current);
+      }
+    };
   }, []);
 
   const loadAgents = async () => {
@@ -87,26 +107,146 @@ export default function Agents() {
   };
 
 
+  // Función para actualizar el estado local inmediatamente
+  const updateLocalAgent = (agentId: number, updatedData: Partial<Agent>) => {
+    setAgents(prev => prev.map(agent => 
+      agent.id === agentId ? { ...agent, ...updatedData } : agent
+    ));
+  };
+
+  // Función para guardar en el backend con todos los campos requeridos
   const handleSaveAgent = async (agentId: number, updatedData: Partial<Agent>) => {
+    // Limpiar el timer anterior si existe
+    if (debounceTimer.current) {
+      clearTimeout(debounceTimer.current);
+    }
+
+    // Actualizar el estado local inmediatamente para feedback visual
+    updateLocalAgent(agentId, updatedData);
+
+    // Guardar en el backend después de un delay (debounce)
+    debounceTimer.current = setTimeout(async () => {
+      try {
+        setSaving(true);
+        
+        // Obtener el agente completo actualizado del estado usando el callback de setAgents
+        setAgents(prev => {
+          const agent = prev.find(a => a.id === agentId);
+          if (!agent) {
+            console.error('Agente no encontrado');
+            setSaving(false);
+            return prev;
+          }
+
+          // Asegurar que los campos requeridos estén presentes y no estén vacíos
+          const dataToSend = {
+            nombre: agent.nombre || '',
+            contexto: agent.contexto || '',
+            system_prompt: agent.system_prompt || '',
+            descripcion: agent.descripcion,
+            especialidad: agent.especialidad,
+            personalidad: agent.personalidad,
+            configuracion: agent.configuracion,
+            orden_prioridad: agent.orden_prioridad,
+          };
+
+          // Hacer la petición al backend de forma asíncrona
+          agentsService.updateAgent(agentId, dataToSend)
+            .then(response => {
+              if (response.success) {
+                // Actualizar con la respuesta del servidor
+                setAgents(prevAgents => prevAgents.map(a => 
+                  a.id === agentId ? response.data : a
+                ));
+                
+                // Guardar el agente actualizado para mostrar en el modal
+                setLastSavedAgent(response.data);
+                
+                // Mostrar modal de éxito
+                setShowSuccessModal(true);
+              }
+            })
+            .catch((error: any) => {
+              console.error('Error actualizando agente:', error);
+              
+              // Mostrar mensaje de error más detallado
+              const errorMessage = error?.response?.data?.message || 
+                                  error?.message || 
+                                  'No se pudo actualizar el agente';
+              
+              toast({
+                title: "Error",
+                description: errorMessage,
+                variant: "destructive"
+              });
+
+              // Recargar los agentes originales en caso de error
+              loadAgents();
+            })
+            .finally(() => {
+              setSaving(false);
+            });
+
+          return prev;
+        });
+      } catch (error: any) {
+        console.error('Error inesperado:', error);
+        setSaving(false);
+      }
+    }, 1000); // Esperar 1 segundo después de que el usuario deje de escribir
+  };
+
+  // Función para guardar manualmente cuando se hace click en el botón
+  const handleManualSave = async () => {
+    if (!activeAgent) return;
+    
+    const agent = agents.find(a => a.id === activeAgent);
+    if (!agent) return;
+
+    // Limpiar el timer de debounce si existe
+    if (debounceTimer.current) {
+      clearTimeout(debounceTimer.current);
+      debounceTimer.current = null;
+    }
+
     try {
       setSaving(true);
-      const response = await agentsService.updateAgent(agentId, updatedData);
+      
+      // Asegurar que los campos requeridos estén presentes
+      const dataToSend = {
+        nombre: agent.nombre || '',
+        contexto: agent.contexto || '',
+        system_prompt: agent.system_prompt || '',
+        descripcion: agent.descripcion,
+        especialidad: agent.especialidad,
+        personalidad: agent.personalidad,
+        configuracion: agent.configuracion,
+        orden_prioridad: agent.orden_prioridad,
+      };
+
+      const response = await agentsService.updateAgent(activeAgent, dataToSend);
       if (response.success) {
-        // Actualizar la lista local
-        setAgents(prev => prev.map(agent => 
-          agent.id === agentId ? { ...agent, ...updatedData } : agent
+        // Actualizar con la respuesta del servidor
+        setAgents(prev => prev.map(a => 
+          a.id === activeAgent ? response.data : a
         ));
         
-        toast({
-          title: "✅ Agente Actualizado",
-          description: "Los cambios han sido guardados correctamente.",
-        });
+        // Guardar el agente actualizado para mostrar en el modal
+        setLastSavedAgent(response.data);
+        
+        // Mostrar modal de éxito
+        setShowSuccessModal(true);
       }
-    } catch (error) {
-      console.error('Error actualizando agente:', error);
+    } catch (error: any) {
+      console.error('Error guardando agente:', error);
+      
+      const errorMessage = error?.response?.data?.message || 
+                          error?.message || 
+                          'No se pudo guardar el agente';
+      
       toast({
         title: "Error",
-        description: "No se pudo actualizar el agente",
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
@@ -475,10 +615,7 @@ export default function Agents() {
                 {canEdit('agents') && (
                   <div className="flex justify-end pt-4">
                     <Button 
-                      onClick={() => toast({
-                        title: "✅ Configuración Guardada",
-                        description: `Configuración del agente ${currentAgent.nombre} actualizada.`,
-                      })}
+                      onClick={handleManualSave}
                       className="flex items-center gap-2"
                       disabled={saving}
                     >
@@ -553,6 +690,53 @@ export default function Agents() {
           </CardContent>
         </Card>
       )}
+
+      {/* Modal de Éxito */}
+      <Dialog open={showSuccessModal} onOpenChange={setShowSuccessModal}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="flex-shrink-0 w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
+                <CheckCircle2 className="h-6 w-6 text-green-600" />
+              </div>
+              <div>
+                <DialogTitle className="text-xl">¡Guardado Exitoso!</DialogTitle>
+                <DialogDescription className="text-base mt-1">
+                  Los cambios del agente han sido guardados correctamente
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+          
+          {lastSavedAgent && (
+            <div className="py-4">
+              <div className="bg-muted/50 rounded-lg p-4 space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className={`w-3 h-3 rounded-full ${getAgentColor(lastSavedAgent.id)}`} />
+                  <span className="font-semibold text-lg">{lastSavedAgent.nombre}</span>
+                </div>
+                {lastSavedAgent.descripcion && (
+                  <p className="text-sm text-muted-foreground">{lastSavedAgent.descripcion}</p>
+                )}
+                <div className="flex items-center gap-2 pt-2">
+                  <Badge variant="outline" className={getAgentStatus(lastSavedAgent.estado).variant}>
+                    {getAgentStatus(lastSavedAgent.estado).label}
+                  </Badge>
+                  {lastSavedAgent.especialidad && (
+                    <Badge variant="secondary">{lastSavedAgent.especialidad}</Badge>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+          
+          <DialogFooter>
+            <Button onClick={() => setShowSuccessModal(false)} className="w-full">
+              Continuar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
