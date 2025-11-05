@@ -25,6 +25,8 @@ import CategoriasProducto from "./pages/CategoriasProducto";
 import Pesos from "./pages/Pesos";
 import Proveedores from "./pages/Proveedores";
 import Notifications from "./pages/Notifications";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import TermsOfService from "./pages/TermsOfService";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 const queryClient = new QueryClient();
@@ -38,6 +40,9 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Login />} />
           <Route path="/login" element={<Login />} />
+          {/* Public pages (accessible sin autenticación) */}
+          <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+          <Route path="/terms" element={<TermsOfService />} />
           <Route path="/dashboard" element={
             <ProtectedRoute>
               <DashboardLayout />
