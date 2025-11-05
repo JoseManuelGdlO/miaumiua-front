@@ -64,8 +64,11 @@ const Dashboard = () => {
   useEffect(() => {
     loadRecentActivity();
     
-    // Recargar cada 30 segundos
-    const interval = setInterval(loadRecentActivity, 30000);
+    // Recargar cada 60 segundos para mantener las actividades actualizadas
+    const interval = setInterval(() => {
+      loadRecentActivity();
+    }, 60000); // 60 segundos
+    
     return () => clearInterval(interval);
   }, [activityFilter]);
 

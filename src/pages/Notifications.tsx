@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { notificationsService, Notification } from "@/services/notificationsService";
@@ -60,12 +60,7 @@ const Notifications = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [notificationToDelete, setNotificationToDelete] = useState<string | null>(null);
 
-  // Cargar notificaciones del backend
-  useEffect(() => {
-    loadNotifications();
-  }, [searchQuery, typeFilter, priorityFilter, readFilter, currentPage]);
-
-  const loadNotifications = async () => {
+  const loadNotifications = useCallback(async () => {
     try {
       setLoading(true);
       
@@ -111,7 +106,22 @@ const Notifications = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [searchQuery, typeFilter, priorityFilter, readFilter, currentPage, toast]);
+
+  // Cargar notificaciones cuando cambian los filtros
+  useEffect(() => {
+    loadNotifications();
+  }, [loadNotifications]);
+
+  // Actualización automática periódica (respeta los filtros actuales)
+  useEffect(() => {
+    // Actualizar automáticamente cada 60 segundos
+    const interval = setInterval(() => {
+      loadNotifications();
+    }, 60000); // 60 segundos
+    
+    return () => clearInterval(interval);
+  }, [loadNotifications]);
 
   // El filtrado ya se hace en el backend, pero podemos mantener un filtro local para el tipo
   const filteredNotifications = useMemo(() => {
@@ -578,4 +588,5 @@ const Notifications = () => {
 };
 
 export default Notifications;
+
 

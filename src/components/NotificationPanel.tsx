@@ -36,8 +36,11 @@ const NotificationPanel = () => {
   useEffect(() => {
     loadNotifications();
     
-    // Recargar cada 30 segundos
-    const interval = setInterval(loadNotifications, 30000);
+    // Recargar cada 60 segundos para mantener las notificaciones actualizadas
+    const interval = setInterval(() => {
+      loadNotifications();
+    }, 60000); // 60 segundos
+    
     return () => clearInterval(interval);
   }, []);
 
