@@ -27,6 +27,7 @@ import Proveedores from "./pages/Proveedores";
 import Notifications from "./pages/Notifications";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
+import DataDeletion from "./pages/DataDeletion";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 const queryClient = new QueryClient();
@@ -43,6 +44,7 @@ const App = () => (
           {/* Public pages (accessible sin autenticación) */}
           <Route path="/privacy-policy" element={<PrivacyPolicy />} />
           <Route path="/terms" element={<TermsOfService />} />
+          <Route path="/data-deletion" element={<DataDeletion />} />
           <Route path="/dashboard" element={
             <ProtectedRoute>
               <DashboardLayout />
