@@ -67,11 +67,8 @@ class AuthService {
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        // Manejar errores de autenticación (401/403) antes de procesar el error
-        this.handleAuthError(response);
-        
         const errorData = await response.json().catch(() => ({}));
-        let errorMessage = errorData.message || `HTTP ${response.status}: ${response.statusText}`;
+        let errorMessage = errorData.message || errorData.error || `HTTP ${response.status}: ${response.statusText}`;
         
         // Manejar errores de validación (400)
         if (response.status === 400) {
@@ -84,13 +81,23 @@ class AuthService {
             errorMessage = 'Errores de validación';
           }
         } else if (response.status === 401) {
-          errorMessage = 'Credenciales incorrectas. Verifica tu email y contraseña.';
+          // Para errores 401, usar el mensaje del servidor o un mensaje por defecto
+          errorMessage = errorData.message || errorData.error || 'Credenciales incorrectas. Verifica tu email y contraseña.';
+          // NO llamar handleAuthError aquí si estamos en la página de login
+          // Solo llamarlo para otras rutas que requieren autenticación
+          if (window.location.pathname !== '/login') {
+            this.handleAuthError(response);
+          }
         } else if (response.status === 403) {
-          errorMessage = 'Acceso denegado. Tu cuenta puede estar desactivada.';
+          errorMessage = errorData.message || errorData.error || 'Acceso denegado. Tu cuenta puede estar desactivada.';
+          // Solo manejar error de auth si no estamos en login
+          if (window.location.pathname !== '/login') {
+            this.handleAuthError(response);
+          }
         } else if (response.status === 404) {
-          errorMessage = 'Usuario no encontrado.';
+          errorMessage = errorData.message || errorData.error || 'Usuario no encontrado.';
         } else if (response.status >= 500) {
-          errorMessage = 'Error del servidor. Inténtalo más tarde.';
+          errorMessage = errorData.message || errorData.error || 'Error del servidor. Inténtalo más tarde.';
         }
         
         const error = new Error(errorMessage);
@@ -153,14 +160,18 @@ class AuthService {
   // Función para manejar errores de autenticación (401/403) y desloguear automáticamente
   handleAuthError(response: Response): void {
     if (response.status === 401 || response.status === 403) {
+      // No hacer nada si ya estamos en la página de login
+      // Esto evita que se limpie el localStorage y cause pantalla en blanco
+      if (window.location.pathname === '/login') {
+        return;
+      }
+      
       // Desloguear al usuario
       this.logout();
       
       // Redirigir a la página de login
       // Usar window.location para redirigir fuera del contexto de React Router
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login';
-      }
+      window.location.href = '/login';
     }
   }
 
@@ -215,12 +226,16 @@ class AuthService {
   // Función helper para procesar respuestas HTTP y manejar errores de autenticación
   // Esta función puede ser usada por otros servicios para manejar respuestas de manera consistente
   async processResponse<T>(response: Response): Promise<T> {
-    // Manejar errores de autenticación antes de procesar
-    this.handleAuthError(response);
-    
     if (!response.ok) {
+      // Manejar errores de autenticación solo si no estamos en la página de login
+      if (response.status === 401 || response.status === 403) {
+        if (window.location.pathname !== '/login') {
+          this.handleAuthError(response);
+        }
+      }
+      
       const errorData = await response.json().catch(() => ({}));
-      const errorMessage = errorData.message || `Error ${response.status}: ${response.statusText}`;
+      const errorMessage = errorData.message || errorData.error || `Error ${response.status}: ${response.statusText}`;
       const error = new Error(errorMessage);
       (error as any).response = {
         status: response.status,
