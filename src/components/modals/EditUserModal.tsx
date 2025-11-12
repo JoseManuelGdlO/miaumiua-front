@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -13,17 +12,19 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { usersService, CreateUserData, Role } from "@/services/usersService";
+import { usersService, User, UpdateUserData, Role } from "@/services/usersService";
 import { rolesService } from "@/services/rolesService";
 import { citiesService, City } from "@/services/citiesService";
+import { Loader2 } from "lucide-react";
 
-interface CreateUserModalProps {
+interface EditUserModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onUserCreated?: () => void;
+  user: User | null;
+  onUserUpdated?: () => void;
 }
 
-const CreateUserModal = ({ open, onOpenChange, onUserCreated }: CreateUserModalProps) => {
+const EditUserModal = ({ open, onOpenChange, user, onUserUpdated }: EditUserModalProps) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [roles, setRoles] = useState<Role[]>([]);
@@ -31,18 +32,17 @@ const CreateUserModal = ({ open, onOpenChange, onUserCreated }: CreateUserModalP
   const [formData, setFormData] = useState({
     nombre_completo: "",
     correo_electronico: "",
-    contrasena: "",
-    confirmPassword: "",
     rol_id: "",
-    ciudad_id: ""
+    ciudad_id: "",
+    isActive: true
   });
 
-  // Cargar datos al abrir el modal
+  // Cargar datos al abrir el modal o cuando cambia el usuario
   useEffect(() => {
-    if (open) {
+    if (open && user) {
       loadData();
     }
-  }, [open]);
+  }, [open, user]);
 
   const loadData = async () => {
     try {
@@ -59,6 +59,17 @@ const CreateUserModal = ({ open, onOpenChange, onUserCreated }: CreateUserModalP
       if (citiesResponse.success) {
         setCities(citiesResponse.data.cities);
       }
+
+      // Establecer los datos del formulario después de cargar roles y ciudades
+      if (user) {
+        setFormData({
+          nombre_completo: user.nombre_completo || "",
+          correo_electronico: user.correo_electronico || "",
+          rol_id: user.rol_id?.toString() || "",
+          ciudad_id: user.ciudad_id?.toString() || "",
+          isActive: user.isActive ?? true
+        });
+      }
     } catch (error) {
       console.error('Error al cargar datos:', error);
       toast({
@@ -71,6 +82,8 @@ const CreateUserModal = ({ open, onOpenChange, onUserCreated }: CreateUserModalP
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!user) return;
+
     setLoading(true);
 
     try {
@@ -93,24 +106,6 @@ const CreateUserModal = ({ open, onOpenChange, onUserCreated }: CreateUserModalP
         return;
       }
 
-      if (!formData.contrasena.trim()) {
-        toast({
-          title: "Error",
-          description: "La contraseña es requerida",
-          variant: "destructive"
-        });
-        return;
-      }
-
-      if (formData.contrasena !== formData.confirmPassword) {
-        toast({
-          title: "Error",
-          description: "Las contraseñas no coinciden",
-          variant: "destructive"
-        });
-        return;
-      }
-
       if (!formData.rol_id) {
         toast({
           title: "Error",
@@ -120,40 +115,30 @@ const CreateUserModal = ({ open, onOpenChange, onUserCreated }: CreateUserModalP
         return;
       }
 
-      const userData: CreateUserData = {
+      const userData: UpdateUserData = {
         nombre_completo: formData.nombre_completo,
         correo_electronico: formData.correo_electronico,
-        contrasena: formData.contrasena,
         rol_id: parseInt(formData.rol_id),
-        ciudad_id: formData.ciudad_id ? parseInt(formData.ciudad_id) : undefined
+        ciudad_id: formData.ciudad_id ? parseInt(formData.ciudad_id) : undefined,
+        isActive: formData.isActive
       };
 
-      const response = await usersService.createUser(userData);
+      const response = await usersService.updateUser(user.id, userData);
 
       if (response.success) {
         toast({
-          title: "Usuario creado",
-          description: `Usuario "${formData.nombre_completo}" creado exitosamente`,
-        });
-
-        // Reset form
-        setFormData({
-          nombre_completo: "",
-          correo_electronico: "",
-          contrasena: "",
-          confirmPassword: "",
-          rol_id: "",
-          ciudad_id: ""
+          title: "Usuario actualizado",
+          description: `Usuario "${formData.nombre_completo}" actualizado exitosamente`,
         });
 
         onOpenChange(false);
-        onUserCreated?.();
+        onUserUpdated?.();
       }
     } catch (error) {
-      console.error('Error al crear usuario:', error);
+      console.error('Error al actualizar usuario:', error);
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Error al crear el usuario",
+        description: error instanceof Error ? error.message : "Error al actualizar el usuario",
         variant: "destructive"
       });
     } finally {
@@ -161,13 +146,15 @@ const CreateUserModal = ({ open, onOpenChange, onUserCreated }: CreateUserModalP
     }
   };
 
+  if (!user) return null;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Crear Nuevo Usuario</DialogTitle>
+          <DialogTitle>Editar Usuario</DialogTitle>
           <DialogDescription>
-            Agrega un nuevo usuario al sistema con sus permisos correspondientes.
+            Modifica la información del usuario {user.nombre_completo}
           </DialogDescription>
         </DialogHeader>
 
@@ -194,30 +181,11 @@ const CreateUserModal = ({ open, onOpenChange, onUserCreated }: CreateUserModalP
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="contrasena">Contraseña *</Label>
-            <Input
-              id="contrasena"
-              type="password"
-              value={formData.contrasena}
-              onChange={(e) => setFormData(prev => ({ ...prev, contrasena: e.target.value }))}
-              placeholder="Mínimo 6 caracteres"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="confirmPassword">Confirmar Contraseña *</Label>
-            <Input
-              id="confirmPassword"
-              type="password"
-              value={formData.confirmPassword}
-              onChange={(e) => setFormData(prev => ({ ...prev, confirmPassword: e.target.value }))}
-              placeholder="Repite la contraseña"
-            />
-          </div>
-
-          <div className="space-y-2">
             <Label htmlFor="rol_id">Rol *</Label>
-            <Select value={formData.rol_id} onValueChange={(value) => setFormData(prev => ({ ...prev, rol_id: value }))}>
+            <Select 
+              value={formData.rol_id || ""} 
+              onValueChange={(value) => setFormData(prev => ({ ...prev, rol_id: value }))}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Selecciona un rol" />
               </SelectTrigger>
@@ -251,12 +219,32 @@ const CreateUserModal = ({ open, onOpenChange, onUserCreated }: CreateUserModalP
             </Select>
           </div>
 
+          <div className="space-y-2">
+            <Label htmlFor="isActive" className="flex items-center space-x-2">
+              <input
+                id="isActive"
+                type="checkbox"
+                checked={formData.isActive}
+                onChange={(e) => setFormData(prev => ({ ...prev, isActive: e.target.checked }))}
+                className="rounded"
+              />
+              <span>Usuario activo</span>
+            </Label>
+          </div>
+
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
               Cancelar
             </Button>
             <Button type="submit" disabled={loading}>
-              {loading ? "Creando..." : "Crear Usuario"}
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Actualizando...
+                </>
+              ) : (
+                "Actualizar Usuario"
+              )}
             </Button>
           </DialogFooter>
         </form>
@@ -265,4 +253,5 @@ const CreateUserModal = ({ open, onOpenChange, onUserCreated }: CreateUserModalP
   );
 };
 
-export default CreateUserModal;
+export default EditUserModal;
+

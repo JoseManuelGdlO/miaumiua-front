@@ -25,11 +25,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Search, Plus, MoreHorizontal, Edit, Trash2, UserPlus, Loader2 } from "lucide-react";
+import { Search, Plus, MoreHorizontal, Edit, Trash2, UserPlus, Loader2, UserX, UserCheck } from "lucide-react";
 import { canCreate, canEdit, canDelete } from "@/utils/permissions";
 import { useToast } from "@/hooks/use-toast";
 import { usersService, User } from "@/services/usersService";
 import CreateUserModal from "@/components/modals/CreateUserModal";
+import EditUserModal from "@/components/modals/EditUserModal";
+import ChangePasswordModal from "@/components/modals/ChangePasswordModal";
 import ConfirmDeleteModal from "@/components/modals/ConfirmDeleteModal";
 
 const Users = () => {
@@ -37,6 +39,8 @@ const Users = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [users, setUsers] = useState<User[]>([]);
@@ -54,7 +58,6 @@ const Users = () => {
     try {
       setLoading(true);
       const response = await usersService.getAllUsers({
-        activos: 'true',
         search: searchTerm || undefined,
         page: currentPage,
         limit: itemsPerPage
@@ -125,9 +128,41 @@ const Users = () => {
     }
   };
 
+  const handleEditClick = (user: User) => {
+    setSelectedUser(user);
+    setIsEditModalOpen(true);
+  };
+
+  const handleChangePasswordClick = (user: User) => {
+    setSelectedUser(user);
+    setIsChangePasswordModalOpen(true);
+  };
+
   const handleDeleteClick = (user: User) => {
     setSelectedUser(user);
     setIsDeleteModalOpen(true);
+  };
+
+  const handleToggleActive = async (user: User) => {
+    try {
+      const newStatus = !user.isActive;
+      const response = await usersService.updateUser(user.id, { isActive: newStatus });
+      
+      if (response.success) {
+        toast({
+          title: newStatus ? "Usuario activado" : "Usuario desactivado",
+          description: `El usuario "${user.nombre_completo}" ha sido ${newStatus ? 'activado' : 'desactivado'} exitosamente`,
+        });
+        loadUsers(); // Recargar la lista
+      }
+    } catch (error) {
+      console.error('Error al cambiar estado del usuario:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Error al cambiar el estado del usuario",
+        variant: "destructive"
+      });
+    }
   };
 
   const handleSearch = (value: string) => {
@@ -242,15 +277,30 @@ const Users = () => {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             {canEdit('users') && (
-                              <DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleEditClick(user)}>
                                 <Edit className="mr-2 h-4 w-4" />
                                 Editar Usuario
                               </DropdownMenuItem>
                             )}
                             {canEdit('users') && (
-                              <DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleChangePasswordClick(user)}>
                                 <UserPlus className="mr-2 h-4 w-4" />
                                 Cambiar Contraseña
+                              </DropdownMenuItem>
+                            )}
+                            {canEdit('users') && (
+                              <DropdownMenuItem onClick={() => handleToggleActive(user)}>
+                                {user.isActive ? (
+                                  <>
+                                    <UserX className="mr-2 h-4 w-4" />
+                                    Desactivar Usuario
+                                  </>
+                                ) : (
+                                  <>
+                                    <UserCheck className="mr-2 h-4 w-4" />
+                                    Activar Usuario
+                                  </>
+                                )}
                               </DropdownMenuItem>
                             )}
                             {canDelete('users') && (
@@ -329,6 +379,20 @@ const Users = () => {
         open={isCreateModalOpen} 
         onOpenChange={setIsCreateModalOpen}
         onUserCreated={loadUsers}
+      />
+
+      <EditUserModal
+        open={isEditModalOpen}
+        onOpenChange={setIsEditModalOpen}
+        user={selectedUser}
+        onUserUpdated={loadUsers}
+      />
+
+      <ChangePasswordModal
+        open={isChangePasswordModalOpen}
+        onOpenChange={setIsChangePasswordModalOpen}
+        user={selectedUser}
+        onPasswordChanged={loadUsers}
       />
 
       <ConfirmDeleteModal

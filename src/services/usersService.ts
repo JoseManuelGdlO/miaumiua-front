@@ -158,7 +158,7 @@ class UsersService {
     }
   }
 
-  // Eliminar un usuario (baja lógica)
+  // Eliminar un usuario (eliminación física)
   async deleteUser(id: number): Promise<{ success: boolean; message: string }> {
     try {
       return await authService.authenticatedRequest<{ success: boolean; message: string }>(`/users/${id}`, {
