@@ -159,7 +159,7 @@ class AuthService {
 
   // Función para manejar errores de autenticación (401/403) y desloguear automáticamente
   handleAuthError(response: Response): void {
-    if (response.status === 401 || response.status === 403) {
+    if (response.status === 401) {
       // No hacer nada si ya estamos en la página de login
       // Esto evita que se limpie el localStorage y cause pantalla en blanco
       if (window.location.pathname === '/login') {
@@ -228,7 +228,7 @@ class AuthService {
   async processResponse<T>(response: Response): Promise<T> {
     if (!response.ok) {
       // Manejar errores de autenticación solo si no estamos en la página de login
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         if (window.location.pathname !== '/login') {
           this.handleAuthError(response);
         }

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { notificationsService } from "@/services/notificationsService";
 import { useToast } from "@/hooks/use-toast";
+import { hasPermission } from "@/utils/permissions";
 
 interface RecentActivity {
   id: string;
@@ -50,29 +51,11 @@ const Dashboard = () => {
   const [activityFilter, setActivityFilter] = useState<string>("all");
   const [stats, setStats] = useState<KPIStat[]>([]);
   const [loadingStats, setLoadingStats] = useState(true);
+  
+  // Verificar si el usuario tiene permisos para ver notificaciones/KPIs
+  const hasNotificationPermission = hasPermission('ver_notificaciones');
 
-  // Cargar KPIs del dashboard
-  useEffect(() => {
-    loadDashboardKPIs();
-    
-    // Recargar cada 60 segundos
-    const interval = setInterval(loadDashboardKPIs, 60000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Cargar actividades recientes
-  useEffect(() => {
-    loadRecentActivity();
-    
-    // Recargar cada 60 segundos para mantener las actividades actualizadas
-    const interval = setInterval(() => {
-      loadRecentActivity();
-    }, 60000); // 60 segundos
-    
-    return () => clearInterval(interval);
-  }, [activityFilter]);
-
-  const loadDashboardKPIs = async () => {
+  const loadDashboardKPIs = useCallback(async () => {
     try {
       setLoadingStats(true);
       const response = await notificationsService.getDashboardKPIs();
@@ -153,9 +136,9 @@ const Dashboard = () => {
     } finally {
       setLoadingStats(false);
     }
-  };
+  }, [toast]);
 
-  const loadRecentActivity = async () => {
+  const loadRecentActivity = useCallback(async () => {
     try {
       setLoadingActivity(true);
       
@@ -226,7 +209,36 @@ const Dashboard = () => {
     } finally {
       setLoadingActivity(false);
     }
-  };
+  }, [activityFilter, toast]);
+
+  // Cargar KPIs del dashboard solo si tiene permisos
+  useEffect(() => {
+    if (hasNotificationPermission) {
+      loadDashboardKPIs();
+      
+      // Recargar cada 60 segundos
+      const interval = setInterval(loadDashboardKPIs, 60000);
+      return () => clearInterval(interval);
+    } else {
+      setLoadingStats(false);
+    }
+  }, [hasNotificationPermission, loadDashboardKPIs]);
+
+  // Cargar actividades recientes solo si tiene permisos
+  useEffect(() => {
+    if (hasNotificationPermission) {
+      loadRecentActivity();
+      
+      // Recargar cada 60 segundos para mantener las actividades actualizadas
+      const interval = setInterval(() => {
+        loadRecentActivity();
+      }, 60000); // 60 segundos
+      
+      return () => clearInterval(interval);
+    } else {
+      setLoadingActivity(false);
+    }
+  }, [activityFilter, hasNotificationPermission, loadRecentActivity]);
 
 
   const getStatusColor = (status: string) => {
@@ -249,122 +261,126 @@ const Dashboard = () => {
         </p>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {loadingStats ? (
-          // Mostrar skeletons mientras carga
-          Array.from({ length: 4 }).map((_, index) => (
-            <Card key={index} className="relative overflow-hidden bg-gradient-to-br from-card to-card/80 border shadow-sm">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-card-foreground">
-                  <div className="h-4 w-32 bg-muted animate-pulse rounded" />
-                </CardTitle>
-                <div className="h-5 w-5 bg-muted animate-pulse rounded" />
-              </CardHeader>
-              <CardContent>
-                <div className="h-8 w-24 bg-muted animate-pulse rounded mb-2" />
-                <div className="h-3 w-40 bg-muted animate-pulse rounded" />
-              </CardContent>
-            </Card>
-          ))
-        ) : (
-          stats.map((stat, index) => (
-            <Card key={index} className="relative overflow-hidden bg-gradient-to-br from-card to-card/80 border shadow-sm hover:shadow-md transition-all duration-300">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-card-foreground">
-                  {stat.title}
-                </CardTitle>
-                <stat.icon className={`h-5 w-5 ${stat.color}`} />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-card-foreground">{stat.value}</div>
-                <p className="text-xs text-muted-foreground">
-                  <span className="text-success font-medium">{stat.change}</span>
-                </p>
-              </CardContent>
-            </Card>
-          ))
-        )}
-      </div>
+      {/* Stats Grid - Solo mostrar si tiene permisos */}
+      {hasNotificationPermission && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {loadingStats ? (
+            // Mostrar skeletons mientras carga
+            Array.from({ length: 4 }).map((_, index) => (
+              <Card key={index} className="relative overflow-hidden bg-gradient-to-br from-card to-card/80 border shadow-sm">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium text-card-foreground">
+                    <div className="h-4 w-32 bg-muted animate-pulse rounded" />
+                  </CardTitle>
+                  <div className="h-5 w-5 bg-muted animate-pulse rounded" />
+                </CardHeader>
+                <CardContent>
+                  <div className="h-8 w-24 bg-muted animate-pulse rounded mb-2" />
+                  <div className="h-3 w-40 bg-muted animate-pulse rounded" />
+                </CardContent>
+              </Card>
+            ))
+          ) : (
+            stats.map((stat, index) => (
+              <Card key={index} className="relative overflow-hidden bg-gradient-to-br from-card to-card/80 border shadow-sm hover:shadow-md transition-all duration-300">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium text-card-foreground">
+                    {stat.title}
+                  </CardTitle>
+                  <stat.icon className={`h-5 w-5 ${stat.color}`} />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-card-foreground">{stat.value}</div>
+                  <p className="text-xs text-muted-foreground">
+                    <span className="text-success font-medium">{stat.change}</span>
+                  </p>
+                </CardContent>
+              </Card>
+            ))
+          )}
+        </div>
+      )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Recent Activity */}
-        <Card className="shadow-sm">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <Activity className="h-5 w-5 text-primary" />
-                  Actividad Reciente
-                </CardTitle>
-                <CardDescription>
-                  Últimas interacciones y eventos del sistema
-                </CardDescription>
-              </div>
-              <div className="flex items-center gap-2">
-                <Select value={activityFilter} onValueChange={setActivityFilter}>
-                  <SelectTrigger className="w-[140px]">
-                    <SelectValue placeholder="Filtrar" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todas</SelectItem>
-                    <SelectItem value="conversacion">Conversaciones</SelectItem>
-                    <SelectItem value="venta">Ventas</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => navigate('/dashboard/notifications')}
-                >
-                  Ver todas
-                </Button>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {loadingActivity ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                <span className="ml-2 text-sm text-muted-foreground">Cargando actividades...</span>
-              </div>
-            ) : recentActivity.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <Activity className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">No hay actividades recientes</p>
-              </div>
-            ) : (
-              recentActivity.map((activity) => (
-                <div 
-                  key={activity.id} 
-                  className="flex items-start space-x-3 p-3 rounded-lg bg-accent/10 border border-accent/20 hover:bg-accent/20 transition-colors cursor-pointer"
-                  onClick={() => {
-                    if (activity.actionUrl) {
-                      navigate(activity.actionUrl);
-                    }
-                  }}
-                >
-                  <div className="flex-1 space-y-1">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium text-foreground">
-                        {activity.type}
-                      </p>
-                      <Badge variant="secondary" className={getStatusColor(activity.status)}>
-                        {activity.status}
-                      </Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      {activity.description}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {activity.time}
-                    </p>
-                  </div>
+      <div className={`grid grid-cols-1 ${hasNotificationPermission ? 'lg:grid-cols-2' : 'lg:grid-cols-1'} gap-8`}>
+        {/* Recent Activity - Solo mostrar si tiene permisos */}
+        {hasNotificationPermission && (
+          <Card className="shadow-sm">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Activity className="h-5 w-5 text-primary" />
+                    Actividad Reciente
+                  </CardTitle>
+                  <CardDescription>
+                    Últimas interacciones y eventos del sistema
+                  </CardDescription>
                 </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
+                <div className="flex items-center gap-2">
+                  <Select value={activityFilter} onValueChange={setActivityFilter}>
+                    <SelectTrigger className="w-[140px]">
+                      <SelectValue placeholder="Filtrar" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas</SelectItem>
+                      <SelectItem value="conversacion">Conversaciones</SelectItem>
+                      <SelectItem value="venta">Ventas</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => navigate('/dashboard/notifications')}
+                  >
+                    Ver todas
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {loadingActivity ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                  <span className="ml-2 text-sm text-muted-foreground">Cargando actividades...</span>
+                </div>
+              ) : recentActivity.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Activity className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">No hay actividades recientes</p>
+                </div>
+              ) : (
+                recentActivity.map((activity) => (
+                  <div 
+                    key={activity.id} 
+                    className="flex items-start space-x-3 p-3 rounded-lg bg-accent/10 border border-accent/20 hover:bg-accent/20 transition-colors cursor-pointer"
+                    onClick={() => {
+                      if (activity.actionUrl) {
+                        navigate(activity.actionUrl);
+                      }
+                    }}
+                  >
+                    <div className="flex-1 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-medium text-foreground">
+                          {activity.type}
+                        </p>
+                        <Badge variant="secondary" className={getStatusColor(activity.status)}>
+                          {activity.status}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        {activity.description}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {activity.time}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Quick Actions */}
         <Card className="shadow-sm">
@@ -408,26 +424,28 @@ const Dashboard = () => {
         </Card>
       </div>
 
-      {/* Performance Chart Placeholder */}
-      <Card className="shadow-sm">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <TrendingUp className="h-5 w-5 text-primary" />
-            Rendimiento Mensual
-          </CardTitle>
-          <CardDescription>
-            Métricas de conversaciones, ventas y satisfacción del cliente
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="h-64 bg-gradient-to-r from-primary/5 to-accent/5 rounded-lg border-2 border-dashed border-primary/20 flex items-center justify-center">
-            <div className="text-center space-y-2">
-              <TrendingUp className="h-8 w-8 text-primary mx-auto" />
-              <p className="text-muted-foreground">Gráfico de rendimiento será implementado aquí</p>
+      {/* Performance Chart Placeholder - Solo mostrar si tiene permisos */}
+      {hasNotificationPermission && (
+        <Card className="shadow-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-primary" />
+              Rendimiento Mensual
+            </CardTitle>
+            <CardDescription>
+              Métricas de conversaciones, ventas y satisfacción del cliente
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="h-64 bg-gradient-to-r from-primary/5 to-accent/5 rounded-lg border-2 border-dashed border-primary/20 flex items-center justify-center">
+              <div className="text-center space-y-2">
+                <TrendingUp className="h-8 w-8 text-primary mx-auto" />
+                <p className="text-muted-foreground">Gráfico de rendimiento será implementado aquí</p>
+              </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };
