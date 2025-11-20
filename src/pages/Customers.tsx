@@ -32,11 +32,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, Plus, MoreHorizontal, Edit, Trash2, UserCheck, Star, MessageSquare, Phone, Loader2 } from "lucide-react";
+import { Search, Plus, MoreHorizontal, Edit, Trash2, UserCheck, Star, MessageSquare, Phone, Loader2, Upload, FileSpreadsheet } from "lucide-react";
 import { canCreate, canEdit, canDelete, canViewStats } from "@/utils/permissions";
 import { useToast } from "@/hooks/use-toast";
 import { clientesService, Cliente } from "@/services/clientesService";
 import CreateCustomerModal from "@/components/modals/CreateCustomerModal";
+import BulkUploadCustomersModal from "@/components/modals/BulkUploadCustomersModal";
 
 // Extend the Cliente interface to match API response
 interface ClienteWithAPI extends Cliente {
@@ -65,6 +66,7 @@ const Customers = () => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isBulkUploadModalOpen, setIsBulkUploadModalOpen] = useState(false);
   const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
   const [clientes, setClientes] = useState<ClienteWithAPI[]>([]);
   const [loading, setLoading] = useState(true);
@@ -169,12 +171,24 @@ const Customers = () => {
             Base de datos de clientes Miau Miau y programa de lealtad
           </p>
         </div>
-        {canCreate('customers') && (
-          <Button className="gap-2" onClick={() => setIsCreateModalOpen(true)}>
-            <UserCheck className="h-4 w-4" />
-            Nuevo Cliente
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {canCreate('customers') && (
+            <>
+              <Button 
+                variant="outline" 
+                className="gap-2" 
+                onClick={() => setIsBulkUploadModalOpen(true)}
+              >
+                <Upload className="h-4 w-4" />
+                Carga Masiva
+              </Button>
+              <Button className="gap-2" onClick={() => setIsCreateModalOpen(true)}>
+                <UserCheck className="h-4 w-4" />
+                Nuevo Cliente
+              </Button>
+            </>
+          )}
+        </div>
       </div>
 
       <Card>
@@ -386,6 +400,12 @@ const Customers = () => {
         itemType="cliente"
         title="Eliminar Cliente"
         description={`¿Estás seguro de que deseas eliminar al cliente "${selectedCliente?.nombre_completo}"? Esta acción no se puede deshacer y el cliente perderá acceso al sistema.`}
+      />
+
+      <BulkUploadCustomersModal
+        open={isBulkUploadModalOpen}
+        onOpenChange={setIsBulkUploadModalOpen}
+        onUploadComplete={loadClientes}
       />
     </div>
   );

@@ -194,6 +194,57 @@ class ClientesService {
   async getActiveClientes(): Promise<ActiveClientesResponse> {
     return this.makeRequest<ActiveClientesResponse>(`${this.baseUrl}/active`);
   }
+
+  // Descargar template de Excel
+  async downloadTemplate(): Promise<Blob> {
+    const token = localStorage.getItem('auth_token');
+    const response = await fetch(`${this.baseUrl}/template`, {
+      headers: {
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
+    }
+
+    return response.blob();
+  }
+
+  // Cargar clientes masivamente desde Excel
+  async uploadBulkClientes(file: File): Promise<{
+    success: boolean;
+    data: {
+      created: number;
+      updated: number;
+      errors: Array<{ row: number; message: string }>;
+      total: number;
+    };
+    message?: string;
+  }> {
+    const token = localStorage.getItem('auth_token');
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch(`${this.baseUrl}/bulk-upload`, {
+      method: 'POST',
+      headers: {
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const { authService } = await import('./authService');
+      authService.handleAuthError(response);
+      
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
 }
 
 export const clientesService = new ClientesService();
