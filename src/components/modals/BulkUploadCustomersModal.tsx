@@ -178,6 +178,7 @@ export default function BulkUploadCustomersModal({
               <ul className="text-xs text-blue-800 dark:text-blue-200 space-y-1 list-disc list-inside">
                 <li>Si el cliente existe (por teléfono), se actualizará con los nuevos datos</li>
                 <li>Si el cliente no existe, se creará como nuevo cliente</li>
+                <li><strong>NombreCompleto es opcional:</strong> Si no se proporciona, se generará automáticamente como "Cliente [Teléfono]"</li>
                 <li>Los registros con errores se reportarán sin afectar los demás</li>
               </ul>
             </div>
