@@ -22,12 +22,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { ordersService, CreateOrderData } from "@/services/ordersService";
-import { clientesService } from "@/services/clientesService";
+import { clientesService, Cliente } from "@/services/clientesService";
 import { citiesService } from "@/services/citiesService";
 import { Inventario } from "@/services/inventariosService";
 import { Promotion } from "@/services/promotionsService";
 import ProductSelector from "@/components/ui/ProductSelector";
 import PromotionSelector from "@/components/ui/PromotionSelector";
+import ClienteSelector from "@/components/ui/ClienteSelector";
 import { Loader2, Plus, Trash2, Package, Calendar, MapPin, Phone, Mail, Tag } from "lucide-react";
 
 interface CreateOrderModalProps {
@@ -45,19 +46,10 @@ interface ProductFormData {
   producto?: Inventario; // Para almacenar la información del producto seleccionado
 }
 
-interface Cliente {
-  id: number;
-  nombre_completo: string;
-  telefono: string;
-  email?: string;
-  fkid_ciudad: number;
-  direccion_entrega?: string;
-}
-
 const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderModalProps) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [clients, setClients] = useState<Cliente[]>([]);
+  const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
   const [cities, setCities] = useState<Array<{ id: number; nombre: string; departamento: string }>>([]);
   const [products, setProducts] = useState<ProductFormData[]>([]);
   const [selectedPromotion, setSelectedPromotion] = useState<Promotion | null>(null);
@@ -77,7 +69,6 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
   // Cargar datos al abrir el modal
   useEffect(() => {
     if (open) {
-      loadClients();
       loadCities();
     }
   }, [open]);
@@ -100,17 +91,6 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
       setSelectedPromotion(null);
     }
   }, [open]);
-
-  const loadClients = async () => {
-    try {
-      const response = await clientesService.getAllClientes({ activos: 'true' });
-      if (response.success) {
-        setClients(response.data.clientes);
-      }
-    } catch (error) {
-      console.error('Error al cargar clientes:', error);
-    }
-  };
 
   const loadCities = async () => {
     try {
@@ -181,21 +161,22 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
     }
   };
 
-  const handleClientChange = (clientId: string) => {
-    const client = clients.find(c => c.id.toString() === clientId);
-    if (client) {
+  const handleClientChange = (cliente: Cliente | null) => {
+    if (cliente) {
+      setSelectedCliente(cliente);
       setFormData(prev => ({
         ...prev,
-        fkid_cliente: clientId,
-        telefono_referencia: client.telefono,
-        email_referencia: client.email || "",
-        fkid_ciudad: client.fkid_ciudad.toString(),
-        direccion_entrega: client.direccion_entrega || ""
+        fkid_cliente: cliente.id.toString(),
+        telefono_referencia: cliente.telefono,
+        email_referencia: cliente.email || "",
+        fkid_ciudad: cliente.fkid_ciudad.toString(),
+        direccion_entrega: cliente.direccion_entrega || ""
       }));
     } else {
+      setSelectedCliente(null);
       setFormData(prev => ({
         ...prev,
-        fkid_cliente: clientId,
+        fkid_cliente: "",
         telefono_referencia: "",
         email_referencia: "",
         fkid_ciudad: "",
@@ -322,8 +303,6 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
     }));
   };
 
-  const selectedClient = clients.find(c => c.id.toString() === formData.fkid_cliente);
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
@@ -349,30 +328,27 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="fkid_cliente">Cliente *</Label>
-                <Select value={formData.fkid_cliente} onValueChange={handleClientChange}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecciona un cliente" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {clients.map((client) => (
-                      <SelectItem key={client.id} value={client.id.toString()}>
-                        {client.nombre_completo} - {client.telefono}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <ClienteSelector
+                  value={formData.fkid_cliente || undefined}
+                  onValueChange={handleClientChange}
+                  placeholder="Buscar y seleccionar cliente..."
+                  disabled={loading}
+                />
               </div>
 
-              {selectedClient && (
+              {selectedCliente && (
                 <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
                   <div className="flex items-center gap-2 text-sm text-blue-800">
                     <Package className="h-4 w-4" />
                     <span className="font-medium">Cliente seleccionado:</span>
                   </div>
                   <div className="mt-2 text-sm text-blue-700">
-                    <div><strong>Nombre:</strong> {selectedClient.nombre_completo}</div>
-                    <div><strong>Teléfono:</strong> {selectedClient.telefono}</div>
-                    {selectedClient.email && <div><strong>Email:</strong> {selectedClient.email}</div>}
+                    <div><strong>Nombre:</strong> {selectedCliente.nombre_completo}</div>
+                    <div><strong>Teléfono:</strong> {selectedCliente.telefono}</div>
+                    {selectedCliente.email && <div><strong>Email:</strong> {selectedCliente.email}</div>}
+                    {selectedCliente.ciudad && (
+                      <div><strong>Ciudad:</strong> {selectedCliente.ciudad.nombre}, {selectedCliente.ciudad.departamento}</div>
+                    )}
                   </div>
                 </div>
               )}

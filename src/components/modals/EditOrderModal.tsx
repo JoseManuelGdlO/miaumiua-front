@@ -40,6 +40,7 @@ import { inventariosService, Inventario } from "@/services/inventariosService";
 import { promotionsService, Promotion } from "@/services/promotionsService";
 import ProductSelector from "@/components/ui/ProductSelector";
 import PromotionSelector from "@/components/ui/PromotionSelector";
+import ClienteSelector from "@/components/ui/ClienteSelector";
 
 interface ProductFormData {
   id?: number;
@@ -61,7 +62,7 @@ interface EditOrderModalProps {
 const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrderModalProps) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [clients, setClients] = useState<Cliente[]>([]);
+  const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
   const [cities, setCities] = useState<City[]>([]);
   const [products, setProducts] = useState<ProductFormData[]>([]);
   const [selectedPromotion, setSelectedPromotion] = useState<Promotion | null>(null);
@@ -94,12 +95,7 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
 
   const loadInitialData = async () => {
     try {
-      const [clientsResponse, citiesResponse] = await Promise.all([
-        clientesService.getAllClientes({ page: 1, limit: 100 }),
-        citiesService.getAllCities({ page: 1, limit: 100 })
-      ]);
-
-      setClients(clientsResponse.data.clientes || []);
+      const citiesResponse = await citiesService.getAllCities({ page: 1, limit: 100 });
       setCities(citiesResponse.data.cities || []);
     } catch (error) {
       console.error("Error loading initial data:", error);
@@ -111,7 +107,7 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
     }
   };
 
-  const loadOrderData = () => {
+  const loadOrderData = async () => {
     if (!order) return;
 
     // Cargar datos del formulario
@@ -127,6 +123,18 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
       notas: order.notas || "",
       codigo_promocion: ""
     });
+
+    // Cargar cliente seleccionado
+    if (order.fkid_cliente) {
+      try {
+        const clienteResponse = await clientesService.getClienteById(order.fkid_cliente);
+        if (clienteResponse.success) {
+          setSelectedCliente(clienteResponse.data.cliente);
+        }
+      } catch (error) {
+        console.error('Error al cargar cliente:', error);
+      }
+    }
 
     // Cargar productos del pedido
     if (order.productos && order.productos.length > 0) {
@@ -233,16 +241,26 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
     }
   };
 
-  const handleClientChange = (clientId: string) => {
-    const client = clients.find(c => c.id.toString() === clientId);
-    if (client) {
+  const handleClientChange = (cliente: Cliente | null) => {
+    if (cliente) {
+      setSelectedCliente(cliente);
       setFormData(prev => ({
         ...prev,
-        fkid_cliente: clientId,
-        telefono_referencia: client.telefono,
-        email_referencia: client.email || "",
-        fkid_ciudad: client.fkid_ciudad.toString(),
-        direccion_entrega: client.direccion_entrega || ""
+        fkid_cliente: cliente.id.toString(),
+        telefono_referencia: cliente.telefono,
+        email_referencia: cliente.email || "",
+        fkid_ciudad: cliente.fkid_ciudad.toString(),
+        direccion_entrega: cliente.direccion_entrega || ""
+      }));
+    } else {
+      setSelectedCliente(null);
+      setFormData(prev => ({
+        ...prev,
+        fkid_cliente: "",
+        telefono_referencia: "",
+        email_referencia: "",
+        fkid_ciudad: "",
+        direccion_entrega: ""
       }));
     }
   };
@@ -392,20 +410,33 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="fkid_cliente">Cliente *</Label>
-                  <Select value={formData.fkid_cliente} onValueChange={handleClientChange}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecciona un cliente" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {clients.map((client) => (
-                        <SelectItem key={client.id} value={client.id.toString()}>
-                          {client.nombre_completo} - {client.telefono}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <ClienteSelector
+                    value={formData.fkid_cliente || undefined}
+                    onValueChange={handleClientChange}
+                    placeholder="Buscar y seleccionar cliente..."
+                    disabled={loading}
+                  />
                 </div>
 
+                {selectedCliente && (
+                  <div className="md:col-span-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                    <div className="flex items-center gap-2 text-sm text-blue-800">
+                      <User className="h-4 w-4" />
+                      <span className="font-medium">Cliente seleccionado:</span>
+                    </div>
+                    <div className="mt-2 text-sm text-blue-700">
+                      <div><strong>Nombre:</strong> {selectedCliente.nombre_completo}</div>
+                      <div><strong>Teléfono:</strong> {selectedCliente.telefono}</div>
+                      {selectedCliente.email && <div><strong>Email:</strong> {selectedCliente.email}</div>}
+                      {selectedCliente.ciudad && (
+                        <div><strong>Ciudad:</strong> {selectedCliente.ciudad.nombre}, {selectedCliente.ciudad.departamento}</div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="telefono_referencia">Teléfono de Referencia</Label>
                   <div className="relative">
