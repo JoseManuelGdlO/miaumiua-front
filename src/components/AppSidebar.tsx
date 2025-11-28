@@ -55,6 +55,7 @@ const menuItems = [
   { title: "Planeación de Rutas", url: "/dashboard/routes", icon: Route, permission: "routes" },
   { title: "Promociones", url: "/dashboard/promotions", icon: Tag, permission: "promotions" },
   { title: "Inventario", url: "/dashboard/inventory", icon: Package, permission: "inventory" },
+  { title: "Paquetes", url: "/dashboard/packages", icon: Package2, permission: "packages" },
   { title: "Ciudades", url: "/dashboard/cities", icon: MapPin, permission: "cities" },
   { title: "Clientes", url: "/dashboard/customers", icon: UserCheck, permission: "customers" },
   {

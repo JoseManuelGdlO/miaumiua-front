@@ -146,6 +146,12 @@ export const SECTION_PERMISSIONS = {
     delete: 'eliminar_agentes',
     activate: 'activar_desactivar_agentes',
     stats: 'ver_estadisticas_agentes'
+  },
+  packages: {
+    base: 'ver_paquetes',
+    create: 'crear_paquetes',
+    edit: 'editar_paquetes',
+    delete: 'eliminar_paquetes'
   }
 } as const;
 

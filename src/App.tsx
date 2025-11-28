@@ -24,6 +24,7 @@ import ConversationDetail from "./pages/ConversationDetail";
 import CategoriasProducto from "./pages/CategoriasProducto";
 import Pesos from "./pages/Pesos";
 import Proveedores from "./pages/Proveedores";
+import Packages from "./pages/Packages";
 import Notifications from "./pages/Notifications";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
@@ -67,6 +68,7 @@ const App = () => (
             <Route path="categorias-producto" element={<CategoriasProducto />} />
             <Route path="pesos" element={<Pesos />} />
             <Route path="proveedores" element={<Proveedores />} />
+            <Route path="packages" element={<Packages />} />
             <Route path="notifications" element={<Notifications />} />
             <Route path="settings" element={<div className="p-6"><h1 className="text-2xl font-bold">Configuración</h1><p className="text-muted-foreground">Configuración general del sistema</p></div>} />
           </Route>
