@@ -27,9 +27,12 @@ import { citiesService } from "@/services/citiesService";
 import { Inventario } from "@/services/inventariosService";
 import { Promotion } from "@/services/promotionsService";
 import ProductSelector from "@/components/ui/ProductSelector";
+import PackageSelector from "@/components/ui/PackageSelector";
 import PromotionSelector from "@/components/ui/PromotionSelector";
 import ClienteSelector from "@/components/ui/ClienteSelector";
-import { Loader2, Plus, Trash2, Package, Calendar, MapPin, Phone, Mail, Tag } from "lucide-react";
+import { packagesService } from "@/services/packagesService";
+import type { Package } from "@/services/packagesService";
+import { Loader2, Plus, Trash2, Package as PackageIcon, Package2, Calendar, MapPin, Phone, Mail, Tag } from "lucide-react";
 
 interface CreateOrderModalProps {
   open: boolean;
@@ -46,12 +49,22 @@ interface ProductFormData {
   producto?: Inventario; // Para almacenar la información del producto seleccionado
 }
 
+interface PackageFormData {
+  fkid_paquete: number;
+  cantidad: number;
+  precio_unidad: number;
+  descuento_paquete: number;
+  notas_paquete: string;
+  paquete?: Package; // Para almacenar la información del paquete seleccionado
+}
+
 const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderModalProps) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
   const [cities, setCities] = useState<Array<{ id: number; nombre: string; departamento: string }>>([]);
   const [products, setProducts] = useState<ProductFormData[]>([]);
+  const [packages, setPackages] = useState<PackageFormData[]>([]);
   const [selectedPromotion, setSelectedPromotion] = useState<Promotion | null>(null);
   
   const [formData, setFormData] = useState({
@@ -88,6 +101,7 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
         codigo_promocion: ""
       });
       setProducts([]);
+      setPackages([]);
       setSelectedPromotion(null);
     }
   }, [open]);
@@ -146,6 +160,49 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
     setProducts(updatedProducts);
   };
 
+  const addPackage = () => {
+    setPackages([...packages, {
+      fkid_paquete: 0,
+      cantidad: 1,
+      precio_unidad: 0,
+      descuento_paquete: 0,
+      notas_paquete: "",
+      paquete: undefined
+    }]);
+  };
+
+  const removePackage = (index: number) => {
+    setPackages(packages.filter((_, i) => i !== index));
+  };
+
+  const updatePackage = (index: number, field: keyof PackageFormData, value: string | number | Package) => {
+    const updatedPackages = [...packages];
+    updatedPackages[index] = { ...updatedPackages[index], [field]: value };
+    setPackages(updatedPackages);
+  };
+
+  const handlePackageSelect = (index: number, pkg: Package | null) => {
+    const updatedPackages = [...packages];
+    
+    if (pkg) {
+      updatedPackages[index] = {
+        ...updatedPackages[index],
+        fkid_paquete: pkg.id,
+        precio_unidad: Number(pkg.precio_final || 0),
+        paquete: pkg
+      };
+    } else {
+      updatedPackages[index] = {
+        ...updatedPackages[index],
+        fkid_paquete: 0,
+        precio_unidad: 0,
+        paquete: undefined
+      };
+    }
+    
+    setPackages(updatedPackages);
+  };
+
   const handlePromotionSelect = (promotion: Promotion | null) => {
     setSelectedPromotion(promotion);
     if (promotion) {
@@ -198,11 +255,11 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
       return;
     }
 
-    // Validar productos
-    if (products.length === 0) {
+    // Validar que haya al menos un producto o paquete
+    if (products.length === 0 && packages.length === 0) {
       toast({
         title: "Error",
-        description: "Debes agregar al menos un producto al pedido",
+        description: "Debes agregar al menos un producto o paquete al pedido",
         variant: "destructive"
       });
       return;
@@ -252,6 +309,38 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
       }
     }
 
+    // Validar paquetes
+    for (let i = 0; i < packages.length; i++) {
+      const pkg = packages[i];
+      
+      if (!pkg.fkid_paquete || !pkg.paquete) {
+        toast({
+          title: "Error",
+          description: `El paquete ${i + 1} debe tener un paquete seleccionado`,
+          variant: "destructive"
+        });
+        return;
+      }
+
+      if (pkg.cantidad <= 0) {
+        toast({
+          title: "Error",
+          description: `El paquete ${i + 1} debe tener una cantidad mayor a 0`,
+          variant: "destructive"
+        });
+        return;
+      }
+
+      if (pkg.precio_unidad <= 0) {
+        toast({
+          title: "Error",
+          description: `El paquete ${i + 1} debe tener un precio válido`,
+          variant: "destructive"
+        });
+        return;
+      }
+    }
+
     try {
       setLoading(true);
 
@@ -265,13 +354,20 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
          metodo_pago: formData.metodo_pago as any,
          notas: formData.notas || undefined,
          codigo_promocion: formData.codigo_promocion || undefined,
-         productos: products.map(p => ({
+         productos: products.length > 0 ? products.map(p => ({
            fkid_producto: p.fkid_producto,
            cantidad: p.cantidad,
            precio_unidad: p.precio_unidad,
            descuento_producto: p.descuento_producto,
            notas_producto: p.notas_producto || undefined
-         }))
+         })) : undefined,
+         paquetes: packages.length > 0 ? packages.map(p => ({
+           fkid_paquete: p.fkid_paquete,
+           cantidad: p.cantidad,
+           precio_unidad: p.precio_unidad,
+           descuento_paquete: p.descuento_paquete,
+           notas_paquete: p.notas_paquete || undefined
+         })) : undefined
        };
 
       const response = await ordersService.createOrder(orderData);
@@ -318,7 +414,7 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
           <Card>
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
-                <Package className="h-5 w-5" />
+                <PackageIcon className="h-5 w-5" />
                 Información del Cliente
               </CardTitle>
               <CardDescription>
@@ -339,7 +435,7 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
               {selectedCliente && (
                 <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
                   <div className="flex items-center gap-2 text-sm text-blue-800">
-                    <Package className="h-4 w-4" />
+                    <PackageIcon className="h-4 w-4" />
                     <span className="font-medium">Cliente seleccionado:</span>
                   </div>
                   <div className="mt-2 text-sm text-blue-700">
@@ -507,7 +603,7 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle className="text-lg flex items-center gap-2">
-                    <Package className="h-5 w-5" />
+                    <PackageIcon className="h-5 w-5" />
                     Productos
                   </CardTitle>
                   <CardDescription>
@@ -529,7 +625,7 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
             <CardContent className="space-y-4">
               {products.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
-                  <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <PackageIcon className="h-12 w-12 mx-auto mb-4 opacity-50" />
                   <p>No hay productos agregados</p>
                   <p className="text-sm">Haz clic en "Agregar Producto" para comenzar</p>
                 </div>
@@ -656,6 +752,164 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
                                 <span> - {product.descuento_producto}% descuento</span>
                               )}
                             </div>
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Paquetes */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Package2 className="h-5 w-5" />
+                    Paquetes
+                  </CardTitle>
+                  <CardDescription>
+                    Agrega paquetes al pedido (opcional)
+                  </CardDescription>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addPackage}
+                  disabled={loading}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Agregar Paquete
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {packages.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Package2 className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>No hay paquetes agregados</p>
+                  <p className="text-sm">Haz clic en "Agregar Paquete" para comenzar</p>
+                </div>
+              ) : (
+                packages.map((pkg, index) => (
+                  <Card key={index} className="border-dashed">
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-base">
+                          Paquete {index + 1}
+                        </CardTitle>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removePackage(index)}
+                          disabled={loading}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="space-y-2">
+                        <Label>Paquete *</Label>
+                        <PackageSelector
+                          value={pkg.fkid_paquete || undefined}
+                          onValueChange={(selectedPackage) => handlePackageSelect(index, selectedPackage)}
+                          placeholder="Buscar y seleccionar paquete..."
+                          disabled={loading}
+                        />
+                      </div>
+
+                      {pkg.paquete && (
+                        <div className="p-3 bg-muted rounded-lg space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium">{pkg.paquete.nombre}</span>
+                            <Badge variant="secondary">
+                              ${Number(pkg.paquete.precio_final).toLocaleString('es-CO')}
+                            </Badge>
+                          </div>
+                          {pkg.paquete.descripcion && (
+                            <p className="text-xs text-muted-foreground">{pkg.paquete.descripcion}</p>
+                          )}
+                          {pkg.paquete.productos && pkg.paquete.productos.length > 0 && (
+                            <p className="text-xs text-muted-foreground">
+                              Incluye {pkg.paquete.productos.length} producto(s)
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>Cantidad *</Label>
+                          <Input
+                            type="number"
+                            min="1"
+                            value={pkg.cantidad}
+                            onChange={(e) => updatePackage(index, 'cantidad', parseInt(e.target.value) || 1)}
+                            placeholder="Cantidad"
+                            required
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label>Precio por Unidad</Label>
+                          {pkg.paquete ? (
+                            <div className="p-2 bg-gray-50 rounded border">
+                              <div className="text-sm font-medium">
+                                ${Number(pkg.paquete.precio_final || 0).toLocaleString('es-CO')}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                Precio del paquete
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="p-2 bg-gray-50 rounded border text-sm text-muted-foreground">
+                              Selecciona un paquete para ver el precio
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>Descuento (%)</Label>
+                          <Input
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="0.01"
+                            value={pkg.descuento_paquete}
+                            onChange={(e) => updatePackage(index, 'descuento_paquete', parseFloat(e.target.value) || 0)}
+                            placeholder="0"
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label>Notas</Label>
+                          <Input
+                            type="text"
+                            value={pkg.notas_paquete}
+                            onChange={(e) => updatePackage(index, 'notas_paquete', e.target.value)}
+                            placeholder="Notas adicionales..."
+                          />
+                        </div>
+                      </div>
+
+                      {pkg.paquete && pkg.cantidad > 0 && (
+                        <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm font-medium">Subtotal:</span>
+                            <span className="text-sm font-bold">
+                              ${((Number(pkg.paquete.precio_final) * pkg.cantidad) * (1 - (pkg.descuento_paquete / 100))).toLocaleString('es-CO', { minimumFractionDigits: 2 })}
+                              {pkg.descuento_paquete > 0 && (
+                                <span className="text-green-600"> - {pkg.descuento_paquete}% descuento</span>
+                              )}
+                            </span>
                           </div>
                         </div>
                       )}

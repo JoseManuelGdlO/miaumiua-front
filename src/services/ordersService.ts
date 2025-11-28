@@ -46,6 +46,22 @@ export interface Order {
       descripcion?: string;
     };
   }>;
+  paquetes?: Array<{
+    id: number;
+    fkid_pedido: number;
+    fkid_paquete: number;
+    cantidad: number;
+    precio_unidad: number;
+    precio_total: number;
+    descuento_paquete: number;
+    notas_paquete?: string;
+    paquete?: {
+      id: number;
+      nombre: string;
+      descripcion?: string;
+      precio_final: number;
+    };
+  }>;
 }
 
 export interface CreateOrderData {
@@ -65,6 +81,13 @@ export interface CreateOrderData {
     descuento_producto?: number;
     notas_producto?: string;
   }>;
+  paquetes?: Array<{
+    fkid_paquete: number;
+    cantidad: number;
+    precio_unidad?: number;
+    descuento_paquete?: number;
+    notas_paquete?: string;
+  }>;
 }
 
 export interface UpdateOrderData {
@@ -77,11 +100,20 @@ export interface UpdateOrderData {
   metodo_pago?: 'efectivo' | 'tarjeta' | 'transferencia' | 'pago_movil';
   notas?: string;
   productos?: Array<{
+    id?: number;
     fkid_producto: number;
     cantidad: number;
     precio_unidad: number;
     descuento_producto?: number;
     notas_producto?: string;
+  }>;
+  paquetes?: Array<{
+    id?: number;
+    fkid_paquete: number;
+    cantidad: number;
+    precio_unidad?: number;
+    descuento_paquete?: number;
+    notas_paquete?: string;
   }>;
 }
 

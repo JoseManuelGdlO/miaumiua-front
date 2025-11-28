@@ -39,8 +39,11 @@ import { citiesService, City } from "@/services/citiesService";
 import { inventariosService, Inventario } from "@/services/inventariosService";
 import { promotionsService, Promotion } from "@/services/promotionsService";
 import ProductSelector from "@/components/ui/ProductSelector";
+import PackageSelector from "@/components/ui/PackageSelector";
 import PromotionSelector from "@/components/ui/PromotionSelector";
 import ClienteSelector from "@/components/ui/ClienteSelector";
+import { packagesService } from "@/services/packagesService";
+import type { Package } from "@/services/packagesService";
 
 interface ProductFormData {
   id?: number;
@@ -50,6 +53,16 @@ interface ProductFormData {
   descuento_producto: number;
   notas_producto: string;
   producto?: Inventario;
+}
+
+interface PackageFormData {
+  id?: number;
+  fkid_paquete: number;
+  cantidad: number;
+  precio_unidad: number;
+  descuento_paquete: number;
+  notas_paquete: string;
+  paquete?: Package;
 }
 
 interface EditOrderModalProps {
@@ -65,6 +78,7 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
   const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
   const [cities, setCities] = useState<City[]>([]);
   const [products, setProducts] = useState<ProductFormData[]>([]);
+  const [packages, setPackages] = useState<PackageFormData[]>([]);
   const [selectedPromotion, setSelectedPromotion] = useState<Promotion | null>(null);
 
   const [formData, setFormData] = useState({
@@ -90,6 +104,23 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
   useEffect(() => {
     if (order && open) {
       loadOrderData();
+    } else if (!open) {
+      // Limpiar estado cuando se cierra el modal
+      setProducts([]);
+      setPackages([]);
+      setSelectedCliente(null);
+      setSelectedPromotion(null);
+      setFormData({
+        fkid_cliente: "",
+        telefono_referencia: "",
+        email_referencia: "",
+        fkid_ciudad: "",
+        direccion_entrega: "",
+        fecha_entrega_estimada: "",
+        metodo_pago: "efectivo",
+        notas: "",
+        codigo_promocion: ""
+      });
     }
   }, [order, open]);
 
@@ -173,6 +204,33 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
       setProducts([]);
     }
 
+    // Cargar paquetes del pedido
+    if (order.paquetes && order.paquetes.length > 0) {
+      const orderPackages: PackageFormData[] = order.paquetes.map(pkg => ({
+        id: pkg.id,
+        fkid_paquete: pkg.fkid_paquete,
+        cantidad: pkg.cantidad,
+        precio_unidad: pkg.precio_unidad,
+        descuento_paquete: pkg.descuento_paquete || 0,
+        notas_paquete: pkg.notas_paquete || "",
+        paquete: pkg.paquete ? {
+          id: pkg.paquete.id,
+          nombre: pkg.paquete.nombre,
+          descripcion: pkg.paquete.descripcion,
+          precio: pkg.precio_unidad,
+          precio_final: pkg.precio_unidad,
+          descuento: pkg.descuento_paquete || 0,
+          is_active: true,
+          created_at: "",
+          updated_at: "",
+          productos: []
+        } : undefined
+      }));
+      setPackages(orderPackages);
+    } else {
+      setPackages([]);
+    }
+
     // Cargar promoción si existe
     if (order.codigo_promocion) {
       // Aquí podrías cargar la promoción específica si es necesario
@@ -202,6 +260,50 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
     const updatedProducts = [...products];
     updatedProducts[index] = { ...updatedProducts[index], [field]: value };
     setProducts(updatedProducts);
+  };
+
+  const addPackage = () => {
+    setPackages([...packages, {
+      fkid_paquete: 0,
+      cantidad: 1,
+      precio_unidad: 0,
+      descuento_paquete: 0,
+      notas_paquete: "",
+      paquete: undefined
+    }]);
+  };
+
+  const removePackage = (index: number) => {
+    const updatedPackages = packages.filter((_, i) => i !== index);
+    setPackages(updatedPackages);
+  };
+
+  const updatePackage = (index: number, field: keyof PackageFormData, value: any) => {
+    const updatedPackages = [...packages];
+    updatedPackages[index] = { ...updatedPackages[index], [field]: value };
+    setPackages(updatedPackages);
+  };
+
+  const handlePackageSelect = (index: number, pkg: Package | null) => {
+    const updatedPackages = [...packages];
+    
+    if (pkg) {
+      updatedPackages[index] = {
+        ...updatedPackages[index],
+        fkid_paquete: pkg.id,
+        precio_unidad: Number(pkg.precio_final || 0),
+        paquete: pkg
+      };
+    } else {
+      updatedPackages[index] = {
+        ...updatedPackages[index],
+        fkid_paquete: 0,
+        precio_unidad: 0,
+        paquete: undefined
+      };
+    }
+    
+    setPackages(updatedPackages);
   };
 
   const handleProductSelect = (index: number, product: Inventario | null) => {
@@ -266,11 +368,19 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
   };
 
   const calculateSubtotal = () => {
-    return products.reduce((total, product) => {
+    const productsTotal = products.reduce((total, product) => {
       const subtotal = product.cantidad * product.precio_unidad;
       const discount = (subtotal * product.descuento_producto) / 100;
       return total + (subtotal - discount);
     }, 0);
+
+    const packagesTotal = packages.reduce((total, pkg) => {
+      const subtotal = pkg.cantidad * pkg.precio_unidad;
+      const discount = (subtotal * pkg.descuento_paquete) / 100;
+      return total + (subtotal - discount);
+    }, 0);
+
+    return productsTotal + packagesTotal;
   };
 
   const calculateTotal = () => {
@@ -294,11 +404,11 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
       return;
     }
 
-    // Validar productos
-    if (products.length === 0) {
+    // Validar que haya al menos un producto o paquete
+    if (products.length === 0 && packages.length === 0) {
       toast({
         title: "Error",
-        description: "Debes agregar al menos un producto al pedido",
+        description: "Debes agregar al menos un producto o paquete al pedido",
         variant: "destructive"
       });
       return;
@@ -336,6 +446,38 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
       }
     }
 
+    // Validar paquetes
+    for (let i = 0; i < packages.length; i++) {
+      const pkg = packages[i];
+      
+      if (!pkg.fkid_paquete || !pkg.paquete) {
+        toast({
+          title: "Error",
+          description: `El paquete ${i + 1} debe tener un paquete seleccionado`,
+          variant: "destructive"
+        });
+        return;
+      }
+
+      if (pkg.cantidad <= 0) {
+        toast({
+          title: "Error",
+          description: `El paquete ${i + 1} debe tener una cantidad mayor a 0`,
+          variant: "destructive"
+        });
+        return;
+      }
+
+      if (pkg.precio_unidad <= 0) {
+        toast({
+          title: "Error",
+          description: `El paquete ${i + 1} debe tener un precio válido`,
+          variant: "destructive"
+        });
+        return;
+      }
+    }
+
     setLoading(true);
 
     try {
@@ -357,6 +499,14 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
           precio_unidad: product.precio_unidad,
           descuento_producto: product.descuento_producto,
           notas_producto: product.notas_producto || undefined
+        })),
+        paquetes: packages.map(pkg => ({
+          id: pkg.id, // Incluir ID para actualización
+          fkid_paquete: pkg.fkid_paquete,
+          cantidad: pkg.cantidad,
+          precio_unidad: pkg.precio_unidad,
+          descuento_paquete: pkg.descuento_paquete,
+          notas_paquete: pkg.notas_paquete || undefined
         }))
       };
 
@@ -619,8 +769,11 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
                     <div className="space-y-2">
                       <Label>Producto *</Label>
                       <ProductSelector
-                        selectedProduct={product.producto}
+                        key={`product-${index}-${product.fkid_producto || 'new'}`}
+                        value={product.fkid_producto && product.fkid_producto > 0 ? product.fkid_producto : undefined}
                         onValueChange={(selectedProduct) => handleProductSelect(index, selectedProduct)}
+                        placeholder="Buscar y seleccionar producto..."
+                        disabled={loading}
                       />
                     </div>
 
@@ -690,6 +843,166 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
               >
                 <Plus className="h-4 w-4 mr-2" />
                 Agregar Producto
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Paquetes */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Package className="h-4 w-4" />
+                    Paquetes
+                  </CardTitle>
+                  <CardDescription>
+                    Agrega paquetes al pedido (opcional)
+                  </CardDescription>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addPackage}
+                  disabled={loading}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Agregar Paquete
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {packages.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>No hay paquetes agregados</p>
+                  <p className="text-sm">Haz clic en "Agregar Paquete" para comenzar</p>
+                </div>
+              ) : (
+                packages.map((pkg, index) => (
+                  <div key={index} className="p-4 border rounded-lg space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-medium">Paquete {index + 1}</h4>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removePackage(index)}
+                        disabled={loading}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Paquete *</Label>
+                      <PackageSelector
+                        key={`package-${index}-${pkg.fkid_paquete || 'new'}`}
+                        value={pkg.fkid_paquete && pkg.fkid_paquete > 0 ? pkg.fkid_paquete : undefined}
+                        onValueChange={(selectedPackage) => handlePackageSelect(index, selectedPackage)}
+                        placeholder="Buscar y seleccionar paquete..."
+                        disabled={loading}
+                      />
+                    </div>
+
+                    {pkg.paquete && (
+                      <div className="p-3 bg-muted rounded-lg space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">{pkg.paquete.nombre}</span>
+                          <Badge variant="secondary">
+                            ${Number(pkg.paquete.precio_final).toLocaleString('es-CO')}
+                          </Badge>
+                        </div>
+                        {pkg.paquete.descripcion && (
+                          <p className="text-xs text-muted-foreground">{pkg.paquete.descripcion}</p>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Cantidad *</Label>
+                        <Input
+                          type="number"
+                          min="1"
+                          value={pkg.cantidad}
+                          onChange={(e) => updatePackage(index, 'cantidad', parseInt(e.target.value) || 1)}
+                          placeholder="Cantidad"
+                          required
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Precio por Unidad</Label>
+                        {pkg.paquete ? (
+                          <div className="p-2 bg-gray-50 rounded border">
+                            <div className="text-sm font-medium">
+                              ${Number(pkg.paquete.precio_final || 0).toLocaleString('es-CO')}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              Precio del paquete
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="p-2 bg-gray-50 rounded border text-sm text-muted-foreground">
+                            Selecciona un paquete para ver el precio
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Descuento (%)</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.01"
+                          value={pkg.descuento_paquete}
+                          onChange={(e) => updatePackage(index, 'descuento_paquete', parseFloat(e.target.value) || 0)}
+                          placeholder="0"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Notas</Label>
+                        <Input
+                          type="text"
+                          value={pkg.notas_paquete}
+                          onChange={(e) => updatePackage(index, 'notas_paquete', e.target.value)}
+                          placeholder="Notas adicionales..."
+                        />
+                      </div>
+                    </div>
+
+                    {pkg.paquete && pkg.cantidad > 0 && (
+                      <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-medium">Subtotal:</span>
+                          <span className="text-sm font-bold">
+                            ${((Number(pkg.paquete.precio_final) * pkg.cantidad) * (1 - (pkg.descuento_paquete / 100))).toLocaleString('es-CO', { minimumFractionDigits: 2 })}
+                            {pkg.descuento_paquete > 0 && (
+                              <span className="text-green-600"> - {pkg.descuento_paquete}% descuento</span>
+                            )}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+
+              <Button
+                type="button"
+                variant="outline"
+                onClick={addPackage}
+                className="w-full"
+                disabled={loading}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Agregar Paquete
               </Button>
             </CardContent>
           </Card>

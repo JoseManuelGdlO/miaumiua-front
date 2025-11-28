@@ -40,9 +40,47 @@ const ProductSelector = ({
   const [selectedProduct, setSelectedProduct] = useState<Inventario | null>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout>();
 
+  const loadSpecificProduct = async (productId: number) => {
+    try {
+      const response = await inventariosService.getInventarioById(productId);
+      if (response.success && response.data.inventario) {
+        setSelectedProduct(response.data.inventario);
+        // Agregar a la lista si no está
+        setProducts(prevProducts => {
+          if (!prevProducts.find(p => p.id === productId)) {
+            return [...prevProducts, response.data.inventario];
+          }
+          return prevProducts;
+        });
+      }
+    } catch (error) {
+      console.error('Error al cargar producto específico:', error);
+    }
+  };
+
+  const loadProducts = async (search: string) => {
+    try {
+      setLoading(true);
+      const response = await inventariosService.getAllInventarios({
+        search: search,
+        limit: 50,
+        activos: true
+      });
+      if (response.success) {
+        setProducts(response.data.inventarios);
+      }
+    } catch (error) {
+      console.error('Error al cargar productos:', error);
+      setProducts([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Cargar productos iniciales
   useEffect(() => {
     loadProducts("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Buscar productos cuando cambie el término de búsqueda
@@ -64,34 +102,35 @@ const ProductSelector = ({
 
   // Cargar producto seleccionado cuando cambie el value
   useEffect(() => {
-    if (value && products.length > 0) {
+    if (value && value > 0) {
+      // Primero buscar en la lista actual
       const product = products.find(p => p.id === value);
       if (product) {
         setSelectedProduct(product);
+      } else {
+        // Si no está en la lista, cargar el producto específico
+        // Esto funciona incluso si la lista aún no se ha cargado
+        loadSpecificProduct(value);
       }
-    } else if (!value) {
+    } else {
       setSelectedProduct(null);
     }
-  }, [value, products]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
 
-  const loadProducts = async (search: string) => {
-    try {
-      setLoading(true);
-      const response = await inventariosService.getAllInventarios({
-        search: search,
-        limit: 50,
-        activos: true
-      });
-      if (response.success) {
-        setProducts(response.data.inventarios);
+  // También actualizar cuando la lista de productos cambie (por si el producto estaba en la lista)
+  useEffect(() => {
+    if (value && value > 0 && products.length > 0) {
+      const product = products.find(p => p.id === value);
+      if (product) {
+        // Solo actualizar si el producto seleccionado es diferente o no existe
+        if (!selectedProduct || selectedProduct.id !== value) {
+          setSelectedProduct(product);
+        }
       }
-    } catch (error) {
-      console.error('Error al cargar productos:', error);
-      setProducts([]);
-    } finally {
-      setLoading(false);
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [products]);
 
   const handleSelect = (product: Inventario) => {
     setSelectedProduct(product);

@@ -193,14 +193,52 @@ const Orders = () => {
     }
   };
 
-  const handleViewDetails = (order: OrderWithAPI) => {
-    setSelectedOrder(order);
-    setIsDetailsModalOpen(true);
+  const handleViewDetails = async (order: OrderWithAPI) => {
+    try {
+      // Cargar los datos completos del pedido desde el backend
+      const response = await ordersService.getOrderById(order.id);
+      if (response.success) {
+        setSelectedOrder(response.data.pedido as OrderWithAPI);
+        setIsDetailsModalOpen(true);
+      } else {
+        toast({
+          title: "Error",
+          description: "No se pudieron cargar los datos del pedido",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error('Error al cargar pedido:', error);
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar los datos del pedido",
+        variant: "destructive"
+      });
+    }
   };
 
-  const handleEditOrder = (order: OrderWithAPI) => {
-    setSelectedOrder(order);
-    setIsEditModalOpen(true);
+  const handleEditOrder = async (order: OrderWithAPI) => {
+    try {
+      // Cargar los datos completos del pedido desde el backend
+      const response = await ordersService.getOrderById(order.id);
+      if (response.success) {
+        setSelectedOrder(response.data.pedido as OrderWithAPI);
+        setIsEditModalOpen(true);
+      } else {
+        toast({
+          title: "Error",
+          description: "No se pudieron cargar los datos del pedido",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error('Error al cargar pedido:', error);
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar los datos del pedido",
+        variant: "destructive"
+      });
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -639,24 +677,59 @@ const Orders = () => {
               </div>
               
               {/* Products */}
-              <div>
-                <h4 className="font-semibold mb-2">Productos</h4>
-                <div className="space-y-2">
-                  {selectedOrder.productos?.map((product, index) => (
-                    <div key={index} className="flex justify-between items-center p-3 border rounded">
-                      <div>
-                        <p className="font-medium">{product.producto?.nombre || 'Producto'}</p>
-                        <p className="text-sm text-muted-foreground">
-                          Cantidad: {product.cantidad} | Precio: {formatCurrency(product.precio_unidad)}
-                        </p>
+              {selectedOrder.productos && selectedOrder.productos.length > 0 && (
+                <div>
+                  <h4 className="font-semibold mb-2">Productos</h4>
+                  <div className="space-y-2">
+                    {selectedOrder.productos.map((product, index) => (
+                      <div key={index} className="flex justify-between items-center p-3 border rounded">
+                        <div>
+                          <p className="font-medium">{product.producto?.nombre || 'Producto'}</p>
+                          <p className="text-sm text-muted-foreground">
+                            Cantidad: {product.cantidad} | Precio: {formatCurrency(product.precio_unidad)}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-medium">{formatCurrency(product.cantidad * product.precio_unidad)}</p>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <p className="font-medium">{formatCurrency(product.cantidad * product.precio_unidad)}</p>
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {/* Packages */}
+              {selectedOrder.paquetes && selectedOrder.paquetes.length > 0 && (
+                <div>
+                  <h4 className="font-semibold mb-2">Paquetes</h4>
+                  <div className="space-y-2">
+                    {selectedOrder.paquetes.map((pkg, index) => (
+                      <div key={index} className="flex justify-between items-center p-3 border rounded">
+                        <div>
+                          <p className="font-medium">{pkg.paquete?.nombre || 'Paquete'}</p>
+                          <p className="text-sm text-muted-foreground">
+                            Cantidad: {pkg.cantidad} | Precio: {formatCurrency(pkg.precio_unidad)}
+                            {pkg.paquete?.descripcion && (
+                              <span className="block mt-1">{pkg.paquete.descripcion}</span>
+                            )}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-medium">{formatCurrency(pkg.precio_total || (pkg.cantidad * pkg.precio_unidad))}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Show message if no products or packages */}
+              {(!selectedOrder.productos || selectedOrder.productos.length === 0) && 
+               (!selectedOrder.paquetes || selectedOrder.paquetes.length === 0) && (
+                <div className="text-center py-4 text-muted-foreground">
+                  <p>No hay productos ni paquetes en este pedido</p>
+                </div>
+              )}
             </div>
           </DialogContent>
         </Dialog>
