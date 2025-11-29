@@ -1,6 +1,7 @@
+import { config } from '@/config/environment';
 import { authService } from './authService';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://intelekia-miaumiau-back.vvggha.easypanel.host/api';
+const API_BASE_URL = config.apiBaseUrl;;
 
 export interface Route {
   id: number;
@@ -55,11 +56,39 @@ export interface RouteOrder {
     numero_pedido: string;
     direccion_entrega: string;
     total?: number;
+    metodo_pago?: string;
+    telefono_referencia?: string;
+    email_referencia?: string;
+    notas?: string;
     cliente?: {
       id: number;
       nombre_completo: string;
       telefono: string;
     };
+    productos?: Array<{
+      id: number;
+      cantidad: number;
+      precio_unidad: number;
+      descuento_producto?: number;
+      producto?: {
+        id: number;
+        nombre: string;
+        descripcion?: string;
+        precio_venta?: number;
+      };
+    }>;
+    paquetes?: Array<{
+      id: number;
+      cantidad: number;
+      precio_unidad: number;
+      descuento_paquete?: number;
+      paquete?: {
+        id: number;
+        nombre: string;
+        descripcion?: string;
+        precio_final?: number;
+      };
+    }>;
   };
 }
 

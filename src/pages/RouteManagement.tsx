@@ -25,7 +25,7 @@ import { DraggableAssignedOrderCard } from "@/components/DraggableAssignedOrderC
 import { DraggableDriverCard } from "@/components/DraggableDriverCard";
 import { DropZone } from "@/components/DropZone";
 import { DndContext, DragEndEvent, DragOverEvent, DragOverlay, DragStartEvent, closestCenter } from '@dnd-kit/core';
-import { MapPin, Truck, Plus, Users, MoreHorizontal, Calendar, Navigation, Sparkles, Loader2, ChevronDown, Download } from "lucide-react";
+import { MapPin, Truck, Plus, Users, MoreHorizontal, Calendar, Navigation, Sparkles, Loader2, ChevronDown, Download, Package as PackageIcon } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import jsPDF from "jspdf";
 import { routesService, Route, AvailableDriver, AvailableOrder } from "@/services/routesService";
@@ -59,6 +59,7 @@ const RouteManagement = () => {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [draggedItem, setDraggedItem] = useState<any>(null);
   const [expandedRoutes, setExpandedRoutes] = useState<Set<number>>(new Set());
+  const [expandedOrderDetails, setExpandedOrderDetails] = useState<Set<number>>(new Set());
 
   // Cargar datos iniciales
   useEffect(() => {
@@ -722,14 +723,69 @@ const RouteManagement = () => {
 
             if (routeOrder.pedido.cliente) {
               doc.text(`Cliente: ${routeOrder.pedido.cliente.nombre_completo}`, margin + 10, yPos);
-              if (routeOrder.pedido.cliente.telefono) {
-                doc.text(`Tel: ${routeOrder.pedido.cliente.telefono}`, margin + 60, yPos);
-              }
               yPos += 5;
+              if (routeOrder.pedido.cliente.telefono) {
+                doc.text(`Tel: ${routeOrder.pedido.cliente.telefono}`, margin + 10, yPos);
+                yPos += 5;
+              }
             }
 
             if (routeOrder.pedido.total) {
               doc.text(`Total: $${routeOrder.pedido.total.toLocaleString('es-CO')}`, margin + 10, yPos);
+              yPos += 5;
+            }
+
+            // Productos del pedido
+            if (routeOrder.pedido.productos && routeOrder.pedido.productos.length > 0) {
+              doc.setFont('helvetica', 'bold');
+              doc.text('Productos:', margin + 10, yPos);
+              yPos += 5;
+              doc.setFont('helvetica', 'normal');
+              routeOrder.pedido.productos.forEach((producto: any) => {
+                if (yPos > 270) {
+                  doc.addPage();
+                  yPos = margin;
+                }
+                const productoText = `  • ${producto.producto?.nombre || 'Producto'} - Cant: ${producto.cantidad} - $${producto.precio_unidad?.toLocaleString('es-CO') || '0'}`;
+                doc.text(productoText, margin + 10, yPos);
+                yPos += 4;
+              });
+            }
+
+            // Paquetes del pedido
+            if (routeOrder.pedido.paquetes && routeOrder.pedido.paquetes.length > 0) {
+              doc.setFont('helvetica', 'bold');
+              doc.text('Paquetes:', margin + 10, yPos);
+              yPos += 5;
+              doc.setFont('helvetica', 'normal');
+              routeOrder.pedido.paquetes.forEach((paquete: any) => {
+                if (yPos > 270) {
+                  doc.addPage();
+                  yPos = margin;
+                }
+                const paqueteText = `  • ${paquete.paquete?.nombre || 'Paquete'} - Cant: ${paquete.cantidad} - $${paquete.precio_unidad?.toLocaleString('es-CO') || paquete.paquete?.precio_final?.toLocaleString('es-CO') || '0'}`;
+                doc.text(paqueteText, margin + 10, yPos);
+                yPos += 4;
+              });
+            }
+
+            // Información adicional
+            if (routeOrder.pedido.metodo_pago) {
+              doc.text(`Método de pago: ${routeOrder.pedido.metodo_pago}`, margin + 10, yPos);
+              yPos += 5;
+            }
+            if (routeOrder.pedido.telefono_referencia) {
+              doc.text(`Tel. referencia: ${routeOrder.pedido.telefono_referencia}`, margin + 10, yPos);
+              yPos += 5;
+            }
+            if (routeOrder.pedido.email_referencia) {
+              doc.text(`Email referencia: ${routeOrder.pedido.email_referencia}`, margin + 10, yPos);
+              yPos += 5;
+            }
+            if (routeOrder.pedido.notas) {
+              doc.setFont('helvetica', 'italic');
+              doc.text(`Notas del pedido: ${routeOrder.pedido.notas}`, margin + 10, yPos);
+              doc.setFont('helvetica', 'normal');
               yPos += 5;
             }
           } else {
@@ -1166,7 +1222,7 @@ const RouteManagement = () => {
                                 <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-semibold">
                                   {routeOrder.orden_entrega || index + 1}
                                 </div>
-                                <div className="flex-1 min-w-0 space-y-1">
+                                <div className="flex-1 min-w-0 space-y-2">
                                   <div className="flex items-start justify-between gap-2">
                                     <div className="flex-1 min-w-0">
                                       {routeOrder.pedido ? (
@@ -1191,6 +1247,23 @@ const RouteManagement = () => {
                                               Total: ${routeOrder.pedido.total.toLocaleString('es-CO')}
                                             </div>
                                           )}
+                                          {/* Indicador de productos y paquetes */}
+                                          {(routeOrder.pedido.productos?.length > 0 || routeOrder.pedido.paquetes?.length > 0) && (
+                                            <div className="text-xs text-muted-foreground mt-1 flex items-center gap-2">
+                                              {routeOrder.pedido.productos?.length > 0 && (
+                                                <span className="flex items-center gap-1">
+                                                  <PackageIcon className="h-3 w-3" />
+                                                  {routeOrder.pedido.productos.length} {routeOrder.pedido.productos.length === 1 ? 'producto' : 'productos'}
+                                                </span>
+                                              )}
+                                              {routeOrder.pedido.paquetes?.length > 0 && (
+                                                <span className="flex items-center gap-1">
+                                                  <PackageIcon className="h-3 w-3" />
+                                                  {routeOrder.pedido.paquetes.length} {routeOrder.pedido.paquetes.length === 1 ? 'paquete' : 'paquetes'}
+                                                </span>
+                                              )}
+                                            </div>
+                                          )}
                                         </>
                                       ) : (
                                         <div className="text-sm text-muted-foreground">
@@ -1211,9 +1284,154 @@ const RouteManagement = () => {
                                        routeOrder.estado_entrega === 'entregado' ? 'Entregado' : 'Fallido'}
                                     </Badge>
                                   </div>
+
+                                  {/* Detalle del Pedido - Productos y Paquetes */}
+                                  {routeOrder.pedido && (
+                                    <Collapsible
+                                      open={expandedOrderDetails.has(routeOrder.id)}
+                                      onOpenChange={() => {
+                                        setExpandedOrderDetails(prev => {
+                                          const newSet = new Set(prev);
+                                          if (newSet.has(routeOrder.id)) {
+                                            newSet.delete(routeOrder.id);
+                                          } else {
+                                            newSet.add(routeOrder.id);
+                                          }
+                                          return newSet;
+                                        });
+                                      }}
+                                    >
+                                      <CollapsibleTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-auto py-1 px-2 text-xs w-full justify-between"
+                                        >
+                                          <span className="text-xs">Ver detalle del pedido</span>
+                                          <ChevronDown
+                                            className={`h-3 w-3 transition-transform ${
+                                              expandedOrderDetails.has(routeOrder.id) ? 'transform rotate-180' : ''
+                                            }`}
+                                          />
+                                        </Button>
+                                      </CollapsibleTrigger>
+                                      <CollapsibleContent className="mt-2 space-y-2">
+                                        {/* Productos */}
+                                        {routeOrder.pedido.productos && routeOrder.pedido.productos.length > 0 ? (
+                                          <div className="bg-background/50 rounded-md p-2 border">
+                                            <div className="text-xs font-medium mb-2 text-muted-foreground uppercase">Productos ({routeOrder.pedido.productos.length}):</div>
+                                            <div className="space-y-2">
+                                              {routeOrder.pedido.productos.map((producto: any) => (
+                                                <div key={producto.id} className="text-xs p-2 bg-muted/30 rounded border-l-2 border-l-primary">
+                                                  <div className="flex items-start justify-between gap-2">
+                                                    <div className="flex-1 min-w-0">
+                                                      <div className="font-medium">{producto.producto?.nombre || 'Producto'}</div>
+                                                      {producto.producto?.descripcion && (
+                                                        <div className="text-muted-foreground mt-0.5 text-[10px]">{producto.producto.descripcion}</div>
+                                                      )}
+                                                    </div>
+                                                    <div className="flex flex-col items-end gap-1 text-muted-foreground">
+                                                      <div className="flex items-center gap-1">
+                                                        <span className="font-medium">Cant:</span>
+                                                        <span>{producto.cantidad}</span>
+                                                      </div>
+                                                      <div className="flex items-center gap-1">
+                                                        <span className="font-medium">Precio:</span>
+                                                        <span>${producto.precio_unidad?.toLocaleString('es-CO') || '0'}</span>
+                                                      </div>
+                                                      {producto.descuento_producto > 0 && (
+                                                        <div className="text-green-600 font-medium">
+                                                          Descuento: -{producto.descuento_producto}%
+                                                        </div>
+                                                      )}
+                                                      {producto.notas_producto && (
+                                                        <div className="text-[10px] italic text-muted-foreground mt-1">
+                                                          {producto.notas_producto}
+                                                        </div>
+                                                      )}
+                                                    </div>
+                                                  </div>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        ) : (
+                                          <div className="text-xs text-muted-foreground italic">No hay productos en este pedido</div>
+                                        )}
+
+                                        {/* Paquetes */}
+                                        {routeOrder.pedido.paquetes && routeOrder.pedido.paquetes.length > 0 ? (
+                                          <div className="bg-background/50 rounded-md p-2 border">
+                                            <div className="text-xs font-medium mb-2 text-muted-foreground uppercase">Paquetes ({routeOrder.pedido.paquetes.length}):</div>
+                                            <div className="space-y-2">
+                                              {routeOrder.pedido.paquetes.map((paquete: any) => (
+                                                <div key={paquete.id} className="text-xs p-2 bg-muted/30 rounded border-l-2 border-l-blue-500">
+                                                  <div className="flex items-start justify-between gap-2">
+                                                    <div className="flex-1 min-w-0">
+                                                      <div className="font-medium">{paquete.paquete?.nombre || 'Paquete'}</div>
+                                                      {paquete.paquete?.descripcion && (
+                                                        <div className="text-muted-foreground mt-0.5 text-[10px]">{paquete.paquete.descripcion}</div>
+                                                      )}
+                                                    </div>
+                                                    <div className="flex flex-col items-end gap-1 text-muted-foreground">
+                                                      <div className="flex items-center gap-1">
+                                                        <span className="font-medium">Cant:</span>
+                                                        <span>{paquete.cantidad}</span>
+                                                      </div>
+                                                      <div className="flex items-center gap-1">
+                                                        <span className="font-medium">Precio:</span>
+                                                        <span>${paquete.precio_unidad?.toLocaleString('es-CO') || paquete.paquete?.precio_final?.toLocaleString('es-CO') || '0'}</span>
+                                                      </div>
+                                                      {paquete.descuento_paquete > 0 && (
+                                                        <div className="text-green-600 font-medium">
+                                                          Descuento: -{paquete.descuento_paquete}%
+                                                        </div>
+                                                      )}
+                                                      {paquete.notas_paquete && (
+                                                        <div className="text-[10px] italic text-muted-foreground mt-1">
+                                                          {paquete.notas_paquete}
+                                                        </div>
+                                                      )}
+                                                    </div>
+                                                  </div>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        ) : (
+                                          <div className="text-xs text-muted-foreground italic">No hay paquetes en este pedido</div>
+                                        )}
+
+                                        {/* Mensaje si no hay ni productos ni paquetes */}
+                                        {(!routeOrder.pedido.productos || routeOrder.pedido.productos.length === 0) &&
+                                         (!routeOrder.pedido.paquetes || routeOrder.pedido.paquetes.length === 0) && (
+                                          <div className="text-xs text-center text-muted-foreground py-2 italic">
+                                            Este pedido no tiene productos ni paquetes asignados
+                                          </div>
+                                        )}
+
+                                        {/* Información adicional del pedido */}
+                                        <div className="text-xs text-muted-foreground space-y-1 pt-2 border-t">
+                                          {routeOrder.pedido.metodo_pago && (
+                                            <div>Método de pago: <span className="font-medium capitalize">{routeOrder.pedido.metodo_pago}</span></div>
+                                          )}
+                                          {routeOrder.pedido.telefono_referencia && (
+                                            <div>Teléfono referencia: {routeOrder.pedido.telefono_referencia}</div>
+                                          )}
+                                          {routeOrder.pedido.email_referencia && (
+                                            <div>Email referencia: {routeOrder.pedido.email_referencia}</div>
+                                          )}
+                                          {routeOrder.pedido.notas && (
+                                            <div className="italic">Notas del pedido: {routeOrder.pedido.notas}</div>
+                                          )}
+                                        </div>
+                                      </CollapsibleContent>
+                                    </Collapsible>
+                                  )}
+
                                   {routeOrder.notas_entrega && (
                                     <div className="text-xs text-muted-foreground mt-1 italic">
-                                      Notas: {routeOrder.notas_entrega}
+                                      Notas de entrega: {routeOrder.notas_entrega}
                                     </div>
                                   )}
                                   {routeOrder.link_ubicacion && (
