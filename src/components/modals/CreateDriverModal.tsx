@@ -95,15 +95,6 @@ const CreateDriverModal = ({ isOpen, onClose, onSuccess }: CreateDriverModalProp
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!formData.fkid_ciudad) {
-      toast({
-        title: "Error",
-        description: "Por favor selecciona una ciudad",
-        variant: "destructive",
-      });
-      return;
-    }
 
     try {
       setLoading(true);
@@ -118,19 +109,52 @@ const CreateDriverModal = ({ isOpen, onClose, onSuccess }: CreateDriverModalProp
         onClose();
         resetForm();
       } else {
+        // Si la respuesta no es exitosa pero no lanzó error
+        const errorMessage = response.message || "No se pudo crear el repartidor";
         toast({
           title: "Error",
-          description: "No se pudo crear el repartidor",
+          description: errorMessage,
           variant: "destructive",
         });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error al crear repartidor:", error);
-      toast({
-        title: "Error",
-        description: "No se pudo crear el repartidor",
-        variant: "destructive",
-      });
+      
+      // Manejar errores de la respuesta del backend
+      if (error.response?.data) {
+        const errorData = error.response.data;
+        
+        // Verificar si es un error 400 con errores de validación
+        if (error.response.status === 400 && errorData.errors && Array.isArray(errorData.errors)) {
+          // Crear mensaje con errores específicos
+          const errorMessages = errorData.errors
+            .map((err: any) => err.msg || err.message)
+            .filter(Boolean)
+            .join(", ");
+          
+          toast({
+            title: "Errores de validación",
+            description: errorMessages || errorData.message || "Por favor corrige los errores en el formulario",
+            variant: "destructive",
+          });
+        } else {
+          // Otros errores (500, 404, etc.)
+          const errorMessage = errorData.message || errorData.error || error.message || "No se pudo crear el repartidor";
+          toast({
+            title: "Error",
+            description: errorMessage,
+            variant: "destructive",
+          });
+        }
+      } else {
+        // Error de red o sin respuesta estructurada
+        const errorMessage = error.message || "No se pudo crear el repartidor. Verifica tu conexión e intenta nuevamente.";
+        toast({
+          title: "Error",
+          description: errorMessage,
+          variant: "destructive",
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -269,7 +293,6 @@ const CreateDriverModal = ({ isOpen, onClose, onSuccess }: CreateDriverModalProp
                   value={formData.capacidad_carga}
                   onChange={(e) => handleInputChange("capacidad_carga", parseFloat(e.target.value) || 0)}
                   placeholder="25.0"
-                  required
                 />
               </div>
             </div>
@@ -309,7 +332,6 @@ const CreateDriverModal = ({ isOpen, onClose, onSuccess }: CreateDriverModalProp
                   value={formData.direccion}
                   onChange={(e) => handleInputChange("direccion", e.target.value)}
                   placeholder="Calle Principal 123, Col. Centro"
-                  required
                 />
               </div>
             </div>
@@ -332,7 +354,6 @@ const CreateDriverModal = ({ isOpen, onClose, onSuccess }: CreateDriverModalProp
                   value={formData.tarifa_base}
                   onChange={(e) => handleInputChange("tarifa_base", parseFloat(e.target.value) || 0)}
                   placeholder="15.00"
-                  required
                 />
               </div>
               
@@ -345,7 +366,6 @@ const CreateDriverModal = ({ isOpen, onClose, onSuccess }: CreateDriverModalProp
                   value={formData.comision_porcentaje}
                   onChange={(e) => handleInputChange("comision_porcentaje", parseFloat(e.target.value) || 0)}
                   placeholder="10.0"
-                  required
                 />
               </div>
               
@@ -356,7 +376,6 @@ const CreateDriverModal = ({ isOpen, onClose, onSuccess }: CreateDriverModalProp
                   type="date"
                   value={formData.fecha_ingreso}
                   onChange={(e) => handleInputChange("fecha_ingreso", e.target.value)}
-                  required
                 />
               </div>
             </div>
@@ -376,7 +395,6 @@ const CreateDriverModal = ({ isOpen, onClose, onSuccess }: CreateDriverModalProp
                 type="date"
                 value={formData.fecha_nacimiento}
                 onChange={(e) => handleInputChange("fecha_nacimiento", e.target.value)}
-                required
               />
             </div>
           </div>
@@ -396,7 +414,6 @@ const CreateDriverModal = ({ isOpen, onClose, onSuccess }: CreateDriverModalProp
                   value={formData.documento_identidad}
                   onChange={(e) => handleInputChange("documento_identidad", e.target.value)}
                   placeholder="12345678"
-                  required
                 />
               </div>
               
@@ -407,7 +424,6 @@ const CreateDriverModal = ({ isOpen, onClose, onSuccess }: CreateDriverModalProp
                   value={formData.licencia_conducir}
                   onChange={(e) => handleInputChange("licencia_conducir", e.target.value)}
                   placeholder="LIC-123456"
-                  required
                 />
               </div>
               
@@ -418,7 +434,6 @@ const CreateDriverModal = ({ isOpen, onClose, onSuccess }: CreateDriverModalProp
                   value={formData.seguro_vehiculo}
                   onChange={(e) => handleInputChange("seguro_vehiculo", e.target.value)}
                   placeholder="SEGURO-789"
-                  required
                 />
               </div>
             </div>
