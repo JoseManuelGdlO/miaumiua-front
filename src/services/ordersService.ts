@@ -174,8 +174,8 @@ export interface OrdersQueryParams {
   metodo_pago?: 'efectivo' | 'tarjeta' | 'transferencia' | 'pago_movil';
   activos?: 'true' | 'false';
   search?: string;
-  start_date?: string;
-  end_date?: string;
+  fecha_pedido?: string;
+  fecha_entrega?: string;
 }
 
 class OrdersService {
@@ -219,8 +219,8 @@ class OrdersService {
     if (params.metodo_pago) queryParams.append('metodo_pago', params.metodo_pago);
     if (params.activos) queryParams.append('activos', params.activos);
     if (params.search) queryParams.append('search', params.search);
-    if (params.start_date) queryParams.append('start_date', params.start_date);
-    if (params.end_date) queryParams.append('end_date', params.end_date);
+    if (params.fecha_pedido) queryParams.append('fecha_pedido', params.fecha_pedido);
+    if (params.fecha_entrega) queryParams.append('fecha_entrega', params.fecha_entrega);
     
     // Incluir información relacionada
     queryParams.append('include_cliente', 'true');

@@ -96,6 +96,8 @@ const Orders = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [paymentMethodFilter, setPaymentMethodFilter] = useState<string>("all");
+  const [fechaPedido, setFechaPedido] = useState<string>("");
+  const [fechaEntrega, setFechaEntrega] = useState<string>("");
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalOrders, setTotalOrders] = useState(0);
@@ -109,7 +111,7 @@ const Orders = () => {
   useEffect(() => {
     loadOrders();
     loadStats();
-  }, [currentPage, searchTerm, statusFilter, paymentMethodFilter]);
+  }, [currentPage, searchTerm, statusFilter, paymentMethodFilter, fechaPedido, fechaEntrega]);
 
   const loadOrders = async () => {
     try {
@@ -120,7 +122,9 @@ const Orders = () => {
         search: searchTerm || undefined,
         estado: statusFilter === 'all' ? undefined : statusFilter as any,
         metodo_pago: paymentMethodFilter === 'all' ? undefined : paymentMethodFilter as any,
-        activos: 'true'
+        fecha_pedido: fechaPedido || undefined,
+        fecha_entrega: fechaEntrega || undefined,
+        // Sin el parámetro activos para traer todos los pedidos (activos e inactivos)
       });
       
       if (response.success) {
@@ -163,6 +167,22 @@ const Orders = () => {
 
   const handlePaymentMethodFilter = (value: string) => {
     setPaymentMethodFilter(value);
+    setCurrentPage(1);
+  };
+
+  const handleFechaPedidoChange = (value: string) => {
+    setFechaPedido(value);
+    setCurrentPage(1);
+  };
+
+  const handleFechaEntregaChange = (value: string) => {
+    setFechaEntrega(value);
+    setCurrentPage(1);
+  };
+
+  const handleClearDateFilters = () => {
+    setFechaPedido("");
+    setFechaEntrega("");
     setCurrentPage(1);
   };
 
@@ -395,42 +415,80 @@ const Orders = () => {
         </CardHeader>
         <CardContent>
           {/* Search and Filters */}
-          <div className="flex items-center space-x-2 mb-6">
-            <div className="relative flex-1">
-              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por número de pedido..."
-                value={searchTerm}
-                onChange={(e) => handleSearch(e.target.value)}
-                className="pl-8"
-              />
+          <div className="space-y-4 mb-6">
+            <div className="flex items-center space-x-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar por número de pedido..."
+                  value={searchTerm}
+                  onChange={(e) => handleSearch(e.target.value)}
+                  className="pl-8"
+                />
+              </div>
+              <Select value={statusFilter} onValueChange={handleStatusFilter}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Filtrar por estado" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos los estados</SelectItem>
+                  <SelectItem value="pendiente">Pendiente</SelectItem>
+                  <SelectItem value="confirmado">Confirmado</SelectItem>
+                  <SelectItem value="en_preparacion">En Preparación</SelectItem>
+                  <SelectItem value="en_camino">En Camino</SelectItem>
+                  <SelectItem value="entregado">Entregado</SelectItem>
+                  <SelectItem value="cancelado">Cancelado</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={paymentMethodFilter} onValueChange={handlePaymentMethodFilter}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Método de pago" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos los métodos</SelectItem>
+                  <SelectItem value="efectivo">Efectivo</SelectItem>
+                  <SelectItem value="tarjeta">Tarjeta</SelectItem>
+                  <SelectItem value="transferencia">Transferencia</SelectItem>
+                  <SelectItem value="pago_movil">Pago Móvil</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-            <Select value={statusFilter} onValueChange={handleStatusFilter}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Filtrar por estado" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos los estados</SelectItem>
-                <SelectItem value="pendiente">Pendiente</SelectItem>
-                <SelectItem value="confirmado">Confirmado</SelectItem>
-                <SelectItem value="en_preparacion">En Preparación</SelectItem>
-                <SelectItem value="en_camino">En Camino</SelectItem>
-                <SelectItem value="entregado">Entregado</SelectItem>
-                <SelectItem value="cancelado">Cancelado</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={paymentMethodFilter} onValueChange={handlePaymentMethodFilter}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Método de pago" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos los métodos</SelectItem>
-                <SelectItem value="efectivo">Efectivo</SelectItem>
-                <SelectItem value="tarjeta">Tarjeta</SelectItem>
-                <SelectItem value="transferencia">Transferencia</SelectItem>
-                <SelectItem value="pago_movil">Pago Móvil</SelectItem>
-              </SelectContent>
-            </Select>
+            {/* Date Filters */}
+            <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-2">
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+                <div className="flex items-center space-x-2">
+                  <label className="text-sm text-muted-foreground whitespace-nowrap">Fecha Pedido:</label>
+                  <Input
+                    type="date"
+                    placeholder="Fecha de pedido"
+                    value={fechaPedido}
+                    onChange={(e) => handleFechaPedidoChange(e.target.value)}
+                    className="w-[180px]"
+                  />
+                </div>
+                <div className="flex items-center space-x-2">
+                  <label className="text-sm text-muted-foreground whitespace-nowrap">Fecha Entrega:</label>
+                  <Input
+                    type="date"
+                    placeholder="Fecha de entrega"
+                    value={fechaEntrega}
+                    onChange={(e) => handleFechaEntregaChange(e.target.value)}
+                    className="w-[180px]"
+                  />
+                </div>
+              </div>
+              {(fechaPedido || fechaEntrega) && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleClearDateFilters}
+                >
+                  <XCircle className="h-4 w-4 mr-1" />
+                  Limpiar fechas
+                </Button>
+              )}
+            </div>
           </div>
 
           {/* Table */}
@@ -444,7 +502,7 @@ const Orders = () => {
                   <TableHead>Estado</TableHead>
                   <TableHead>Método Pago</TableHead>
                   <TableHead>Total</TableHead>
-                  <TableHead>Fecha</TableHead>
+                  <TableHead>Fecha Entrega</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
@@ -505,14 +563,16 @@ const Orders = () => {
                       </TableCell>
                       <TableCell>
                         <div className="text-sm">
-                          <div>{formatDate(order.created_at)}</div>
-                          {order.fecha_entrega_estimada && (
-                            <div className="text-muted-foreground">
-                              Entrega: {formatDate(order.fecha_entrega_estimada)}
+                          {order.fecha_entrega_estimada ? (
+                            <div>{formatDate(order.fecha_entrega_estimada)}</div>
+                          ) : (
+                            <div className="text-muted-foreground">Sin fecha</div>
+                          )}
+                          <div className="text-xs text-muted-foreground">
+                            Creado: {formatDate(order.created_at)}
                           </div>
-                        )}
-                      </div>
-                    </TableCell>
+                        </div>
+                      </TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
