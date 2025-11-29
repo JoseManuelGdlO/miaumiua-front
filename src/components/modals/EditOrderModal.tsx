@@ -21,7 +21,7 @@ import {
 import { 
   Plus, 
   Trash2, 
-  Package,
+  Package as PackageIcon,
   Calendar,
   MapPin,
   User,
@@ -653,7 +653,7 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Package className="h-4 w-4" />
+                <PackageIcon className="h-4 w-4" />
                 Información del Pedido
               </CardTitle>
             </CardHeader>
@@ -742,7 +742,7 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Package className="h-4 w-4" />
+                <PackageIcon className="h-4 w-4" />
                 Productos
               </CardTitle>
               <CardDescription>
@@ -853,7 +853,7 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle className="flex items-center gap-2">
-                    <Package className="h-4 w-4" />
+                    <PackageIcon className="h-4 w-4" />
                     Paquetes
                   </CardTitle>
                   <CardDescription>
@@ -875,7 +875,7 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
             <CardContent className="space-y-4">
               {packages.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
-                  <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <PackageIcon className="h-12 w-12 mx-auto mb-4 opacity-50" />
                   <p>No hay paquetes agregados</p>
                   <p className="text-sm">Haz clic en "Agregar Paquete" para comenzar</p>
                 </div>

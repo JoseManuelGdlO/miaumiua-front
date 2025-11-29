@@ -25,7 +25,9 @@ import { DraggableAssignedOrderCard } from "@/components/DraggableAssignedOrderC
 import { DraggableDriverCard } from "@/components/DraggableDriverCard";
 import { DropZone } from "@/components/DropZone";
 import { DndContext, DragEndEvent, DragOverEvent, DragOverlay, DragStartEvent, closestCenter } from '@dnd-kit/core';
-import { MapPin, Truck, Plus, Users, MoreHorizontal, Calendar, Navigation, Sparkles, Loader2 } from "lucide-react";
+import { MapPin, Truck, Plus, Users, MoreHorizontal, Calendar, Navigation, Sparkles, Loader2, ChevronDown, Download } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import jsPDF from "jspdf";
 import { routesService, Route, AvailableDriver, AvailableOrder } from "@/services/routesService";
 import { usersService } from "@/services/usersService";
 import { driversService, Driver } from "@/services/driversService";
@@ -56,6 +58,7 @@ const RouteManagement = () => {
   const [stats, setStats] = useState<any>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [draggedItem, setDraggedItem] = useState<any>(null);
+  const [expandedRoutes, setExpandedRoutes] = useState<Set<number>>(new Set());
 
   // Cargar datos iniciales
   useEffect(() => {
@@ -628,6 +631,174 @@ const RouteManagement = () => {
     return { totalValue, totalOrders };
   };
 
+  const toggleRouteExpanded = (routeId: number) => {
+    setExpandedRoutes(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(routeId)) {
+        newSet.delete(routeId);
+      } else {
+        newSet.add(routeId);
+      }
+      return newSet;
+    });
+  };
+
+  const downloadRoutePDF = (route: Route) => {
+    try {
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const margin = 15;
+      let yPos = margin;
+
+      // Título
+      doc.setFontSize(18);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Detalle de Ruta', pageWidth / 2, yPos, { align: 'center' });
+      yPos += 10;
+
+      // Información de la ruta
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Ruta: ${route.nombre_ruta}`, margin, yPos);
+      yPos += 7;
+      
+      doc.text(`Fecha: ${new Date(route.fecha_ruta).toLocaleDateString('es-ES', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      })}`, margin, yPos);
+      yPos += 7;
+
+      if (route.repartidor) {
+        doc.text(`Repartidor: ${route.repartidor.nombre_completo}`, margin, yPos);
+        if (route.repartidor.codigo_repartidor) {
+          doc.text(`Código: ${route.repartidor.codigo_repartidor}`, margin + 60, yPos);
+        }
+        yPos += 7;
+      }
+
+      doc.text(`Estado: ${route.estado === 'planificada' ? 'Planificada' :
+                route.estado === 'en_progreso' ? 'En Progreso' :
+                route.estado === 'completada' ? 'Completada' : 'Cancelada'}`, margin, yPos);
+      yPos += 10;
+
+      // Línea separadora
+      doc.setLineWidth(0.5);
+      doc.line(margin, yPos, pageWidth - margin, yPos);
+      yPos += 7;
+
+      // Listado de entregas
+      if (route.pedidos && route.pedidos.length > 0) {
+        doc.setFontSize(14);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Direcciones a Entregar', margin, yPos);
+        yPos += 8;
+
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+
+        const sortedPedidos = [...route.pedidos].sort((a, b) => (a.orden_entrega || 0) - (b.orden_entrega || 0));
+
+        sortedPedidos.forEach((routeOrder, index) => {
+          // Verificar si necesitamos una nueva página
+          if (yPos > 270) {
+            doc.addPage();
+            yPos = margin;
+          }
+
+          // Número de orden
+          doc.setFont('helvetica', 'bold');
+          doc.text(`${routeOrder.orden_entrega || index + 1}.`, margin, yPos);
+          
+          if (routeOrder.pedido) {
+            // Información del pedido
+            doc.setFont('helvetica', 'normal');
+            doc.text(`Pedido: ${routeOrder.pedido.numero_pedido}`, margin + 10, yPos);
+            yPos += 5;
+
+            doc.text(`Dirección: ${routeOrder.pedido.direccion_entrega}`, margin + 10, yPos);
+            yPos += 5;
+
+            if (routeOrder.pedido.cliente) {
+              doc.text(`Cliente: ${routeOrder.pedido.cliente.nombre_completo}`, margin + 10, yPos);
+              if (routeOrder.pedido.cliente.telefono) {
+                doc.text(`Tel: ${routeOrder.pedido.cliente.telefono}`, margin + 60, yPos);
+              }
+              yPos += 5;
+            }
+
+            if (routeOrder.pedido.total) {
+              doc.text(`Total: $${routeOrder.pedido.total.toLocaleString('es-CO')}`, margin + 10, yPos);
+              yPos += 5;
+            }
+          } else {
+            doc.text(`Pedido ID: ${routeOrder.fkid_pedido}`, margin + 10, yPos);
+            yPos += 5;
+          }
+
+          doc.text(`Estado: ${routeOrder.estado_entrega === 'pendiente' ? 'Pendiente' :
+                    routeOrder.estado_entrega === 'en_camino' ? 'En Camino' :
+                    routeOrder.estado_entrega === 'entregado' ? 'Entregado' : 'Fallido'}`, margin + 10, yPos);
+          yPos += 5;
+
+          if (routeOrder.notas_entrega) {
+            doc.setFont('helvetica', 'italic');
+            doc.text(`Notas: ${routeOrder.notas_entrega}`, margin + 10, yPos);
+            doc.setFont('helvetica', 'normal');
+            yPos += 5;
+          }
+
+          // Línea separadora entre entregas
+          yPos += 2;
+          doc.setLineWidth(0.2);
+          doc.line(margin + 10, yPos, pageWidth - margin - 10, yPos);
+          yPos += 5;
+        });
+      } else {
+        doc.text('No hay pedidos asignados a esta ruta', margin, yPos);
+        yPos += 7;
+      }
+
+      // Estadísticas al final
+      if (route.distancia_estimada || route.tiempo_estimado) {
+        if (yPos > 250) {
+          doc.addPage();
+          yPos = margin;
+        }
+        yPos += 5;
+        doc.setLineWidth(0.5);
+        doc.line(margin, yPos, pageWidth - margin, yPos);
+        yPos += 7;
+
+        doc.setFontSize(10);
+        if (route.distancia_estimada != null && typeof route.distancia_estimada === 'number') {
+          doc.text(`Distancia estimada: ${route.distancia_estimada.toFixed(2)} km`, margin, yPos);
+          yPos += 5;
+        }
+        if (route.tiempo_estimado != null && typeof route.tiempo_estimado === 'number') {
+          doc.text(`Tiempo estimado: ${Math.round(route.tiempo_estimado)} min`, margin, yPos);
+        }
+      }
+
+      // Guardar el PDF
+      const fileName = `Ruta_${route.nombre_ruta.replace(/\s+/g, '_')}_${route.fecha_ruta}.pdf`;
+      doc.save(fileName);
+
+      toast({
+        title: "PDF generado",
+        description: `El detalle de la ruta se ha descargado exitosamente`,
+      });
+    } catch (error) {
+      console.error('Error al generar PDF:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo generar el PDF",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <DndContext
       collisionDetection={closestCenter}
@@ -884,6 +1055,206 @@ const RouteManagement = () => {
             }}
           />
         </div>
+      )}
+
+      {/* Listado de Rutas Planificadas */}
+      {routes.length > 0 && (
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Navigation className="h-5 w-5" />
+              Rutas Planificadas - Detalle de Entregas
+            </CardTitle>
+            <CardDescription>
+              Listado completo de rutas planificadas con detalles de cada dirección a entregar y repartidor asignado
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-6">
+              {routes.map((route) => (
+                <div key={route.id} className="border rounded-lg p-4 space-y-4">
+                  {/* Información de la Ruta */}
+                  <div className="flex items-start justify-between">
+                    <div className="space-y-1 flex-1">
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-lg font-semibold">{route.nombre_ruta}</h3>
+                        <Badge variant={
+                          route.estado === 'planificada' ? 'secondary' :
+                          route.estado === 'en_progreso' ? 'default' :
+                          route.estado === 'completada' ? 'default' : 'destructive'
+                        }>
+                          {route.estado === 'planificada' ? 'Planificada' :
+                           route.estado === 'en_progreso' ? 'En Progreso' :
+                           route.estado === 'completada' ? 'Completada' : 'Cancelada'}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <Calendar className="h-4 w-4" />
+                          {new Date(route.fecha_ruta).toLocaleDateString('es-ES', {
+                            weekday: 'long',
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric'
+                          })}
+                        </span>
+                        {route.repartidor && (
+                          <span className="flex items-center gap-1">
+                            <Truck className="h-4 w-4" />
+                            Repartidor: <strong className="text-foreground">{route.repartidor.nombre_completo}</strong>
+                            {route.repartidor.codigo_repartidor && (
+                              <span className="text-xs">({route.repartidor.codigo_repartidor})</span>
+                            )}
+                          </span>
+                        )}
+                        {route.total_pedidos > 0 && (
+                          <span className="flex items-center gap-1">
+                            <MapPin className="h-4 w-4" />
+                            {route.total_pedidos} {route.total_pedidos === 1 ? 'pedido' : 'pedidos'}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {!route.repartidor && (
+                        <Badge variant="outline" className="text-warning">
+                          Sin repartidor asignado
+                        </Badge>
+                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => downloadRoutePDF(route)}
+                        className="gap-2"
+                      >
+                        <Download className="h-4 w-4" />
+                        PDF
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Listado de Pedidos/Entregas */}
+                  {route.pedidos && route.pedidos.length > 0 ? (
+                    <Collapsible
+                      open={expandedRoutes.has(route.id)}
+                      onOpenChange={() => toggleRouteExpanded(route.id)}
+                    >
+                      <CollapsibleTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          className="w-full justify-between p-3 h-auto"
+                        >
+                          <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">
+                            Direcciones a Entregar ({route.pedidos.length})
+                          </h4>
+                          <ChevronDown
+                            className={`h-4 w-4 transition-transform ${
+                              expandedRoutes.has(route.id) ? 'transform rotate-180' : ''
+                            }`}
+                          />
+                        </Button>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <div className="space-y-2 pt-2">
+                          {route.pedidos
+                            .sort((a, b) => (a.orden_entrega || 0) - (b.orden_entrega || 0))
+                            .map((routeOrder, index) => (
+                              <div
+                                key={routeOrder.id}
+                                className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg border"
+                              >
+                                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-semibold">
+                                  {routeOrder.orden_entrega || index + 1}
+                                </div>
+                                <div className="flex-1 min-w-0 space-y-1">
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="flex-1 min-w-0">
+                                      {routeOrder.pedido ? (
+                                        <>
+                                          <div className="font-medium text-sm">
+                                            Pedido: {routeOrder.pedido.numero_pedido}
+                                          </div>
+                                          <div className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
+                                            <MapPin className="h-3 w-3 flex-shrink-0" />
+                                            <span className="truncate">{routeOrder.pedido.direccion_entrega}</span>
+                                          </div>
+                                          {routeOrder.pedido.cliente && (
+                                            <div className="text-xs text-muted-foreground mt-1">
+                                              Cliente: {routeOrder.pedido.cliente.nombre_completo}
+                                              {routeOrder.pedido.cliente.telefono && (
+                                                <span className="ml-2">• {routeOrder.pedido.cliente.telefono}</span>
+                                              )}
+                                            </div>
+                                          )}
+                                          {routeOrder.pedido.total && (
+                                            <div className="text-xs font-medium mt-1">
+                                              Total: ${routeOrder.pedido.total.toLocaleString('es-CO')}
+                                            </div>
+                                          )}
+                                        </>
+                                      ) : (
+                                        <div className="text-sm text-muted-foreground">
+                                          Pedido ID: {routeOrder.fkid_pedido}
+                                        </div>
+                                      )}
+                                    </div>
+                                    <Badge
+                                      variant={
+                                        routeOrder.estado_entrega === 'entregado' ? 'default' :
+                                        routeOrder.estado_entrega === 'en_camino' ? 'default' :
+                                        routeOrder.estado_entrega === 'fallido' ? 'destructive' : 'secondary'
+                                      }
+                                      className="text-xs"
+                                    >
+                                      {routeOrder.estado_entrega === 'pendiente' ? 'Pendiente' :
+                                       routeOrder.estado_entrega === 'en_camino' ? 'En Camino' :
+                                       routeOrder.estado_entrega === 'entregado' ? 'Entregado' : 'Fallido'}
+                                    </Badge>
+                                  </div>
+                                  {routeOrder.notas_entrega && (
+                                    <div className="text-xs text-muted-foreground mt-1 italic">
+                                      Notas: {routeOrder.notas_entrega}
+                                    </div>
+                                  )}
+                                  {routeOrder.link_ubicacion && (
+                                    <a
+                                      href={routeOrder.link_ubicacion}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-xs text-primary hover:underline flex items-center gap-1 mt-1"
+                                    >
+                                      <Navigation className="h-3 w-3" />
+                                      Ver en mapa
+                                    </a>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  ) : (
+                    <div className="text-center text-muted-foreground py-4 border rounded-lg">
+                      No hay pedidos asignados a esta ruta
+                    </div>
+                  )}
+
+                  {/* Estadísticas de la Ruta */}
+                  {(route.distancia_estimada || route.tiempo_estimado) && (
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground pt-2 border-t">
+                      {route.distancia_estimada != null && typeof route.distancia_estimada === 'number' && (
+                        <span>Distancia estimada: {route.distancia_estimada.toFixed(2)} km</span>
+                      )}
+                      {route.tiempo_estimado != null && typeof route.tiempo_estimado === 'number' && (
+                        <span>Tiempo estimado: {Math.round(route.tiempo_estimado)} min</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       )}
       </div>
       
