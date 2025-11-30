@@ -1,7 +1,18 @@
+// Función helper para normalizar la URL base del API
+const normalizeApiUrl = (url: string | undefined): string => {
+  if (!url) return 'http://localhost:3000/api';
+  // Si ya tiene protocolo, usarlo tal cual
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url;
+  }
+  // Si no tiene protocolo, agregar http://
+  return `http://${url}`;
+};
+
 // Configuración de entorno para la aplicación
 export const config = {
-  // URLs base del API según el entorno
-  apiBaseUrl: import.meta.env.VITE_API_BASE_URL || 'https://intelekia-miaumiau-back.vvggha.easypanel.host/api',
+  // URLs base del API según el entorno (normalizada con protocolo)
+  apiBaseUrl: normalizeApiUrl(import.meta.env.VITE_API_BASE_URL || 'localhost:3000/api'),
   
   // Información de la aplicación
   appName: import.meta.env.VITE_APP_NAME || 'Miau Miau Control Center',
@@ -15,14 +26,14 @@ export const config = {
 
 // Configuraciones específicas para desarrollo
 export const devConfig = {
-  apiBaseUrl: 'https://intelekia-miaumiau-back.vvggha.easypanel.host/api',
+  apiBaseUrl: normalizeApiUrl('localhost:3000/api'),
   timeout: 10000, // 10 segundos
   retryAttempts: 3,
 };
 
 // Configuraciones específicas para producción
 export const prodConfig = {
-  apiBaseUrl: 'https://intelekia-miaumiau-back.vvggha.easypanel.host/api',
+  apiBaseUrl: normalizeApiUrl('localhost:3000/api'),
   timeout: 15000, // 15 segundos
   retryAttempts: 2,
 };
