@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -67,20 +67,10 @@ export default function Agents() {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [lastSavedAgent, setLastSavedAgent] = useState<Agent | null>(null);
   const { toast } = useToast();
-  const debounceTimer = useRef<NodeJS.Timeout | null>(null);
 
   // Cargar agentes al montar el componente
   useEffect(() => {
     loadAgents();
-  }, []);
-
-  // Limpiar el timer cuando el componente se desmonte
-  useEffect(() => {
-    return () => {
-      if (debounceTimer.current) {
-        clearTimeout(debounceTimer.current);
-      }
-    };
   }, []);
 
   const loadAgents = async () => {
@@ -107,93 +97,11 @@ export default function Agents() {
   };
 
 
-  // Función para actualizar el estado local inmediatamente
+  // Función para actualizar el estado local inmediatamente (sin guardar)
   const updateLocalAgent = (agentId: number, updatedData: Partial<Agent>) => {
     setAgents(prev => prev.map(agent => 
       agent.id === agentId ? { ...agent, ...updatedData } : agent
     ));
-  };
-
-  // Función para guardar en el backend con todos los campos requeridos
-  const handleSaveAgent = async (agentId: number, updatedData: Partial<Agent>) => {
-    // Limpiar el timer anterior si existe
-    if (debounceTimer.current) {
-      clearTimeout(debounceTimer.current);
-    }
-
-    // Actualizar el estado local inmediatamente para feedback visual
-    updateLocalAgent(agentId, updatedData);
-
-    // Guardar en el backend después de un delay (debounce)
-    debounceTimer.current = setTimeout(async () => {
-      try {
-        setSaving(true);
-        
-        // Obtener el agente completo actualizado del estado usando el callback de setAgents
-        setAgents(prev => {
-          const agent = prev.find(a => a.id === agentId);
-          if (!agent) {
-            console.error('Agente no encontrado');
-            setSaving(false);
-            return prev;
-          }
-
-          // Asegurar que los campos requeridos estén presentes y no estén vacíos
-          const dataToSend = {
-            nombre: agent.nombre || '',
-            contexto: agent.contexto || '',
-            system_prompt: agent.system_prompt || '',
-            descripcion: agent.descripcion,
-            especialidad: agent.especialidad,
-            personalidad: agent.personalidad,
-            configuracion: agent.configuracion,
-            orden_prioridad: agent.orden_prioridad,
-          };
-
-          // Hacer la petición al backend de forma asíncrona
-          agentsService.updateAgent(agentId, dataToSend)
-            .then(response => {
-              if (response.success) {
-                // Actualizar con la respuesta del servidor
-                setAgents(prevAgents => prevAgents.map(a => 
-                  a.id === agentId ? response.data : a
-                ));
-                
-                // Guardar el agente actualizado para mostrar en el modal
-                setLastSavedAgent(response.data);
-                
-                // Mostrar modal de éxito
-                setShowSuccessModal(true);
-              }
-            })
-            .catch((error: any) => {
-              console.error('Error actualizando agente:', error);
-              
-              // Mostrar mensaje de error más detallado
-              const errorMessage = error?.response?.data?.message || 
-                                  error?.message || 
-                                  'No se pudo actualizar el agente';
-              
-              toast({
-                title: "Error",
-                description: errorMessage,
-                variant: "destructive"
-              });
-
-              // Recargar los agentes originales en caso de error
-              loadAgents();
-            })
-            .finally(() => {
-              setSaving(false);
-            });
-
-          return prev;
-        });
-      } catch (error: any) {
-        console.error('Error inesperado:', error);
-        setSaving(false);
-      }
-    }, 1000); // Esperar 1 segundo después de que el usuario deje de escribir
   };
 
   // Función para guardar manualmente cuando se hace click en el botón
@@ -202,12 +110,6 @@ export default function Agents() {
     
     const agent = agents.find(a => a.id === activeAgent);
     if (!agent) return;
-
-    // Limpiar el timer de debounce si existe
-    if (debounceTimer.current) {
-      clearTimeout(debounceTimer.current);
-      debounceTimer.current = null;
-    }
 
     try {
       setSaving(true);
@@ -249,6 +151,9 @@ export default function Agents() {
         description: errorMessage,
         variant: "destructive"
       });
+      
+      // Recargar los agentes originales en caso de error
+      loadAgents();
     } finally {
       setSaving(false);
     }
@@ -463,7 +368,7 @@ export default function Agents() {
                       <Textarea
                         id="context"
                         value={currentAgent.contexto}
-                        onChange={(e) => canEdit('agents') && handleSaveAgent(currentAgent.id, { contexto: e.target.value })}
+                        onChange={(e) => canEdit('agents') && updateLocalAgent(currentAgent.id, { contexto: e.target.value })}
                         rows={8}
                         className="mt-2"
                         placeholder="Describe el rol y responsabilidades de este agente..."
@@ -478,7 +383,7 @@ export default function Agents() {
                       <Textarea
                         id="systemPrompt"
                         value={currentAgent.system_prompt}
-                        onChange={(e) => canEdit('agents') && handleSaveAgent(currentAgent.id, { system_prompt: e.target.value })}
+                        onChange={(e) => canEdit('agents') && updateLocalAgent(currentAgent.id, { system_prompt: e.target.value })}
                         rows={8}
                         className="mt-2"
                         placeholder="Instrucciones específicas para el comportamiento del agente..."
@@ -494,7 +399,7 @@ export default function Agents() {
                         <Input
                           id="nombre"
                           value={currentAgent.nombre}
-                          onChange={(e) => canEdit('agents') && handleSaveAgent(currentAgent.id, { nombre: e.target.value })}
+                          onChange={(e) => canEdit('agents') && updateLocalAgent(currentAgent.id, { nombre: e.target.value })}
                           className="mt-2"
                           disabled={!canEdit('agents')}
                         />
@@ -504,7 +409,7 @@ export default function Agents() {
                         <Input
                           id="especialidad"
                           value={currentAgent.especialidad}
-                          onChange={(e) => canEdit('agents') && handleSaveAgent(currentAgent.id, { especialidad: e.target.value })}
+                          onChange={(e) => canEdit('agents') && updateLocalAgent(currentAgent.id, { especialidad: e.target.value })}
                           className="mt-2"
                           disabled={!canEdit('agents')}
                         />
@@ -514,7 +419,7 @@ export default function Agents() {
                         <Textarea
                           id="descripcion"
                           value={currentAgent.descripcion}
-                          onChange={(e) => canEdit('agents') && handleSaveAgent(currentAgent.id, { descripcion: e.target.value })}
+                          onChange={(e) => canEdit('agents') && updateLocalAgent(currentAgent.id, { descripcion: e.target.value })}
                           rows={3}
                           className="mt-2"
                           disabled={!canEdit('agents')}
@@ -526,7 +431,7 @@ export default function Agents() {
                           id="orden_prioridad"
                           type="number"
                           value={currentAgent.orden_prioridad}
-                          onChange={(e) => canEdit('agents') && handleSaveAgent(currentAgent.id, { orden_prioridad: parseInt(e.target.value) })}
+                          onChange={(e) => canEdit('agents') && updateLocalAgent(currentAgent.id, { orden_prioridad: parseInt(e.target.value) || 0 })}
                           className="mt-2"
                           disabled={!canEdit('agents')}
                         />
@@ -541,7 +446,7 @@ export default function Agents() {
                           <Input
                             id="tono"
                             value={currentAgent.personalidad?.tono || ''}
-                            onChange={(e) => canEdit('agents') && handleSaveAgent(currentAgent.id, { 
+                            onChange={(e) => canEdit('agents') && updateLocalAgent(currentAgent.id, { 
                               personalidad: { ...currentAgent.personalidad, tono: e.target.value }
                             })}
                             className="mt-2"
@@ -553,7 +458,7 @@ export default function Agents() {
                           <Input
                             id="estilo"
                             value={currentAgent.personalidad?.estilo || ''}
-                            onChange={(e) => canEdit('agents') && handleSaveAgent(currentAgent.id, { 
+                            onChange={(e) => canEdit('agents') && updateLocalAgent(currentAgent.id, { 
                               personalidad: { ...currentAgent.personalidad, estilo: e.target.value }
                             })}
                             className="mt-2"
@@ -572,8 +477,8 @@ export default function Agents() {
                             id="max_tokens"
                             type="number"
                             value={currentAgent.configuracion?.max_tokens || ''}
-                            onChange={(e) => canEdit('agents') && handleSaveAgent(currentAgent.id, { 
-                              configuracion: { ...currentAgent.configuracion, max_tokens: parseInt(e.target.value) }
+                            onChange={(e) => canEdit('agents') && updateLocalAgent(currentAgent.id, { 
+                              configuracion: { ...currentAgent.configuracion, max_tokens: parseInt(e.target.value) || 0 }
                             })}
                             className="mt-2"
                             disabled={!canEdit('agents')}
@@ -588,8 +493,8 @@ export default function Agents() {
                             min="0"
                             max="2"
                             value={currentAgent.configuracion?.temperature || ''}
-                            onChange={(e) => canEdit('agents') && handleSaveAgent(currentAgent.id, { 
-                              configuracion: { ...currentAgent.configuracion, temperature: parseFloat(e.target.value) }
+                            onChange={(e) => canEdit('agents') && updateLocalAgent(currentAgent.id, { 
+                              configuracion: { ...currentAgent.configuracion, temperature: parseFloat(e.target.value) || 0 }
                             })}
                             className="mt-2"
                             disabled={!canEdit('agents')}
@@ -600,7 +505,7 @@ export default function Agents() {
                           <Input
                             id="modelo"
                             value={currentAgent.configuracion?.modelo || ''}
-                            onChange={(e) => canEdit('agents') && handleSaveAgent(currentAgent.id, { 
+                            onChange={(e) => canEdit('agents') && updateLocalAgent(currentAgent.id, { 
                               configuracion: { ...currentAgent.configuracion, modelo: e.target.value }
                             })}
                             className="mt-2"
