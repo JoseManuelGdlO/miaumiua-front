@@ -158,6 +158,16 @@ export interface AvailableOrder {
     direccion_entrega?: string;
     lat?: number;
     lng?: number;
+    ciudad?: {
+      id: number;
+      nombre: string;
+      departamento: string;
+    };
+  };
+  ciudad?: {
+    id: number;
+    nombre: string;
+    departamento: string;
   };
   productos?: Array<{
     id: number;

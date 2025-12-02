@@ -411,12 +411,32 @@ const RouteManagement = () => {
       return;
     }
 
+    // Verificar que haya repartidores disponibles
+    if (drivers.length === 0) {
+      toast({
+        title: "Error",
+        description: "No hay repartidores disponibles. Debe haber al menos un repartidor disponible para crear una ruta.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Verificar que haya pedidos disponibles
+    if (availableOrders.length === 0) {
+      toast({
+        title: "Error",
+        description: "No hay pedidos disponibles. Debe haber al menos un pedido para crear una ruta.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     try {
       const response = await routesService.createRoute({
         nombre_ruta: `Ruta Manual - ${new Date().toLocaleString()}`,
         fecha_ruta: selectedDate,
         fkid_ciudad: parseInt(selectedCity),
-        fkid_repartidor: drivers[0]?.id || 1, // Asignar primer repartidor disponible
+        fkid_repartidor: drivers[0].id, // Asignar primer repartidor disponible
         estado: "planificada",
         notas: "Ruta creada manualmente"
       });
@@ -872,7 +892,13 @@ const RouteManagement = () => {
         </div>
         <div className="flex gap-2">
           {canCreate('routes') && (
-            <Button onClick={createManualRoute} variant="outline" className="gap-2" disabled={loading}>
+            <Button 
+              onClick={createManualRoute} 
+              variant="outline" 
+              className="gap-2" 
+              disabled={loading || drivers.length === 0 || availableOrders.length === 0}
+              title={drivers.length === 0 ? "No hay repartidores disponibles" : availableOrders.length === 0 ? "No hay pedidos disponibles" : ""}
+            >
               {loading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
@@ -1089,25 +1115,217 @@ const RouteManagement = () => {
       {selectedCity && availableOrders.length > 0 && (
         <div className="mt-6">
           <AIRouteOptimizer
-            orders={availableOrders.map(order => ({
+            orders={availableOrders.map(order => {
+              // Priorizar ciudad del pedido, luego del cliente, luego del array cities
+              const cityInfo = order.ciudad 
+                || order.cliente?.ciudad 
+                || cities.find(c => c.id === order.fkid_ciudad);
+              
+              return {
               id: order.id,
-              orderNumber: order.numero_pedido,
+                orderNumber: order.numero_pedido || `PED-${order.id}`,
               customer: order.cliente?.nombre_completo || 'Cliente',
               phone: order.cliente?.telefono || '',
-              address: order.direccion_entrega,
-              city: cities.find(c => c.id === order.fkid_ciudad)?.nombre || 'Ciudad',
+                address: order.direccion_entrega || 'Dirección no disponible',
+                city: cityInfo?.nombre || 'Ciudad',
+                estado: cityInfo?.departamento || '', // Estado/departamento para geocodificación
+                ciudad: cityInfo?.nombre || '', // Nombre de la ciudad para geocodificación
               zone: 'Zona',
               products: 'Productos',
               total: order.total,
-              coordinates: { lat: 0, lng: 0 }, // Se puede obtener de geolocalización
+                coordinates: order.cliente?.lat && order.cliente?.lng 
+                  ? { lat: order.cliente.lat, lng: order.cliente.lng }
+                  : { lat: 0, lng: 0 }, // Se geocodificará automáticamente
               route: null,
               driver: null
-            }))}
-            city={selectedCity}
+              };
+            })}
+            city={cities.find(c => c.id.toString() === selectedCity)?.nombre || selectedCity}
+            cityInfo={cities.find(c => c.id.toString() === selectedCity) ? {
+              id: cities.find(c => c.id.toString() === selectedCity)!.id,
+              nombre: cities.find(c => c.id.toString() === selectedCity)!.nombre,
+              departamento: cities.find(c => c.id.toString() === selectedCity)!.departamento,
+              direccion_operaciones: cities.find(c => c.id.toString() === selectedCity)!.direccion_operaciones
+            } : undefined}
             date={selectedDate}
-            onRoutesGenerated={(newRoutes) => {
-              // Esta función ya no es necesaria ya que usamos el backend
-              // Se mantiene por compatibilidad pero no hace nada
+            driversAvailable={drivers.length}
+            onRoutesGenerated={async (newRoutes) => {
+              try {
+                setLoading(true);
+                
+                // Verificar que haya repartidores disponibles
+                if (drivers.length === 0) {
+                  toast({
+                    title: "Error",
+                    description: "No hay repartidores disponibles para asignar a las rutas. Por favor, asegúrate de que haya al menos un repartidor disponible.",
+                    variant: "destructive"
+                  });
+                  return;
+                }
+                
+                // Crear una ruta para cada grupo optimizado
+                const routeEntries = Object.entries(newRoutes);
+                let driverIndex = 0;
+                let routesCreated = 0;
+                let routesWithOrders = 0;
+                let totalOrdersAssigned = 0;
+                
+                for (const [routeId, orders] of routeEntries) {
+                  if (orders.length === 0) continue;
+                  
+                  try {
+                    // Seleccionar repartidor (distribuir entre los disponibles)
+                    const selectedDriver = drivers[driverIndex % drivers.length];
+                    driverIndex++;
+                    
+                    // Crear la ruta con repartidor asignado
+                    const routeResponse = await routesService.createRoute({
+                      nombre_ruta: `Ruta ${routeId} - ${selectedDate}`,
+                      fecha_ruta: selectedDate,
+                      fkid_ciudad: parseInt(selectedCity),
+                      fkid_repartidor: selectedDriver.id,
+                      estado: "planificada",
+                      notas: `Ruta optimizada con IA - ${orders.length} pedidos`
+                    });
+                    
+                    // La respuesta del backend devuelve data.id directamente (el objeto ruta completo)
+                    if (routeResponse.success && routeResponse.data?.id) {
+                      routesCreated++;
+                      const routeIdNum = parseInt(routeResponse.data.id.toString());
+                      console.log(`[DEBUG] ✅ Ruta creada con ID: ${routeIdNum}`);
+                      console.log(`[DEBUG] Estructura completa de respuesta:`, JSON.stringify(routeResponse, null, 2));
+                      
+                      // Esperar un momento para asegurar que la ruta esté completamente creada
+                      await new Promise(resolve => setTimeout(resolve, 100));
+                      
+                      // Asignar pedidos en el orden optimizado
+                      const pedidosToAssign = orders.map((order, index) => {
+                        // Obtener coordenadas del pedido original desde availableOrders
+                        const originalOrder = availableOrders.find(o => o.id === order.id);
+                        const lat = originalOrder?.cliente?.lat || order.coordinates?.lat;
+                        const lng = originalOrder?.cliente?.lng || order.coordinates?.lng;
+                        
+                        const pedidoData: any = {
+                          fkid_pedido: parseInt(order.id),
+                          orden_entrega: index + 1
+                        };
+                        
+                        // Solo agregar lat/lng si existen y son válidos
+                        if (lat !== undefined && lat !== null && lat !== 0) {
+                          pedidoData.lat = parseFloat(lat.toString());
+                        }
+                        if (lng !== undefined && lng !== null && lng !== 0) {
+                          pedidoData.lng = parseFloat(lng.toString());
+                        }
+                        
+                        // Solo agregar link si hay coordenadas válidas
+                        if (lat && lng && lat !== 0 && lng !== 0) {
+                          pedidoData.link_ubicacion = `https://maps.google.com/?q=${lat},${lng}`;
+                        }
+                        
+                        pedidoData.notas_entrega = `Orden optimizado: ${index + 1}`;
+                        
+                        return pedidoData;
+                      });
+                      
+                      console.log(`[DEBUG] 📦 Preparando asignar ${pedidosToAssign.length} pedidos a ruta ${routeIdNum}`);
+                      console.log(`[DEBUG] Datos de pedidos:`, JSON.stringify(pedidosToAssign, null, 2));
+                      
+                      // Asignar pedidos a la ruta
+                      try {
+                        const assignResponse = await routesService.assignOrdersToRoute(routeIdNum, {
+                          pedidos: pedidosToAssign
+                        });
+                        
+                        console.log(`[DEBUG] 📥 Respuesta del servidor:`, JSON.stringify(assignResponse, null, 2));
+                        
+                        if (assignResponse && assignResponse.success) {
+                          routesWithOrders++;
+                          totalOrdersAssigned += assignResponse.data?.pedidos_asignados || pedidosToAssign.length;
+                          console.log(`✅ ✅ ✅ Pedidos asignados exitosamente a ruta ${routeIdNum}`);
+                          console.log(`   - Pedidos asignados: ${assignResponse.data?.pedidos_asignados || pedidosToAssign.length}`);
+                          console.log(`   - Total en ruta: ${assignResponse.data?.total_pedidos_ruta || 0}`);
+                          console.log(`   - Pedidos en respuesta: ${assignResponse.data?.pedidos?.length || 0}`);
+                        } else {
+                          console.error(`❌ Error en respuesta de asignación:`, assignResponse);
+                          const errorDetails = assignResponse?.errors || assignResponse?.message || 'Error desconocido';
+                          toast({
+                            title: "Error",
+                            description: `No se pudieron asignar los pedidos a la ruta ${routeId}: ${typeof errorDetails === 'string' ? errorDetails : JSON.stringify(errorDetails)}`,
+                            variant: "destructive"
+                          });
+                        }
+                      } catch (assignError: any) {
+                        console.error(`❌ ❌ ❌ EXCEPCIÓN al asignar pedidos:`, assignError);
+                        console.error(`[DEBUG] Detalles del error:`, {
+                          message: assignError?.message,
+                          response: assignError?.response?.data,
+                          status: assignError?.response?.status,
+                          statusText: assignError?.response?.statusText
+                        });
+                        
+                        let errorMessage = 'Error desconocido';
+                        if (assignError?.response?.data) {
+                          if (assignError.response.data.errors && Array.isArray(assignError.response.data.errors)) {
+                            errorMessage = assignError.response.data.errors.map((e: any) => e.msg || e.message).join(', ');
+                          } else if (assignError.response.data.message) {
+                            errorMessage = assignError.response.data.message;
+                          }
+                        } else if (assignError?.message) {
+                          errorMessage = assignError.message;
+                        }
+                          
+                        toast({
+                          title: "Error",
+                          description: `Error al asignar pedidos a la ruta ${routeId}: ${errorMessage}`,
+                          variant: "destructive"
+                        });
+                      }
+                    } else {
+                      console.error(`❌ Error creando ruta ${routeId}:`, routeResponse);
+                      toast({
+                        title: "Error",
+                        description: `No se pudo crear la ruta ${routeId}: ${routeResponse.message || 'Error desconocido'}`,
+                        variant: "destructive"
+                      });
+                    }
+                  } catch (routeError: any) {
+                    console.error(`Error procesando ruta ${routeId}:`, routeError);
+                    const errorMessage = routeError?.response?.data?.message || routeError?.message || 'Error desconocido';
+                    toast({
+                      title: "Error",
+                      description: `Error al crear la ruta ${routeId}: ${errorMessage}`,
+                      variant: "destructive"
+                    });
+                  }
+                }
+                
+                // Mostrar resumen
+                if (routesCreated > 0) {
+                  toast({
+                    title: "Rutas optimizadas creadas",
+                    description: `Se crearon ${routesCreated} ruta(s) y se asignaron ${totalOrdersAssigned} pedido(s) exitosamente`,
+                  });
+                } else {
+                  toast({
+                    title: "Error",
+                    description: "No se pudieron crear las rutas optimizadas",
+                    variant: "destructive"
+                  });
+                }
+                
+                // Recargar datos
+                loadRouteData();
+              } catch (error) {
+                console.error('Error creando rutas optimizadas:', error);
+                toast({
+                  title: "Error",
+                  description: "No se pudieron crear todas las rutas optimizadas",
+                  variant: "destructive"
+                });
+              } finally {
+                setLoading(false);
+              }
             }}
           />
         </div>
