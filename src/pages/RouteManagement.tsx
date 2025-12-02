@@ -1140,7 +1140,13 @@ const RouteManagement = () => {
               driver: null
               };
             })}
-            city={selectedCity}
+            city={cities.find(c => c.id.toString() === selectedCity)?.nombre || selectedCity}
+            cityInfo={cities.find(c => c.id.toString() === selectedCity) ? {
+              id: cities.find(c => c.id.toString() === selectedCity)!.id,
+              nombre: cities.find(c => c.id.toString() === selectedCity)!.nombre,
+              departamento: cities.find(c => c.id.toString() === selectedCity)!.departamento,
+              direccion_operaciones: cities.find(c => c.id.toString() === selectedCity)!.direccion_operaciones
+            } : undefined}
             date={selectedDate}
             driversAvailable={drivers.length}
             onRoutesGenerated={async (newRoutes) => {

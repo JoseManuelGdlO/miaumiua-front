@@ -130,6 +130,48 @@ function optimizeRouteOrder(
   return bestRoute;
 }
 
+// Algoritmo de optimización que siempre comienza desde la bodega (índice 0)
+// La matriz de distancias incluye la bodega como primer elemento (índice 0)
+function optimizeRouteFromWarehouse(
+  numOrders: number,
+  distanceMatrix: number[][]
+): number[] {
+  if (numOrders <= 0) return [0];
+  
+  // La matriz tiene: [bodega (0), pedido1 (1), pedido2 (2), ...]
+  const n = numOrders + 1; // +1 por la bodega
+  const warehouseIndex = 0;
+  
+  const visited = new Set<number>();
+  const route: number[] = [warehouseIndex]; // Siempre comenzar desde la bodega
+  visited.add(warehouseIndex);
+  
+  let currentIndex = warehouseIndex;
+  
+  // Nearest Neighbor: siempre ir al punto más cercano no visitado
+  while (visited.size < n) {
+    let nearestIndex = -1;
+    let nearestDistance = Infinity;
+    
+    for (let i = 0; i < n; i++) {
+      if (!visited.has(i) && distanceMatrix[currentIndex][i] < nearestDistance) {
+        nearestDistance = distanceMatrix[currentIndex][i];
+        nearestIndex = i;
+      }
+    }
+    
+    if (nearestIndex !== -1) {
+      route.push(nearestIndex);
+      visited.add(nearestIndex);
+      currentIndex = nearestIndex;
+    } else {
+      break;
+    }
+  }
+  
+  return route;
+}
+
 // Agrupar pedidos en rutas usando clustering geográfico
 function clusterOrders(
   orders: Order[],
@@ -222,6 +264,12 @@ interface Order {
 interface AIRouteOptimizerProps {
   orders: Order[];
   city: string;
+  cityInfo?: {
+    id: number;
+    nombre: string;
+    departamento: string;
+    direccion_operaciones: string;
+  };
   date: string;
   driversAvailable: number;
   onRoutesGenerated: (routes: { [key: string]: Order[] }) => void;
@@ -230,6 +278,7 @@ interface AIRouteOptimizerProps {
 const AIRouteOptimizer: React.FC<AIRouteOptimizerProps> = ({
   orders,
   city,
+  cityInfo,
   date,
   driversAvailable,
   onRoutesGenerated
@@ -246,10 +295,29 @@ const AIRouteOptimizer: React.FC<AIRouteOptimizerProps> = ({
       return;
     }
 
+    if (!cityInfo || !cityInfo.direccion_operaciones) {
+      alert('No se encontró la dirección de la bodega para esta ciudad');
+      return;
+    }
+
     setIsOptimizing(true);
 
     try {
-      // Paso 1: Geocodificar direcciones para obtener coordenadas
+      // Paso 0: Geocodificar la dirección de la bodega (punto de inicio)
+      console.log('Geocodificando dirección de bodega:', cityInfo.direccion_operaciones);
+      const warehouseCoords = await geocodeAddress(
+        cityInfo.direccion_operaciones,
+        cityInfo.departamento,
+        cityInfo.nombre
+      );
+
+      if (!warehouseCoords) {
+        throw new Error('No se pudo geocodificar la dirección de la bodega');
+      }
+
+      console.log('Coordenadas de bodega:', warehouseCoords);
+
+      // Paso 1: Geocodificar direcciones de pedidos para obtener coordenadas
       const ordersWithCoordinates: Order[] = [];
       
       for (const order of orders) {
@@ -302,27 +370,34 @@ const AIRouteOptimizer: React.FC<AIRouteOptimizerProps> = ({
           continue;
         }
 
-        // Calcular matriz de distancias
-        const coordinates = cluster.map(o => o.coordinates!);
-        const distanceMatrix = await calculateDistanceMatrix(coordinates, coordinates);
+        // Calcular matriz de distancias incluyendo la bodega como origen
+        // La matriz incluye: [bodega (0), pedido1 (1), pedido2 (2), ...]
+        const allCoordinates = [warehouseCoords, ...cluster.map(o => o.coordinates!)];
+        const distanceMatrix = await calculateDistanceMatrix(allCoordinates, allCoordinates);
         
         if (!distanceMatrix) {
           // Si falla la API, usar distancias haversine como fallback
-          const haversineMatrix = coordinates.map((coord1, i) =>
-            coordinates.map((coord2, j) => 
+          const haversineMatrix = allCoordinates.map((coord1, i) =>
+            allCoordinates.map((coord2, j) => 
               i === j ? 0 : haversineDistance(coord1, coord2)
             )
           );
           
-          // Optimizar orden usando Nearest Neighbor (prueba todos los puntos como inicio)
-          const optimizedOrder = optimizeRouteOrder(cluster, haversineMatrix);
-          optimizedRoutes[routeId] = optimizedOrder.map(index => cluster[index]);
+          // Optimizar orden usando Nearest Neighbor desde la bodega (índice 0)
+          // El resultado incluye índices donde 0 es la bodega, 1+ son los pedidos
+          const optimizedOrder = optimizeRouteFromWarehouse(cluster.length, haversineMatrix);
+          // Remover el índice 0 (bodega) y ajustar índices para los pedidos
+          const orderWithoutWarehouse = optimizedOrder.filter(idx => idx > 0).map(idx => idx - 1);
+          optimizedRoutes[routeId] = orderWithoutWarehouse.map(index => cluster[index]);
         } else {
-          // Optimizar orden usando distancias reales de Google Maps (prueba todos los puntos como inicio)
-          const optimizedOrder = optimizeRouteOrder(cluster, distanceMatrix);
-          optimizedRoutes[routeId] = optimizedOrder.map(index => cluster[index]);
+          // Optimizar orden usando distancias reales de Google Maps desde la bodega
+          // El índice 0 en la matriz es la bodega
+          const optimizedOrder = optimizeRouteFromWarehouse(cluster.length, distanceMatrix);
+          // Remover el índice 0 (bodega) y ajustar índices para los pedidos
+          const orderWithoutWarehouse = optimizedOrder.filter(idx => idx > 0).map(idx => idx - 1);
+          optimizedRoutes[routeId] = orderWithoutWarehouse.map(index => cluster[index]);
           
-          // Calcular distancia total optimizada
+          // Calcular distancia total optimizada (desde bodega + entre pedidos)
           let routeDistance = 0;
           for (let i = 0; i < optimizedOrder.length - 1; i++) {
             routeDistance += distanceMatrix[optimizedOrder[i]][optimizedOrder[i + 1]];
