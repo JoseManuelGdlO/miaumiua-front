@@ -1,6 +1,6 @@
 // Función helper para normalizar la URL base del API
 const normalizeApiUrl = (url: string | undefined): string => {
-  if (!url) return 'http://localhost:3000/api';
+  if (!url) return 'https://intelekia-miaumiau-back.vvggha.easypanel.host/api';
   // Si ya tiene protocolo, usarlo tal cual
   if (url.startsWith('http://') || url.startsWith('https://')) {
     return url;
