@@ -12,7 +12,7 @@ const normalizeApiUrl = (url: string | undefined): string => {
 // Configuración de entorno para la aplicación
 export const config = {
   // URLs base del API según el entorno (normalizada con protocolo)
-  apiBaseUrl: normalizeApiUrl(import.meta.env.VITE_API_BASE_URL || 'localhost:3000/api'),
+  apiBaseUrl: normalizeApiUrl(import.meta.env.VITE_API_BASE_URL || 'https://intelekia-miaumiau-back.vvggha.easypanel.host/api'),
   
   // Información de la aplicación
   appName: import.meta.env.VITE_APP_NAME || 'Miau Miau Control Center',
@@ -26,14 +26,14 @@ export const config = {
 
 // Configuraciones específicas para desarrollo
 export const devConfig = {
-  apiBaseUrl: normalizeApiUrl('localhost:3000/api'),
+  apiBaseUrl: normalizeApiUrl('https://intelekia-miaumiau-back.vvggha.easypanel.host/api'),
   timeout: 10000, // 10 segundos
   retryAttempts: 3,
 };
 
 // Configuraciones específicas para producción
 export const prodConfig = {
-  apiBaseUrl: normalizeApiUrl('localhost:3000/api'),
+  apiBaseUrl: normalizeApiUrl('https://intelekia-miaumiau-back.vvggha.easypanel.host/api'),
   timeout: 15000, // 15 segundos
   retryAttempts: 2,
 };
