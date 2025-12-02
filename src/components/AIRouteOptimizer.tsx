@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Loader2, Sparkles, MapPin, Truck, Route } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { mapsService } from '@/services/mapsService';
+import { compareOneVsTwoDrivers, type Location } from '@/utils/vrpSolver';
 
 // Utilidades para cálculo de distancias
 interface Coordinates {
@@ -325,7 +326,6 @@ const AIRouteOptimizer: React.FC<AIRouteOptimizerProps> = ({
         
         // Si no tiene coordenadas o son (0,0), geocodificar
         if (!coords || (coords.lat === 0 && coords.lng === 0)) {
-          // Incluir estado y ciudad para mejor precisión en la geocodificación
           const geocoded = await geocodeAddress(
             order.address,
             order.estado, // Estado/departamento
@@ -335,7 +335,6 @@ const AIRouteOptimizer: React.FC<AIRouteOptimizerProps> = ({
             coords = geocoded;
           } else {
             console.warn(`No se pudo geocodificar: ${order.address}, ${order.estado || ''}, ${order.ciudad || ''}`);
-            // Usar coordenadas por defecto de la ciudad si no se puede geocodificar
             continue;
           }
         }
@@ -350,69 +349,84 @@ const AIRouteOptimizer: React.FC<AIRouteOptimizerProps> = ({
         throw new Error('No se pudieron obtener coordenadas para los pedidos');
       }
 
-      // Paso 2: Agrupar pedidos en clusters geográficos
-      const clusters = clusterOrders(ordersWithCoordinates, 8);
-      
-      // Paso 3: Para cada cluster, calcular matriz de distancias y optimizar orden
-      const optimizedRoutes: { [key: string]: Order[] } = {};
-      let routeId = 'A';
-      let totalDistanceSaved = 0;
-      let totalRoutes = 0;
+      // Paso 2: Construir arreglo de ubicaciones para el solver VRP
+      const locations: Location[] = [
+        {
+          lat: warehouseCoords.lat,
+          lng: warehouseCoords.lng,
+          label: cityInfo.nombre || 'Bodega',
+          address: cityInfo.direccion_operaciones
+        },
+        ...ordersWithCoordinates.map(o => ({
+          lat: o.coordinates.lat,
+          lng: o.coordinates.lng,
+          label: o.orderNumber || `Pedido ${o.id}`,
+          address: o.address
+        }))
+      ];
 
-      for (const cluster of clusters) {
-        if (cluster.length === 0) continue;
+      // Paso 3: Comparar 1 vs 2 repartidores usando el solver VRP
+      const comparison = await compareOneVsTwoDrivers(locations);
+      console.log('[AI ROUTES] Resultado comparación 1 vs 2 repartidores:', comparison);
 
-        // Si solo hay un pedido, no necesita optimización
-        if (cluster.length === 1) {
-          optimizedRoutes[routeId] = cluster;
-          routeId = String.fromCharCode(routeId.charCodeAt(0) + 1);
-          totalRoutes++;
-          continue;
-        }
+      // Determinar cuántos repartidores usar realmente según disponibilidad
+      const recommendedDrivers = comparison.recommendation === '2 drivers' ? 2 : 1;
+      const driversToUse = Math.min(driversAvailable, recommendedDrivers);
 
-        // Calcular matriz de distancias incluyendo la bodega como origen
-        // La matriz incluye: [bodega (0), pedido1 (1), pedido2 (2), ...]
-        const allCoordinates = [warehouseCoords, ...cluster.map(o => o.coordinates!)];
-        const distanceMatrix = await calculateDistanceMatrix(allCoordinates, allCoordinates);
-        
-        if (!distanceMatrix) {
-          // Si falla la API, usar distancias haversine como fallback
-          const haversineMatrix = allCoordinates.map((coord1, i) =>
-            allCoordinates.map((coord2, j) => 
-              i === j ? 0 : haversineDistance(coord1, coord2)
-            )
-          );
-          
-          // Optimizar orden usando Nearest Neighbor desde la bodega (índice 0)
-          // El resultado incluye índices donde 0 es la bodega, 1+ son los pedidos
-          const optimizedOrder = optimizeRouteFromWarehouse(cluster.length, haversineMatrix);
-          // Remover el índice 0 (bodega) y ajustar índices para los pedidos
-          const orderWithoutWarehouse = optimizedOrder.filter(idx => idx > 0).map(idx => idx - 1);
-          optimizedRoutes[routeId] = orderWithoutWarehouse.map(index => cluster[index]);
-        } else {
-          // Optimizar orden usando distancias reales de Google Maps desde la bodega
-          // El índice 0 en la matriz es la bodega
-          const optimizedOrder = optimizeRouteFromWarehouse(cluster.length, distanceMatrix);
-          // Remover el índice 0 (bodega) y ajustar índices para los pedidos
-          const orderWithoutWarehouse = optimizedOrder.filter(idx => idx > 0).map(idx => idx - 1);
-          optimizedRoutes[routeId] = orderWithoutWarehouse.map(index => cluster[index]);
-          
-          // Calcular distancia total optimizada (desde bodega + entre pedidos)
-          let routeDistance = 0;
-          for (let i = 0; i < optimizedOrder.length - 1; i++) {
-            routeDistance += distanceMatrix[optimizedOrder[i]][optimizedOrder[i + 1]];
-          }
-          totalDistanceSaved += routeDistance;
-        }
-        
-        routeId = String.fromCharCode(routeId.charCodeAt(0) + 1);
-        totalRoutes++;
+      if (comparison.recommendation === '2 drivers' && driversAvailable < 2) {
+        console.warn('[AI ROUTES] La IA recomienda 2 repartidores, pero solo hay 1 disponible. Se usará 1 repartidor.');
       }
 
-      // Generar resumen de optimización
-      const summary = `Se generaron ${totalRoutes} rutas optimizadas para ${ordersWithCoordinates.length} pedidos. ` +
-        `Las rutas fueron agrupadas geográficamente y ordenadas para minimizar distancias de viaje. ` +
-        `Distancia total estimada: ${totalDistanceSaved.toFixed(2)} km.`;
+      const optimizedRoutes: { [key: string]: Order[] } = {};
+
+      if (driversToUse === 1) {
+        // Usar solución de 1 repartidor
+        const route = comparison.oneDriver.routes[0];
+        if (route && route.stops.length > 1) {
+          const ordersForRoute: Order[] = [];
+          for (const stopIndex of route.stops) {
+            if (stopIndex === 0) continue; // Saltar la bodega
+            const orderIdx = stopIndex - 1; // Ajustar índice (0 es bodega)
+            const order = ordersWithCoordinates[orderIdx];
+            if (order) {
+              ordersForRoute.push(order);
+            }
+          }
+          optimizedRoutes['A'] = ordersForRoute;
+        }
+      } else {
+        // Usar solución de 2 repartidores
+        let routeKeyCharCode = 'A'.charCodeAt(0);
+        for (const route of comparison.twoDrivers.routes) {
+          if (!route || route.stops.length <= 1) continue;
+
+          const ordersForRoute: Order[] = [];
+          for (const stopIndex of route.stops) {
+            if (stopIndex === 0) continue; // Saltar la bodega
+            const orderIdx = stopIndex - 1; // Ajustar índice (0 es bodega)
+            const order = ordersWithCoordinates[orderIdx];
+            if (order) {
+              ordersForRoute.push(order);
+            }
+          }
+
+          if (ordersForRoute.length > 0) {
+            const routeKey = String.fromCharCode(routeKeyCharCode);
+            optimizedRoutes[routeKey] = ordersForRoute;
+            routeKeyCharCode++;
+          }
+        }
+      }
+
+      const totalOrdersOptimized = Object.values(optimizedRoutes).reduce(
+        (sum, arr) => sum + arr.length,
+        0
+      );
+
+      const summary =
+        `Se optimizaron ${totalOrdersOptimized} pedidos usando ${driversToUse} repartidor(es). ` +
+        `Recomendación de IA: ${comparison.recommendation}. ` +
+        `Motivo: ${comparison.reason}`;
 
       setLastOptimization({
         routes: optimizedRoutes,
