@@ -69,7 +69,7 @@ export interface PackagesResponse {
   };
 }
 
-const API_BASE_URL = config.apiUrl;
+const API_BASE_URL = config.apiBaseUrl;
 
 class PackagesService {
   private async request<T>(
