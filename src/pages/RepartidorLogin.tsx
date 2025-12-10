@@ -17,12 +17,12 @@ const RepartidorLogin = () => {
   const { login, isLoading, error, clearError, isAuthenticated } = useRepartidorAuth();
   const navigate = useNavigate();
 
-  // Redirigir si ya está autenticado
+  // Redirigir si ya está autenticado (solo si no está cargando)
   useEffect(() => {
-    if (isAuthenticated) {
-      navigate("/repartidores/dashboard");
+    if (isAuthenticated && !isLoading) {
+      navigate("/repartidores/dashboard", { replace: true });
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, isLoading, navigate]);
 
   // Limpiar errores después de 5 segundos
   useEffect(() => {

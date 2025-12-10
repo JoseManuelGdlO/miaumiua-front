@@ -92,6 +92,7 @@ export const useRepartidorAuth = () => {
         }
         console.log('=== FIN LOGIN ===');
         
+        // Actualizar el estado primero
         setAuthState({
           isAuthenticated: true,
           isLoading: false,
@@ -99,8 +100,11 @@ export const useRepartidorAuth = () => {
           error: null,
         });
         
+        // Esperar un momento para que el estado se actualice antes de navegar
+        await new Promise(resolve => setTimeout(resolve, 50));
+        
         // Redirigir después del login exitoso
-        navigate('/repartidores/dashboard');
+        navigate('/repartidores/dashboard', { replace: true });
       } else {
         const errorMessage = response.error || 'Credenciales incorrectas. Verifica tus datos.';
         setAuthState(prev => ({

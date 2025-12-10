@@ -50,7 +50,7 @@ const RepartidorDashboard = () => {
   const [showNotasDialog, setShowNotasDialog] = useState(false);
   const [notas, setNotas] = useState("");
   const [fechaActual, setFechaActual] = useState<string>("");
-  const { repartidor, isAuthenticated, logout } = useRepartidorAuth();
+  const { repartidor, isAuthenticated, isLoading: authLoading, logout } = useRepartidorAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -92,8 +92,15 @@ const RepartidorDashboard = () => {
   }, []);
 
   useEffect(() => {
+    // Esperar a que termine la verificación inicial de autenticación
+    if (authLoading) {
+      return; // No hacer nada mientras se verifica la autenticación
+    }
+    
+    // Solo verificar autenticación después de que termine la carga inicial
     if (!isAuthenticated) {
-      navigate("/repartidores/login");
+      console.log('No autenticado, redirigiendo al login');
+      navigate("/repartidores/login", { replace: true });
       return;
     }
     
@@ -102,7 +109,7 @@ const RepartidorDashboard = () => {
       loadPedidos();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated, repartidor?.id]);
+  }, [isAuthenticated, authLoading, repartidor?.id]);
 
   const handleUpdateEstado = async (
     pedido: Pedido,
@@ -214,7 +221,8 @@ const RepartidorDashboard = () => {
     }
   };
 
-  if (loading) {
+  // Mostrar loading mientras se verifica la autenticación o se cargan los pedidos
+  if (authLoading || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin" />
