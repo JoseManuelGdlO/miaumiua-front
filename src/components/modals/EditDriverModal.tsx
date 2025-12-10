@@ -18,7 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, MapPin, Calendar, Car, User, Phone, Mail, FileText, CreditCard, Shield, Activity } from "lucide-react";
+import { Loader2, MapPin, Calendar, Car, User, Phone, Mail, FileText, CreditCard, Shield, Activity, Lock } from "lucide-react";
 import { driversService, Driver, UpdateDriverData } from "@/services/driversService";
 import { citiesService } from "@/services/citiesService";
 import { useToast } from "@/hooks/use-toast";
@@ -123,7 +123,13 @@ const EditDriverModal = ({ isOpen, onClose, onSuccess, driver }: EditDriverModal
       setLoading(true);
       setFieldErrors({}); // Limpiar errores previos
       
-      const response = await driversService.updateDriver(driver.id, formData);
+      // Preparar datos para enviar, excluyendo contrasena si está vacía
+      const dataToSend = { ...formData };
+      if (!dataToSend.contrasena || dataToSend.contrasena.trim() === "") {
+        delete dataToSend.contrasena;
+      }
+      
+      const response = await driversService.updateDriver(driver.id, dataToSend);
       
       if (response.success) {
         toast({
@@ -304,6 +310,25 @@ const EditDriverModal = ({ isOpen, onClose, onSuccess, driver }: EditDriverModal
                 {getFieldError("email") && (
                   <p className="text-sm text-red-500">{getFieldError("email")}</p>
                 )}
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="contrasena">Nueva Contraseña</Label>
+                <Input
+                  id="contrasena"
+                  type="password"
+                  value={formData.contrasena || ""}
+                  onChange={(e) => handleInputChange("contrasena", e.target.value)}
+                  placeholder="Dejar vacío para no cambiar"
+                  minLength={6}
+                  className={getFieldError("contrasena") ? "border-red-500" : ""}
+                />
+                {getFieldError("contrasena") && (
+                  <p className="text-sm text-red-500">{getFieldError("contrasena")}</p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Dejar vacío si no deseas cambiar la contraseña. Mínimo 6 caracteres.
+                </p>
               </div>
             </div>
           </div>

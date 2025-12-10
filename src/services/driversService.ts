@@ -1,4 +1,5 @@
 import { authService } from './authService';
+import { getCurrentConfig } from '@/config/environment';
 
 // Tipos para los repartidores
 export interface Driver {
@@ -89,6 +90,7 @@ export interface CreateDriverData {
   licencia_conducir: string;
   seguro_vehiculo: string;
   notas?: string;
+  contrasena?: string;
 }
 
 export interface UpdateDriverData {
@@ -123,6 +125,7 @@ export interface UpdateDriverData {
   licencia_conducir?: string;
   seguro_vehiculo?: string;
   notas?: string;
+  contrasena?: string;
 }
 
 export interface ChangeDriverStatusData {
@@ -196,8 +199,124 @@ export interface DriverScheduleResponse {
   };
 }
 
+export interface RepartidorLoginCredentials {
+  email?: string;
+  codigo_repartidor?: string;
+  contrasena: string;
+}
+
+export interface RepartidorLoginResponse {
+  success: boolean;
+  message?: string;
+  data?: {
+    repartidor: {
+      id: number;
+      codigo_repartidor: string;
+      nombre_completo: string;
+      telefono: string;
+      email: string;
+      tipo_vehiculo: string;
+      estado: string;
+      ciudad?: {
+        id: number;
+        nombre: string;
+        departamento: string;
+      };
+      calificacion_promedio?: number;
+      total_entregas?: number;
+    };
+    token: string;
+    refreshToken: string;
+  };
+  error?: string;
+}
+
 // Clase para manejar los repartidores
 class DriversService {
+  // Login de repartidor
+  async loginRepartidor(credentials: RepartidorLoginCredentials): Promise<RepartidorLoginResponse> {
+    try {
+      const response = await fetch(`${this.getBaseUrl()}/repartidores/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(credentials),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        return {
+          success: false,
+          error: data.message || data.error || 'Error al iniciar sesión',
+        };
+      }
+
+      // Si el login es exitoso, guardar el token y datos del repartidor en localStorage
+      if (data.success && data.data?.token && data.data?.repartidor) {
+        try {
+          console.log('=== GUARDANDO DATOS DEL REPARTIDOR ===');
+          console.log('Datos recibidos del backend:', data.data.repartidor);
+          
+          // Guardar token
+          localStorage.setItem('repartidor_token', data.data.token);
+          console.log('Token guardado:', data.data.token ? '✓' : '✗');
+          
+          // Guardar refresh token
+          if (data.data.refreshToken) {
+            localStorage.setItem('repartidor_refresh_token', data.data.refreshToken);
+            console.log('Refresh token guardado:', data.data.refreshToken ? '✓' : '✗');
+          }
+          
+          // Guardar datos del repartidor
+          const repartidorDataString = JSON.stringify(data.data.repartidor);
+          localStorage.setItem('repartidor_data', repartidorDataString);
+          console.log('Datos del repartidor guardados:', repartidorDataString ? '✓' : '✗');
+          
+          // Verificar que se guardó correctamente
+          const savedToken = localStorage.getItem('repartidor_token');
+          const savedData = localStorage.getItem('repartidor_data');
+          
+          if (savedToken && savedData) {
+            const parsedData = JSON.parse(savedData);
+            console.log('=== VERIFICACIÓN DE PERSISTENCIA ===');
+            console.log('Token verificado:', savedToken ? '✓' : '✗');
+            console.log('Datos verificados:', parsedData);
+            console.log('ID del repartidor:', parsedData?.id);
+            console.log('Nombre:', parsedData?.nombre_completo);
+            console.log('Email:', parsedData?.email);
+            console.log('=== FIN VERIFICACIÓN ===');
+          } else {
+            console.error('ERROR: No se pudieron guardar los datos en localStorage');
+            throw new Error('Error al guardar datos en localStorage');
+          }
+        } catch (error) {
+          console.error('Error al guardar datos del repartidor en localStorage:', error);
+          throw error;
+        }
+      } else {
+        console.error('ERROR: La respuesta del login no contiene los datos necesarios');
+        console.error('data.success:', data.success);
+        console.error('data.data?.token:', data.data?.token);
+        console.error('data.data?.repartidor:', data.data?.repartidor);
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Error en login de repartidor:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Error de conexión',
+      };
+    }
+  }
+
+  // Obtener la URL base del API
+  private getBaseUrl(): string {
+    const config = getCurrentConfig();
+    return config.apiBaseUrl;
+  }
   // Obtener todos los repartidores
   async getAllDrivers(params?: {
     page?: number;
@@ -375,6 +494,139 @@ class DriversService {
     } catch (error) {
       console.error('Error al verificar horario de trabajo:', error);
       throw error;
+    }
+  }
+
+  // Logout de repartidor
+  logoutRepartidor(): void {
+    localStorage.removeItem('repartidor_token');
+    localStorage.removeItem('repartidor_refresh_token');
+    localStorage.removeItem('repartidor_data');
+  }
+
+  // Verificar si el repartidor está autenticado
+  isRepartidorAuthenticated(): boolean {
+    const token = localStorage.getItem('repartidor_token');
+    return !!token;
+  }
+
+  // Obtener el token del repartidor
+  getRepartidorToken(): string | null {
+    return localStorage.getItem('repartidor_token');
+  }
+
+  // Obtener los datos del repartidor
+  getRepartidorData(): any | null {
+    try {
+      const repartidorData = localStorage.getItem('repartidor_data');
+      console.log('getRepartidorData - Raw data from localStorage:', repartidorData);
+      if (repartidorData) {
+        const parsed = JSON.parse(repartidorData);
+        console.log('getRepartidorData - Parsed data:', parsed);
+        return parsed;
+      }
+      console.log('getRepartidorData - No data found in localStorage');
+      return null;
+    } catch (error) {
+      console.error('Error al obtener datos del repartidor desde localStorage:', error);
+      return null;
+    }
+  }
+
+  // Obtener pedidos del día del repartidor
+  async getPedidosDelDia(repartidorId?: number): Promise<{
+    success: boolean;
+    data?: {
+      pedidos: any[];
+      total: number;
+      fecha: string;
+    };
+    error?: string;
+  }> {
+    try {
+      const token = this.getRepartidorToken();
+      if (!token) {
+        throw new Error('No hay token de autenticación');
+      }
+
+      const config = getCurrentConfig();
+      console.log(repartidorId, "repartidorId");
+      
+      // Agregar repartidor_id como query parameter si se proporciona
+      const url = repartidorId 
+        ? `${config.apiBaseUrl}/repartidores/mis-pedidos/del-dia?repartidor_id=${repartidorId}`
+        : `${config.apiBaseUrl}/repartidores/mis-pedidos/del-dia`;
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        return {
+          success: false,
+          error: data.message || data.error || 'Error al obtener pedidos',
+        };
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Error al obtener pedidos del día:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Error de conexión',
+      };
+    }
+  }
+
+  // Actualizar estado de un pedido
+  async updateEstadoPedido(
+    pedidoId: number,
+    estado: 'pendiente' | 'en_camino' | 'en_ubicacion' | 'entregado' | 'no_entregado',
+    notas?: string
+  ): Promise<{
+    success: boolean;
+    message?: string;
+    data?: any;
+    error?: string;
+  }> {
+    try {
+      const token = this.getRepartidorToken();
+      if (!token) {
+        throw new Error('No hay token de autenticación');
+      }
+
+      const config = getCurrentConfig();
+      const response = await fetch(`${config.apiBaseUrl}/repartidores/pedidos/${pedidoId}/estado`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ estado, notas }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        return {
+          success: false,
+          error: data.message || data.error || 'Error al actualizar estado',
+        };
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Error al actualizar estado del pedido:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Error de conexión',
+      };
     }
   }
 }

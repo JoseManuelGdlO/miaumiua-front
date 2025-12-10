@@ -13,6 +13,9 @@ const normalizeApiUrl = (url: string | undefined): string => {
 export const config = {
   // URLs base del API según el entorno (normalizada con protocolo)
   apiBaseUrl: normalizeApiUrl(import.meta.env.VITE_API_BASE_URL || 'https://intelekia-miaumiau-back.vvggha.easypanel.host/api'),
+
+  // Alias para compatibilidad
+  apiUrl: import.meta.env.VITE_API_BASE_URL || 'https://intelekia-miaumiau-back.vvggha.easypanel.host/api',
   
   // Información de la aplicación
   appName: import.meta.env.VITE_APP_NAME || 'Miau Miau Control Center',

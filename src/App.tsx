@@ -29,6 +29,8 @@ import Notifications from "./pages/Notifications";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
 import DataDeletion from "./pages/DataDeletion";
+import RepartidorLogin from "./pages/RepartidorLogin";
+import RepartidorDashboard from "./pages/RepartidorDashboard";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 const queryClient = new QueryClient();
@@ -42,6 +44,8 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Login />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/repartidores/login" element={<RepartidorLogin />} />
+          <Route path="/repartidores/dashboard" element={<RepartidorDashboard />} />
           {/* Public pages (accessible sin autenticación) */}
           <Route path="/privacy-policy" element={<PrivacyPolicy />} />
           <Route path="/terms" element={<TermsOfService />} />
