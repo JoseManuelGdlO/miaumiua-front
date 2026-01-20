@@ -192,11 +192,11 @@ const Conversations = () => {
   ];
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 max-w-6xl mx-auto">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Conversaciones</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">Conversaciones</h1>
           <p className="text-muted-foreground">
             Gestiona las conversaciones con tus clientes
           </p>
@@ -267,10 +267,10 @@ const Conversations = () => {
             {filteredConversations.map((conversation) => (
               <div
                 key={conversation.id}
-                className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
+                className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer overflow-hidden"
               >
-                <div className="flex items-center space-x-4 flex-1">
-                  <div className="relative">
+                <div className="flex items-center space-x-4 flex-1 min-w-0">
+                  <div className="relative flex-shrink-0">
                     <Avatar>
                       <AvatarImage src={conversation.avatar} />
                       <AvatarFallback>
@@ -280,30 +280,28 @@ const Conversations = () => {
                     <div className={`absolute -bottom-1 -right-1 w-3 h-3 ${getStatusColor(conversation.status)} rounded-full border-2 border-background`}></div>
                   </div>
                   
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium text-foreground truncate">
-                        {conversation.customer}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {conversation.timestamp}
-                      </p>
-                    </div>
-                    <p className="text-sm text-muted-foreground truncate">
+                  <div className="flex-1 min-w-0 overflow-hidden">
+                    <p className="text-sm font-medium text-foreground truncate">
+                      {conversation.customer}
+                    </p>
+                    <p className="text-sm text-muted-foreground truncate mt-1">
                       {conversation.lastMessage}
                     </p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <Badge variant={getStatusBadge(conversation.status)} className="text-xs">
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      <Badge 
+                        variant={getStatusBadge(conversation.status)} 
+                        className={`text-xs flex-shrink-0 ${conversation.status === "pausada" ? "bg-yellow-500 text-white" : ""}`}
+                      >
                         {conversation.status}
                       </Badge>
-                      <span className="text-xs text-muted-foreground">
+                      <span className="text-xs text-muted-foreground truncate">
                         Agente: {conversation.agent}
                       </span>
                       {(conversation.status === "error" || conversation.status === "escalado") && (
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="text-xs h-6 px-2 text-destructive hover:text-destructive"
+                          className="text-xs h-6 px-2 text-destructive hover:text-destructive flex-shrink-0"
                           onClick={(e) => {
                             e.stopPropagation();
                             setSelectedConversation(conversation);
@@ -318,14 +316,18 @@ const Conversations = () => {
                   </div>
                 </div>
 
-                <div className="flex items-center space-x-3">
-                  {conversation.unread > 0 && (
-                    <Badge variant="destructive" className="text-xs">
-                      {conversation.unread}
-                    </Badge>
-                  )}
-                  
-                  <DropdownMenu>
+                <div className="flex flex-col items-end space-y-2 flex-shrink-0 ml-4">
+                  <p className="text-xs text-muted-foreground whitespace-nowrap">
+                    {conversation.timestamp}
+                  </p>
+                  <div className="flex items-center space-x-3">
+                    {conversation.unread > 0 && (
+                      <Badge variant="destructive" className="text-xs">
+                        {conversation.unread}
+                      </Badge>
+                    )}
+                    
+                    <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" className="h-8 w-8 p-0">
                         <MoreVertical className="h-4 w-4" />
@@ -362,6 +364,7 @@ const Conversations = () => {
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
+                  </div>
                 </div>
               </div>
             ))}
