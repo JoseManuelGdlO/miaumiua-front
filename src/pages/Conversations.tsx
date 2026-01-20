@@ -12,10 +12,12 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useNavigate } from "react-router-dom";
 import ErrorDetailsModal from "@/components/ErrorDetailsModal";
 import { conversationsService } from "@/services/conversationsService";
+import { useToast } from "@/hooks/use-toast";
 
 const Conversations = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [selectedConversation, setSelectedConversation] = useState<any>(null);
   const [showErrorDetails, setShowErrorDetails] = useState(false);
   const [loading, setLoading] = useState<boolean>(false);
@@ -83,6 +85,8 @@ const Conversations = () => {
         return "bg-red-500";
       case "escalado":
         return "bg-orange-500";
+      case "pausada":
+        return "bg-blue-500";
       default:
         return "bg-gray-500";
     }
@@ -100,6 +104,8 @@ const Conversations = () => {
         return "destructive";
       case "escalado":
         return "secondary";
+      case "pausada":
+        return "secondary";
       default:
         return "outline";
     }
@@ -109,6 +115,54 @@ const Conversations = () => {
     conversation.customer.toLowerCase().includes(searchTerm.toLowerCase()) ||
     conversation.lastMessage.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const handlePauseConversation = async (conversationId: number) => {
+    try {
+      await conversationsService.updateConversationStatus(conversationId, "pausada");
+      
+      // Actualizar estado local
+      setConversations(prevConversations =>
+        prevConversations.map(conv =>
+          conv.id === conversationId ? { ...conv, status: "pausada" } : conv
+        )
+      );
+
+      toast({
+        title: "Éxito",
+        description: `Conversación con id ${conversationId} se ha pausado`,
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: `La conversación con id ${conversationId} no se ha podido pausar`,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleActivateConversation = async (conversationId: number) => {
+    try {
+      await conversationsService.updateConversationStatus(conversationId, "activa");
+      
+      // Actualizar estado local
+      setConversations(prevConversations =>
+        prevConversations.map(conv =>
+          conv.id === conversationId ? { ...conv, status: "activa" } : conv
+        )
+      );
+
+      toast({
+        title: "Éxito",
+        description: `Conversación con id ${conversationId} se ha activado`,
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: `La conversación con id ${conversationId} no se ha podido activar`,
+        variant: "destructive",
+      });
+    }
+  };
 
   const stats = [
     {
@@ -284,6 +338,24 @@ const Conversations = () => {
                       )}
                       {canAssignConversation() && (
                         <DropdownMenuItem>Asignar agente</DropdownMenuItem>
+                      )}
+                      {conversation.status === "pausada" ? (
+                        <DropdownMenuItem 
+                          className="text-green-600"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleActivateConversation(conversation.id);
+                          }}
+                        >
+                          Activar conversación
+                        </DropdownMenuItem>
+                      ) : (
+                        <DropdownMenuItem onClick={(e) => {
+                          e.stopPropagation();
+                          handlePauseConversation(conversation.id);
+                        }}>
+                          Pausar conversación
+                        </DropdownMenuItem>
                       )}
                       <DropdownMenuItem className="text-destructive">
                         Archivar
