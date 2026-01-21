@@ -420,10 +420,12 @@ const Inventarios = () => {
       )}
 
       <ConfirmDeleteModal
-        isOpen={isDeleteModalOpen}
-        onClose={() => {
-          setIsDeleteModalOpen(false);
-          setSelectedInventario(null);
+        open={isDeleteModalOpen}
+        onOpenChange={(open) => {
+          setIsDeleteModalOpen(open);
+          if (!open) {
+            setSelectedInventario(null);
+          }
         }}
         onConfirm={handleDelete}
         title="Eliminar Inventario"
