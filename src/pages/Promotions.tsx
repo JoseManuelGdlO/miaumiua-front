@@ -57,7 +57,7 @@ const Promotions = () => {
         limit: itemsPerPage,
         search: searchTerm || undefined,
         // activos: 'true', // Temporarily commented to see all promotions
-        include_cities: 'true'
+        include_cities: 'true' as 'true' | 'false'
       };
       
       console.log('Fetching promotions with params:', queryParams);
@@ -430,10 +430,12 @@ const Promotions = () => {
       )}
 
       <ConfirmDeleteModal
-        isOpen={isDeleteModalOpen}
-        onClose={() => {
-          setIsDeleteModalOpen(false);
-          setSelectedPromotion(null);
+        open={isDeleteModalOpen}
+        onOpenChange={(open) => {
+          setIsDeleteModalOpen(open);
+          if (!open) {
+            setSelectedPromotion(null);
+          }
         }}
         onConfirm={handleDelete}
         title="Eliminar Promoción"

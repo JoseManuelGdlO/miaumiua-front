@@ -222,12 +222,12 @@ class AgentsService {
 
   // Obtener agentes activos (público)
   async getActiveAgents(): Promise<{ success: boolean; data: Agent[] }> {
-    return authService.makeRequest(`${this.baseUrl}/activos`);
+    return authService.authenticatedRequest(`${this.baseUrl}/activos`);
   }
 
   // Obtener estadísticas (público)
   async getAgentStats(): Promise<AgentStatsResponse> {
-    return authService.makeRequest(`${this.baseUrl}/estadisticas`);
+    return authService.authenticatedRequest(`${this.baseUrl}/estadisticas`);
   }
 }
 

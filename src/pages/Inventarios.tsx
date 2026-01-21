@@ -26,7 +26,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Search, Plus, MoreHorizontal, Edit, Trash2, Package, Package2, Loader2, AlertTriangle } from "lucide-react";
+import { Search, Plus, MoreHorizontal, Edit, Trash2, Package, Package2, Loader2, AlertTriangle, RotateCcw } from "lucide-react";
 import { canCreate, canEdit, canDelete } from "@/utils/permissions";
 import CreateInventarioModal from "@/components/modals/CreateInventarioModal";
 import EditInventarioModal from "@/components/modals/EditInventarioModal";
@@ -56,7 +56,6 @@ const Inventarios = () => {
         page: currentPage,
         limit: itemsPerPage,
         search: searchTerm || undefined,
-        activos: 'true'
       });
 
       setInventarios(response.data.inventarios);
@@ -108,6 +107,25 @@ const Inventarios = () => {
     }
   };
 
+  // Manejar restauración
+  const handleRestore = async (inventarioId: number) => {
+    try {
+      await inventariosService.restoreInventario(inventarioId);
+      toast({
+        title: "Éxito",
+        description: "Inventario restaurado correctamente",
+      });
+      loadInventarios();
+    } catch (error) {
+      console.error('Error al restaurar inventario:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo restaurar el inventario",
+        variant: "destructive",
+      });
+    }
+  };
+
   // Formatear fecha
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('es-ES');
@@ -124,6 +142,11 @@ const Inventarios = () => {
 
   // Obtener estado del stock
   const getStockStatus = (inventario: Inventario) => {
+    // Si tiene baja lógica, mostrar "producto archivado"
+    if (inventario.baja_logica) {
+      return { status: "Producto archivado", variant: "outline" as const };
+    }
+    
     if (inventario.stock_inicial <= inventario.stock_minimo) {
       return { status: "Stock Bajo", variant: "destructive" as const };
     } else if (inventario.stock_inicial <= inventario.stock_minimo * 1.5) {
@@ -307,7 +330,7 @@ const Inventarios = () => {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              {canEdit('inventory') && (
+                              {canEdit('inventory') && !inventario.baja_logica && (
                                 <DropdownMenuItem
                                   onClick={() => {
                                     setSelectedInventario(inventario);
@@ -318,17 +341,29 @@ const Inventarios = () => {
                                   Editar
                                 </DropdownMenuItem>
                               )}
-                              {canDelete('inventory') && (
-                                <DropdownMenuItem
-                                  onClick={() => {
-                                    setSelectedInventario(inventario);
-                                    setIsDeleteModalOpen(true);
-                                  }}
-                                  className="text-destructive"
-                                >
-                                  <Trash2 className="mr-2 h-4 w-4" />
-                                  Eliminar
-                                </DropdownMenuItem>
+                              {inventario.baja_logica ? (
+                                canDelete('inventory') && (
+                                  <DropdownMenuItem
+                                    onClick={() => handleRestore(inventario.id)}
+                                    className="text-green-600"
+                                  >
+                                    <RotateCcw className="mr-2 h-4 w-4" />
+                                    Restaurar
+                                  </DropdownMenuItem>
+                                )
+                              ) : (
+                                canDelete('inventory') && (
+                                  <DropdownMenuItem
+                                    onClick={() => {
+                                      setSelectedInventario(inventario);
+                                      setIsDeleteModalOpen(true);
+                                    }}
+                                    className="text-destructive"
+                                  >
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Eliminar
+                                  </DropdownMenuItem>
+                                )
                               )}
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -429,7 +464,7 @@ const Inventarios = () => {
         }}
         onConfirm={handleDelete}
         title="Eliminar Inventario"
-        description={`¿Estás seguro de que quieres eliminar el inventario "${selectedInventario?.nombre}"? Esta acción no se puede deshacer.`}
+        description={`¿Estás seguro de que quieres eliminar el inventario "${selectedInventario?.nombre}"?.`}
       />
     </div>
   );
