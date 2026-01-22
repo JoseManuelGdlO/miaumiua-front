@@ -55,7 +55,7 @@ const Conversations = () => {
           const unreadCount = chats.filter((chat: any) => chat?.leido === false).length;
           const customerNameRaw = c?.cliente?.nombre_completo || c?.from || `Conversación #${c.id}`;
           const customerName = customerNameRaw.replace(/usuairo/gi, "usuario");
-          const phoneNumberRaw = c?.cliente?.telefono || c?.from || '';
+          const phoneNumberRaw = c?.from || '';
           const phoneNumber = getPhoneDisplay(phoneNumberRaw);
           const logs = Array.isArray(c.logs) ? c.logs : [];
           const errorLog = logs.find((l: any) => l?.tipo_log === 'error' || l?.nivel === 'error');
