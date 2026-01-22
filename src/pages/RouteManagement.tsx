@@ -1206,7 +1206,7 @@ const RouteManagement = () => {
                         const lng = originalOrder?.cliente?.lng || order.coordinates?.lng;
                         
                         const pedidoData: any = {
-                          fkid_pedido: parseInt(order.id),
+                          fkid_pedido: typeof order.id === 'string' ? parseInt(order.id) : order.id,
                           orden_entrega: index + 1
                         };
                         

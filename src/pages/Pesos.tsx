@@ -245,7 +245,7 @@ const Pesos = () => {
                         {getUnidadBadge(peso.unidad_medida)}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
-                        {peso.createdAt ? new Date(peso.createdAt).toLocaleDateString('es-ES') : 'N/A'}
+                        {peso.created_at ? new Date(peso.created_at).toLocaleDateString('es-ES') : 'N/A'}
                       </TableCell>
                       <TableCell className="text-right">
                         <DropdownMenu>
