@@ -24,6 +24,9 @@ const Conversations = () => {
   const [error, setError] = useState<string | null>(null);
   const [conversations, setConversations] = useState<any[]>([]);
   const [statsData, setStatsData] = useState<Record<string, number>>({});
+  const [page, setPage] = useState<number>(1);
+  const [totalPages, setTotalPages] = useState<number>(1);
+  const [limit] = useState<number>(20);
 
   const normalizePhone = (value: string) => value.replace(/\D/g, "");
   const formatPhone = (value: string) => {
@@ -45,7 +48,7 @@ const Conversations = () => {
       setError(null);
       try {
         const [listRes, statsRes] = await Promise.all([
-          conversationsService.getConversations({ page: 1, limit: 20 }),
+          conversationsService.getConversations({ page, limit }),
           conversationsService.getStats(),
         ]);
 
@@ -81,6 +84,7 @@ const Conversations = () => {
 
         setConversations(mapped);
         setStatsData(statsRes?.data || {});
+        setTotalPages(listRes?.data?.pagination?.totalPages || 1);
       } catch (e: any) {
         setError(e?.message || 'Error al cargar conversaciones');
       } finally {
@@ -89,7 +93,7 @@ const Conversations = () => {
     };
 
     fetchData();
-  }, []);
+  }, [page, limit]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -392,6 +396,25 @@ const Conversations = () => {
                 </div>
               </div>
             ))}
+          </div>
+          <div className="mt-4 flex items-center justify-between">
+            <Button
+              variant="outline"
+              disabled={loading || page <= 1}
+              onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+            >
+              Anterior
+            </Button>
+            <div className="text-xs text-muted-foreground">
+              Página {page} de {totalPages}
+            </div>
+            <Button
+              variant="outline"
+              disabled={loading || page >= totalPages}
+              onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+            >
+              Siguiente
+            </Button>
           </div>
         </CardContent>
       </Card>
