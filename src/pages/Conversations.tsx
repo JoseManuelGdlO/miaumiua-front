@@ -25,6 +25,12 @@ const Conversations = () => {
   const [conversations, setConversations] = useState<any[]>([]);
   const [statsData, setStatsData] = useState<Record<string, number>>({});
 
+  const normalizePhone = (value: string) => value.replace(/\D/g, "");
+  const formatPhone = (value: string) => {
+    const digits = normalizePhone(value);
+    return digits ? `+${digits}` : "";
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
@@ -39,7 +45,10 @@ const Conversations = () => {
           const chats = Array.isArray(c.chats) ? c.chats : [];
           const lastChat = chats.length > 0 ? chats[chats.length - 1] : null;
           const unreadCount = chats.filter((chat: any) => chat?.leido === false).length;
-          const customerName = c?.cliente?.nombre_completo || c?.from || `Conversación #${c.id}`;
+          const customerNameRaw = c?.cliente?.nombre_completo || c?.from || `Conversación #${c.id}`;
+          const customerName = customerNameRaw.replace(/usuairo/gi, "usuario");
+          const phoneNumberRaw = c?.cliente?.telefono || c?.from || '';
+          const phoneNumber = formatPhone(phoneNumberRaw);
           const logs = Array.isArray(c.logs) ? c.logs : [];
           const errorLog = logs.find((l: any) => l?.tipo_log === 'error' || l?.nivel === 'error');
           const hasError = Boolean(errorLog);
@@ -58,6 +67,7 @@ const Conversations = () => {
             unread: unreadCount,
             agent: c?.agente?.nombre || "Bot Assistant",
             errorDetails: hasError ? (errorLog?.descripcion || "Error en la conversación") : undefined,
+            phoneNumber,
           };
         });
 
@@ -113,7 +123,8 @@ const Conversations = () => {
 
   const filteredConversations = conversations.filter(conversation =>
     conversation.customer.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    conversation.lastMessage.toLowerCase().includes(searchTerm.toLowerCase())
+    conversation.lastMessage.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    conversation.phoneNumber.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const handlePauseConversation = async (conversationId: number) => {
@@ -284,6 +295,11 @@ const Conversations = () => {
                     <p className="text-sm font-medium text-foreground truncate">
                       {conversation.customer}
                     </p>
+                    {conversation.phoneNumber && (
+                      <p className="text-xs text-muted-foreground truncate mt-1">
+                        Tel: {conversation.phoneNumber}
+                      </p>
+                    )}
                     <p className="text-sm text-muted-foreground truncate mt-1">
                       {conversation.lastMessage}
                     </p>
