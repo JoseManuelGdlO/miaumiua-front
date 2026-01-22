@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Textarea } from "@/components/ui/textarea";
 import { conversationsService } from "@/services/conversationsService";
 import { hasPermission } from "@/utils/permissions";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
@@ -13,6 +14,10 @@ const ConversationDetail = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [conversation, setConversation] = useState<any>(null);
+  const [newMessage, setNewMessage] = useState<string>('');
+  const [sending, setSending] = useState<boolean>(false);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const chatEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const fetchDetail = async () => {
@@ -31,6 +36,40 @@ const ConversationDetail = () => {
 
     fetchDetail();
   }, [id]);
+
+  useEffect(() => {
+    if (!loading) {
+      chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [chats.length, loading]);
+
+  const handleSendMessage = async () => {
+    if (!id) return;
+    const message = newMessage.trim();
+    if (!message) {
+      setSendError('Escribe un mensaje antes de enviar.');
+      return;
+    }
+
+    setSending(true);
+    setSendError(null);
+    try {
+      const res = await conversationsService.sendWhatsAppMessage(id, message);
+      const chat = res?.data?.chat;
+      if (chat) {
+        setConversation((prev: any) => {
+          if (!prev) return prev;
+          const currentChats = Array.isArray(prev.chats) ? prev.chats : [];
+          return { ...prev, chats: [...currentChats, chat] };
+        });
+      }
+      setNewMessage('');
+    } catch (e: any) {
+      setSendError(e?.message || 'Error al enviar el mensaje');
+    } finally {
+      setSending(false);
+    }
+  };
 
   const chats = Array.isArray(conversation?.chats) ? conversation.chats : [];
   const logs = Array.isArray(conversation?.logs) ? conversation.logs : [];
@@ -251,7 +290,30 @@ const ConversationDetail = () => {
                   </div>
                 );
               })}
+              <div ref={chatEndRef} />
             </div>
+
+            {hasPermission("enviar_conversaciones_chat") && (
+              <div className="mt-4 space-y-2">
+                {sendError && (
+                  <Alert>
+                    <AlertDescription className="text-destructive">{sendError}</AlertDescription>
+                  </Alert>
+                )}
+                <Textarea
+                  placeholder="Escribe tu mensaje..."
+                  value={newMessage}
+                  onChange={(event) => setNewMessage(event.target.value)}
+                  rows={3}
+                  disabled={sending}
+                />
+                <div className="flex justify-end">
+                  <Button onClick={handleSendMessage} disabled={sending || !newMessage.trim()}>
+                    {sending ? 'Enviando...' : 'Enviar mensaje'}
+                  </Button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

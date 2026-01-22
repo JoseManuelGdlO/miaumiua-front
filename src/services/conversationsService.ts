@@ -42,6 +42,14 @@ export interface ConversationStatsResponse {
 	};
 }
 
+export interface ConversationChatResponse {
+	success: boolean;
+	message?: string;
+	data: {
+		chat: any;
+	};
+}
+
 export interface ConversationsQueryParams {
 	status?: string; // activa | pendiente | resuelto | error | escalado
 	page?: number;
@@ -105,6 +113,14 @@ class ConversationsService {
 	async getActive(): Promise<ConversationsResponse> {
 		return this.makeRequest<ConversationsResponse>('/conversaciones/active', {
 			headers: {},
+		});
+	}
+
+	// Authenticated: send WhatsApp message for a conversation
+	async sendWhatsAppMessage(conversacionId: number | string, mensaje: string): Promise<ConversationChatResponse> {
+		return this.makeRequest<ConversationChatResponse>('/mensajeria/send-whatsapp', {
+			method: 'POST',
+			body: JSON.stringify({ conversacionId, mensaje }),
 		});
 	}
 }
