@@ -30,6 +30,14 @@ const Conversations = () => {
     const digits = normalizePhone(value);
     return digits ? `+${digits}` : "";
   };
+  const getPhoneDisplay = (value: string) => {
+    if (!value) return "";
+    if (value.toLowerCase().startsWith("whatsapp:")) {
+      return formatPhone(value);
+    }
+    const digits = normalizePhone(value);
+    return digits.length >= 5 ? formatPhone(value) : value;
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -48,7 +56,7 @@ const Conversations = () => {
           const customerNameRaw = c?.cliente?.nombre_completo || c?.from || `Conversación #${c.id}`;
           const customerName = customerNameRaw.replace(/usuairo/gi, "usuario");
           const phoneNumberRaw = c?.cliente?.telefono || c?.from || '';
-          const phoneNumber = formatPhone(phoneNumberRaw);
+          const phoneNumber = getPhoneDisplay(phoneNumberRaw);
           const logs = Array.isArray(c.logs) ? c.logs : [];
           const errorLog = logs.find((l: any) => l?.tipo_log === 'error' || l?.nivel === 'error');
           const hasError = Boolean(errorLog);
