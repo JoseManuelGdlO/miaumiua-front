@@ -50,6 +50,19 @@ export interface ConversationChatResponse {
 	};
 }
 
+export interface ConversationChatsResponse {
+	success: boolean;
+	data: {
+		chats: any[];
+		pagination?: {
+			total: number;
+			page: number;
+			limit: number;
+			totalPages: number;
+		};
+	};
+}
+
 export interface ConversationsQueryParams {
 	status?: string; // activa | pendiente | resuelto | error | escalado
 	page?: number;
@@ -122,6 +135,16 @@ class ConversationsService {
 			method: 'POST',
 			body: JSON.stringify({ conversacionId, mensaje }),
 		});
+	}
+
+	// Authenticated: conversation chats with pagination
+	async getConversationChats(conversacionId: number | string, page = 1, limit = 10): Promise<ConversationChatsResponse> {
+		const qs = new URLSearchParams();
+		qs.append('fkid_conversacion', String(conversacionId));
+		qs.append('page', String(page));
+		qs.append('limit', String(limit));
+		qs.append('activos', 'true');
+		return this.makeRequest<ConversationChatsResponse>(`/conversaciones-chat?${qs.toString()}`);
 	}
 
 	// Authenticated: update conversation status

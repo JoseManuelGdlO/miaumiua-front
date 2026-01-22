@@ -14,10 +14,16 @@ const ConversationDetail = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [conversation, setConversation] = useState<any>(null);
+  const [chats, setChats] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState<string>('');
   const [sending, setSending] = useState<boolean>(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
+  const [chatPage, setChatPage] = useState<number>(1);
+  const [chatTotalPages, setChatTotalPages] = useState<number>(1);
+  const [loadingChats, setLoadingChats] = useState<boolean>(false);
+  const [loadingOlder, setLoadingOlder] = useState<boolean>(false);
+  const chatLimit = 10;
 
   useEffect(() => {
     const fetchDetail = async () => {
@@ -37,16 +43,45 @@ const ConversationDetail = () => {
     fetchDetail();
   }, [id]);
 
-  const chats = Array.isArray(conversation?.chats) ? conversation.chats : [];
+  const loadChats = async (pageToLoad: number, options: { prepend?: boolean } = {}) => {
+    if (!id) return;
+    setLoadingChats(true);
+    if (options.prepend) {
+      setLoadingOlder(true);
+    }
+    try {
+      const res = await conversationsService.getConversationChats(id, pageToLoad, chatLimit);
+      const items = Array.isArray(res?.data?.chats) ? res.data.chats : [];
+      const ordered = items.slice().reverse();
+      setChats((prev) => (options.prepend ? [...ordered, ...prev] : ordered));
+      setChatTotalPages(res?.data?.pagination?.totalPages || 1);
+      setChatPage(pageToLoad);
+    } catch (e: any) {
+      setSendError(e?.message || 'Error al cargar los mensajes');
+    } finally {
+      setLoadingChats(false);
+      setLoadingOlder(false);
+    }
+  };
+
   const logs = Array.isArray(conversation?.logs) ? conversation.logs : [];
   const pedido = conversation?.pedido || null;
   const productos = Array.isArray(pedido?.productos) ? pedido.productos : [];
+  const lastChatId = chats.length > 0 ? chats[chats.length - 1]?.id : null;
 
   useEffect(() => {
-    if (!loading) {
+    if (!loadingChats && !loadingOlder) {
       chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [chats.length, loading]);
+  }, [lastChatId, loadingChats, loadingOlder]);
+
+  useEffect(() => {
+    if (!id) return;
+    setChats([]);
+    setChatPage(1);
+    setChatTotalPages(1);
+    loadChats(1);
+  }, [id]);
 
   const handleSendMessage = async () => {
     if (!id) return;
@@ -62,11 +97,7 @@ const ConversationDetail = () => {
       const res = await conversationsService.sendWhatsAppMessage(id, message);
       const chat = res?.data?.chat;
       if (chat) {
-        setConversation((prev: any) => {
-          if (!prev) return prev;
-          const currentChats = Array.isArray(prev.chats) ? prev.chats : [];
-          return { ...prev, chats: [...currentChats, chat] };
-        });
+        setChats((prev) => [...prev, chat]);
       }
       setNewMessage('');
     } catch (e: any) {
@@ -251,9 +282,21 @@ const ConversationDetail = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {loading && <div className="text-sm text-muted-foreground">Cargando chats...</div>}
-              {!loading && chats.length === 0 && (
+              {loadingChats && <div className="text-sm text-muted-foreground">Cargando chats...</div>}
+              {!loadingChats && chats.length === 0 && (
                 <div className="text-sm text-muted-foreground">Sin mensajes</div>
+              )}
+              {chatPage < chatTotalPages && (
+                <div className="flex justify-center">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={loadingOlder}
+                    onClick={() => loadChats(chatPage + 1, { prepend: true })}
+                  >
+                    {loadingOlder ? 'Cargando...' : 'Cargar mensajes anteriores'}
+                  </Button>
+                </div>
               )}
               {chats.map((chat: any) => {
                 const isUser = (chat?.from || '').toLowerCase() === 'usuario';
