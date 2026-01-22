@@ -37,6 +37,11 @@ const ConversationDetail = () => {
     fetchDetail();
   }, [id]);
 
+  const chats = Array.isArray(conversation?.chats) ? conversation.chats : [];
+  const logs = Array.isArray(conversation?.logs) ? conversation.logs : [];
+  const pedido = conversation?.pedido || null;
+  const productos = Array.isArray(pedido?.productos) ? pedido.productos : [];
+
   useEffect(() => {
     if (!loading) {
       chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -70,11 +75,6 @@ const ConversationDetail = () => {
       setSending(false);
     }
   };
-
-  const chats = Array.isArray(conversation?.chats) ? conversation.chats : [];
-  const logs = Array.isArray(conversation?.logs) ? conversation.logs : [];
-  const pedido = conversation?.pedido || null;
-  const productos = Array.isArray(pedido?.productos) ? pedido.productos : [];
 
   // Guard: require base permission to view conversation detail
   if (!hasPermission("ver_conversaciones")) {
