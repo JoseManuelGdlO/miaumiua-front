@@ -60,6 +60,7 @@ export interface RouteOrder {
     telefono_referencia?: string;
     email_referencia?: string;
     notas?: string;
+    fecha_entrega_estimada?: string;
     cliente?: {
       id: number;
       nombre_completo: string;
@@ -347,8 +348,13 @@ class RoutesService {
     return this.makeRequest('/rutas/activas');
   }
 
-  async getRouteStats() {
-    return this.makeRequest('/rutas/estadisticas');
+  async getRouteStats(fecha?: string, ciudad?: number) {
+    const queryParams = new URLSearchParams();
+    if (fecha) queryParams.append('fecha', fecha);
+    if (ciudad) queryParams.append('ciudad', ciudad.toString());
+    
+    const queryString = queryParams.toString();
+    return this.makeRequest(`/rutas/estadisticas${queryString ? `?${queryString}` : ''}`);
   }
 
   // Rutas-Pedidos
@@ -497,40 +503,6 @@ class RoutesService {
     return this.makeRequest(`/rutas/${rutaId}/pedidos/orden`, {
       method: 'PUT',
       body: JSON.stringify(data),
-    });
-  }
-
-  async getRouteStats(fecha?: string, ciudad?: number) {
-    const queryParams = new URLSearchParams();
-    if (fecha) queryParams.append('fecha', fecha);
-    if (ciudad) queryParams.append('ciudad', ciudad.toString());
-    
-    const queryString = queryParams.toString();
-    return this.makeRequest(`/rutas/estadisticas${queryString ? `?${queryString}` : ''}`);
-  }
-
-  async getRoutesByDriver(driverId: number, fecha?: string) {
-    const queryParams = fecha ? `?fecha=${fecha}` : '';
-    return this.makeRequest(`/rutas/repartidor/${driverId}${queryParams}`);
-  }
-
-  async updateRoute(id: number, data: UpdateRouteData) {
-    return this.makeRequest(`/rutas/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
-  }
-
-  async deleteRoute(id: number) {
-    return this.makeRequest(`/rutas/${id}`, {
-      method: 'DELETE',
-    });
-  }
-
-  async changeRouteStatus(id: number, estado: string) {
-    return this.makeRequest(`/rutas/${id}/estado`, {
-      method: 'PATCH',
-      body: JSON.stringify({ estado }),
     });
   }
 

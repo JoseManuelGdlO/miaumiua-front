@@ -123,6 +123,14 @@ class ConversationsService {
 			body: JSON.stringify({ conversacionId, mensaje }),
 		});
 	}
+
+	// Authenticated: update conversation status
+	async updateConversationStatus(id: number, status: string): Promise<ConversationResponse> {
+		return this.makeRequest<ConversationResponse>(`/conversaciones/${id}/status`, {
+			method: 'PATCH',
+			body: JSON.stringify({ status }),
+		});
+	}
 }
 
 export const conversationsService = new ConversationsService();

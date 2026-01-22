@@ -1206,7 +1206,7 @@ const RouteManagement = () => {
                         const lng = originalOrder?.cliente?.lng || order.coordinates?.lng;
                         
                         const pedidoData: any = {
-                          fkid_pedido: parseInt(order.id),
+                          fkid_pedido: typeof order.id === 'string' ? parseInt(order.id) : order.id,
                           orden_entrega: index + 1
                         };
                         
@@ -1407,7 +1407,7 @@ const RouteManagement = () => {
                     </div>
                   </div>
 
-                  {/* Listado de Pedidos/Entregas */}
+                  {/* Listado de Pedidos/Entregas agrupados por fecha de envío estimada */}
                   {route.pedidos && route.pedidos.length > 0 ? (
                     <Collapsible
                       open={expandedRoutes.has(route.id)}
@@ -1429,10 +1429,53 @@ const RouteManagement = () => {
                         </Button>
                       </CollapsibleTrigger>
                       <CollapsibleContent>
-                        <div className="space-y-2 pt-2">
-                          {route.pedidos
-                            .sort((a, b) => (a.orden_entrega || 0) - (b.orden_entrega || 0))
-                            .map((routeOrder, index) => (
+                        <div className="space-y-4 pt-2">
+                          {(() => {
+                            // Agrupar pedidos por fecha de envío estimada
+                            const pedidosAgrupados = route.pedidos.reduce((acc, routeOrder) => {
+                              const fechaEstimada = routeOrder.pedido?.fecha_entrega_estimada 
+                                ? new Date(routeOrder.pedido.fecha_entrega_estimada).toLocaleDateString('es-ES', {
+                                    weekday: 'long',
+                                    year: 'numeric',
+                                    month: 'long',
+                                    day: 'numeric'
+                                  })
+                                : 'Sin fecha estimada';
+                              
+                              if (!acc[fechaEstimada]) {
+                                acc[fechaEstimada] = [];
+                              }
+                              acc[fechaEstimada].push(routeOrder);
+                              return acc;
+                            }, {} as { [key: string]: typeof route.pedidos });
+
+                            // Ordenar las fechas
+                            const fechasOrdenadas = Object.keys(pedidosAgrupados).sort((a, b) => {
+                              if (a === 'Sin fecha estimada') return 1;
+                              if (b === 'Sin fecha estimada') return -1;
+                              return a.localeCompare(b);
+                            });
+
+                            return (
+                              <>
+                                {fechasOrdenadas.map((fechaEstimada) => (
+                              <div key={fechaEstimada} className="space-y-3">
+                                {/* Encabezado de fecha de envío estimada */}
+                                <div className="flex items-center gap-2 pb-2 border-b">
+                                  <Calendar className="h-4 w-4 text-primary" />
+                                  <h5 className="font-semibold text-sm text-foreground">
+                                    Fecha de Envío Estimada: {fechaEstimada}
+                                  </h5>
+                                  <Badge variant="outline" className="ml-auto">
+                                    {pedidosAgrupados[fechaEstimada].length} {pedidosAgrupados[fechaEstimada].length === 1 ? 'pedido' : 'pedidos'}
+                                  </Badge>
+                                </div>
+                                
+                                {/* Detalle de pedidos para esta fecha */}
+                                <div className="space-y-2 pl-4">
+                                  {pedidosAgrupados[fechaEstimada]
+                                    .sort((a, b) => (a.orden_entrega || 0) - (b.orden_entrega || 0))
+                                    .map((routeOrder, index) => (
                               <div
                                 key={routeOrder.id}
                                 className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg border"
@@ -1665,7 +1708,13 @@ const RouteManagement = () => {
                                   )}
                                 </div>
                               </div>
-                            ))}
+                                    ))}
+                                </div>
+                              </div>
+                                ))}
+                              </>
+                            );
+                          })()}
                         </div>
                       </CollapsibleContent>
                     </Collapsible>

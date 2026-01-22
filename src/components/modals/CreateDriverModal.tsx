@@ -18,7 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, MapPin, Calendar, Car, User, Phone, Mail, FileText, CreditCard, Shield } from "lucide-react";
+import { Loader2, MapPin, Calendar, Car, User, Phone, Mail, FileText, CreditCard, Shield, Lock } from "lucide-react";
 import { driversService, CreateDriverData } from "@/services/driversService";
 import { citiesService } from "@/services/citiesService";
 import { useToast } from "@/hooks/use-toast";
@@ -55,6 +55,7 @@ const CreateDriverModal = ({ isOpen, onClose, onSuccess }: CreateDriverModalProp
     licencia_conducir: "",
     seguro_vehiculo: "",
     notas: "",
+    contrasena: "",
   });
   const { toast } = useToast();
 
@@ -178,6 +179,7 @@ const CreateDriverModal = ({ isOpen, onClose, onSuccess }: CreateDriverModalProp
       licencia_conducir: "",
       seguro_vehiculo: "",
       notas: "",
+      contrasena: "",
     });
   };
 
@@ -253,6 +255,21 @@ const CreateDriverModal = ({ isOpen, onClose, onSuccess }: CreateDriverModalProp
                   placeholder="juan.perez@miaumiau.com"
                   required
                 />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="contrasena">Contraseña</Label>
+                <Input
+                  id="contrasena"
+                  type="password"
+                  value={formData.contrasena || ""}
+                  onChange={(e) => handleInputChange("contrasena", e.target.value)}
+                  placeholder="Mínimo 6 caracteres"
+                  minLength={6}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Contraseña para que el repartidor pueda acceder desde su teléfono
+                </p>
               </div>
             </div>
           </div>
