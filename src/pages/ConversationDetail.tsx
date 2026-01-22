@@ -83,6 +83,14 @@ const ConversationDetail = () => {
     loadChats(1);
   }, [id]);
 
+  useEffect(() => {
+    if (!id || chatPage !== 1) return;
+    const interval = setInterval(() => {
+      loadChats(1);
+    }, 120000);
+    return () => clearInterval(interval);
+  }, [id, chatPage]);
+
   const handleSendMessage = async () => {
     if (!id) return;
     const message = newMessage.trim();
