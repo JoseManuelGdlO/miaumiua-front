@@ -6,16 +6,23 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { MessageCircle, Search, Filter, MoreVertical, AlertTriangle, XCircle, Info } from "lucide-react";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { MessageCircle, Search, Filter, MoreVertical, AlertTriangle, XCircle, Info, Tag, X } from "lucide-react";
 import { canChangeConversationStatus, canAssignConversation } from "@/utils/permissions";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useNavigate } from "react-router-dom";
 import ErrorDetailsModal from "@/components/ErrorDetailsModal";
+import AssignFlagsModal from "@/components/modals/AssignFlagsModal";
+import FlagsSelector from "@/components/FlagsSelector";
 import { conversationsService } from "@/services/conversationsService";
 import { useToast } from "@/hooks/use-toast";
 
 const Conversations = () => {
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedFlags, setSelectedFlags] = useState<number[]>([]);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [assignFlagsModalOpen, setAssignFlagsModalOpen] = useState(false);
+  const [selectedConversationForFlags, setSelectedConversationForFlags] = useState<number | null>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
   const [selectedConversation, setSelectedConversation] = useState<any>(null);
@@ -48,7 +55,11 @@ const Conversations = () => {
       setError(null);
       try {
         const [listRes, statsRes] = await Promise.all([
-          conversationsService.getConversations({ page, limit }),
+          conversationsService.getConversations({ 
+            page, 
+            limit,
+            flags: selectedFlags.length > 0 ? selectedFlags : undefined
+          }),
           conversationsService.getStats(),
         ]);
 
@@ -63,6 +74,7 @@ const Conversations = () => {
           const logs = Array.isArray(c.logs) ? c.logs : [];
           const errorLog = logs.find((l: any) => l?.tipo_log === 'error' || l?.nivel === 'error');
           const hasError = Boolean(errorLog);
+          const flags = Array.isArray(c.flags) ? c.flags : [];
 
           return {
             id: c.id,
@@ -79,6 +91,7 @@ const Conversations = () => {
             agent: c?.agente?.nombre || "Bot Assistant",
             errorDetails: hasError ? (errorLog?.descripcion || "Error en la conversación") : undefined,
             phoneNumber,
+            flags,
           };
         });
 
@@ -93,7 +106,7 @@ const Conversations = () => {
     };
 
     fetchData();
-  }, [page, limit]);
+  }, [page, limit, selectedFlags]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -266,10 +279,47 @@ const Conversations = () => {
             className="pl-10"
           />
         </div>
-        <Button variant="outline">
-          <Filter className="mr-2 h-4 w-4" />
-          Filtros
-        </Button>
+        <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
+          <SheetTrigger asChild>
+            <Button variant="outline">
+              <Filter className="mr-2 h-4 w-4" />
+              Filtros
+              {selectedFlags.length > 0 && (
+                <Badge variant="secondary" className="ml-2">
+                  {selectedFlags.length}
+                </Badge>
+              )}
+            </Button>
+          </SheetTrigger>
+          <SheetContent>
+            <SheetHeader>
+              <SheetTitle>Filtros de Conversaciones</SheetTitle>
+              <SheetDescription>
+                Filtra las conversaciones por flags
+              </SheetDescription>
+            </SheetHeader>
+            <div className="mt-6 space-y-4">
+              <div>
+                <label className="text-sm font-medium mb-2 block">Flags</label>
+                <FlagsSelector
+                  value={selectedFlags}
+                  onValueChange={setSelectedFlags}
+                  placeholder="Seleccionar flags para filtrar..."
+                />
+              </div>
+              {selectedFlags.length > 0 && (
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => setSelectedFlags([])}
+                >
+                  <X className="mr-2 h-4 w-4" />
+                  Limpiar Filtros
+                </Button>
+              )}
+            </div>
+          </SheetContent>
+        </Sheet>
       </div>
 
       {/* Conversations List */}
@@ -325,6 +375,28 @@ const Conversations = () => {
                       <span className="text-xs text-muted-foreground truncate">
                         Agente: {conversation.agent}
                       </span>
+                      {conversation.flags && conversation.flags.length > 0 && (
+                        <div className="flex items-center gap-1 flex-wrap">
+                          {conversation.flags.map((flag: any) => (
+                            <Badge
+                              key={flag.id}
+                              variant="secondary"
+                              className="text-xs flex items-center gap-1"
+                              style={{
+                                backgroundColor: `${flag.color}20`,
+                                borderColor: flag.color,
+                                color: flag.color,
+                              }}
+                            >
+                              <div
+                                className="w-2 h-2 rounded-full"
+                                style={{ backgroundColor: flag.color }}
+                              />
+                              {flag.nombre}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
                       {(conversation.status === "error" || conversation.status === "escalado") && (
                         <Button
                           variant="ghost"
@@ -363,6 +435,16 @@ const Conversations = () => {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem onClick={() => navigate(`/dashboard/conversations/${conversation.id}`)}>Ver conversación</DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedConversationForFlags(conversation.id);
+                          setAssignFlagsModalOpen(true);
+                        }}
+                      >
+                        <Tag className="mr-2 h-4 w-4" />
+                        Gestionar flags
+                      </DropdownMenuItem>
                       {canChangeConversationStatus() && (
                         <DropdownMenuItem>Marcar como resuelto</DropdownMenuItem>
                       )}
@@ -425,6 +507,67 @@ const Conversations = () => {
           open={showErrorDetails}
           onOpenChange={setShowErrorDetails}
           conversation={selectedConversation}
+        />
+      )}
+
+      {/* Assign Flags Modal */}
+      {selectedConversationForFlags && (
+        <AssignFlagsModal
+          open={assignFlagsModalOpen}
+          onOpenChange={(open) => {
+            setAssignFlagsModalOpen(open);
+            if (!open) {
+              setSelectedConversationForFlags(null);
+            }
+          }}
+          conversacionId={selectedConversationForFlags}
+          onSuccess={() => {
+            // Recargar conversaciones para actualizar flags
+            const fetchData = async () => {
+              try {
+                const listRes = await conversationsService.getConversations({ 
+                  page, 
+                  limit,
+                  flags: selectedFlags.length > 0 ? selectedFlags : undefined
+                });
+                const mapped = (listRes?.data?.conversaciones || []).map((c: any) => {
+                  const chats = Array.isArray(c.chats) ? c.chats : [];
+                  const lastChat = chats.length > 0 ? chats[chats.length - 1] : null;
+                  const unreadCount = chats.filter((chat: any) => chat?.leido === false).length;
+                  const customerNameRaw = c?.cliente?.nombre_completo || c?.from || `Conversación #${c.id}`;
+                  const customerName = customerNameRaw.replace(/usuairo/gi, "usuario");
+                  const phoneNumberRaw = c?.from || '';
+                  const phoneNumber = getPhoneDisplay(phoneNumberRaw);
+                  const logs = Array.isArray(c.logs) ? c.logs : [];
+                  const errorLog = logs.find((l: any) => l?.tipo_log === 'error' || l?.nivel === 'error');
+                  const hasError = Boolean(errorLog);
+                  const flags = Array.isArray(c.flags) ? c.flags : [];
+
+                  return {
+                    id: c.id,
+                    customer: customerName,
+                    avatar: "",
+                    lastMessage: lastChat?.mensaje || "",
+                    timestamp: lastChat?.created_at
+                      ? new Date(lastChat.created_at).toLocaleString()
+                      : c?.updatedAt
+                        ? new Date(c.updatedAt).toLocaleString()
+                        : "",
+                    status: hasError ? "error" : (c.status || "pendiente"),
+                    unread: unreadCount,
+                    agent: c?.agente?.nombre || "Bot Assistant",
+                    errorDetails: hasError ? (errorLog?.descripcion || "Error en la conversación") : undefined,
+                    phoneNumber,
+                    flags,
+                  };
+                });
+                setConversations(mapped);
+              } catch (e: any) {
+                console.error('Error al recargar conversaciones:', e);
+              }
+            };
+            fetchData();
+          }}
         />
       )}
     </div>

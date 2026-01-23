@@ -9,6 +9,13 @@ export interface Conversation {
 	updated_at?: string;
 	customer_name?: string;
 	unread?: number;
+	flags?: Array<{
+		id: number;
+		nombre: string;
+		color: string;
+		descripcion?: string;
+		activo: boolean;
+	}>;
 }
 
 export interface ConversationsResponse {
@@ -68,6 +75,7 @@ export interface ConversationsQueryParams {
 	page?: number;
 	limit?: number;
 	search?: string;
+	flags?: number[]; // Array de IDs de flags para filtrar
 }
 
 class ConversationsService {
@@ -106,6 +114,9 @@ class ConversationsService {
 		if (params.page) qs.append('page', String(params.page));
 		if (params.limit) qs.append('limit', String(params.limit));
 		if (params.search) qs.append('search', params.search);
+		if (params.flags && params.flags.length > 0) {
+			qs.append('flags', params.flags.join(','));
+		}
 		const query = qs.toString();
 		return this.makeRequest<ConversationsResponse>(`/conversaciones${query ? `?${query}` : ''}`);
 	}
