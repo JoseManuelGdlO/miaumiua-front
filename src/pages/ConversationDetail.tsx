@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { conversationsService } from "@/services/conversationsService";
 import { hasPermission } from "@/utils/permissions";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import WhatsAppMessageStatus from "@/components/WhatsAppMessageStatus";
 
 const ConversationDetail = () => {
   const { id } = useParams();
@@ -309,6 +310,11 @@ const ConversationDetail = () => {
               {chats.map((chat: any) => {
                 const isUser = (chat?.from || '').toLowerCase() === 'usuario';
                 const timestamp = chat.created_at ? new Date(chat.created_at).toLocaleString() : `${chat.fecha} ${chat.hora}`;
+                // Extraer estado de WhatsApp del metadata
+                const whatsappStatus = chat?.metadata?.whatsapp_status || null;
+                // Solo mostrar estado para mensajes enviados por agente/bot (no para mensajes del usuario)
+                const shouldShowStatus = !isUser && whatsappStatus;
+                
                 return (
                   <div key={chat.id} className={`flex ${isUser ? 'justify-start' : 'justify-end'} px-1`}>
                     <div className={`relative max-w-[75%] px-3 py-2 rounded-2xl shadow-sm ${isUser ? 'bg-gray-200 text-foreground' : 'bg-blue-600 text-white'}`}>
@@ -336,7 +342,15 @@ const ConversationDetail = () => {
                         />
                       )}
                       <div className="text-base whitespace-pre-wrap break-words">{chat.mensaje}</div>
-                      <div className={`mt-1 text-xs ${isUser ? 'text-muted-foreground' : 'text-blue-100'} text-right`}>{timestamp}</div>
+                      <div className={`mt-1 flex items-center justify-end gap-1 text-xs ${isUser ? 'text-muted-foreground' : 'text-blue-100'}`}>
+                        <span>{timestamp}</span>
+                        {shouldShowStatus && (
+                          <WhatsAppMessageStatus 
+                            status={whatsappStatus} 
+                            className={isUser ? '' : 'text-blue-100'}
+                          />
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
