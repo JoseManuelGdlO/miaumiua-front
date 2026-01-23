@@ -130,6 +130,45 @@ export interface Notification {
   conversationId?: string;
 }
 
+// Interfaz para actividades recientes (formato diferente del endpoint /actividad-reciente)
+export interface RecentActivity {
+  tipo: 'conversacion' | 'venta' | 'cliente' | 'inventario';
+  id: string;
+  titulo: string;
+  descripcion: string;
+  fecha: string;
+  status: string;
+  statusLabel: string;
+  tiempoRelativo: string;
+  fechaFormateada: string;
+  datos?: {
+    conversacionId?: number;
+    clienteId?: number;
+    clienteNombre?: string;
+    ciudad?: string;
+    pedidoId?: number;
+    numeroPedido?: string;
+    total?: number;
+    inventarioId?: number;
+    productoNombre?: string;
+    stockActual?: number;
+    stockMinimo?: number;
+    ciudadId?: number;
+    canalContacto?: string;
+    [key: string]: any;
+  };
+}
+
+export interface RecentActivityResponse {
+  success: boolean;
+  data: RecentActivity[];
+  total: number;
+  filtros: {
+    limiteHoras: number;
+    tipo: string;
+  };
+}
+
 class NotificationsService {
   private makeRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const token = authService.getToken();
@@ -325,7 +364,7 @@ class NotificationsService {
   async getRecentActivity(params?: {
     limit?: number;
     tipo?: 'conversacion' | 'venta';
-  }): Promise<NotificationsResponse> {
+  }): Promise<RecentActivityResponse> {
     const queryParams = new URLSearchParams();
     
     if (params?.limit) {
@@ -338,16 +377,52 @@ class NotificationsService {
     const queryString = queryParams.toString();
     const endpoint = `/notificaciones/actividad-reciente${queryString ? `?${queryString}` : ''}`;
     
-    return this.makeRequest<NotificationsResponse>(endpoint);
+    return this.makeRequest<RecentActivityResponse>(endpoint);
   }
 
-  // Helper para obtener actividades recientes mapeadas
+  // Helper para obtener actividades recientes mapeadas al formato del frontend
   async getMappedRecentActivity(params?: {
     limit?: number;
     tipo?: 'conversacion' | 'venta';
   }): Promise<Notification[]> {
     const response = await this.getRecentActivity(params);
-    return response.data.map(notif => this.mapNotification(notif));
+    
+    // Mapear actividades al formato Notification para compatibilidad con el Dashboard
+    return response.data.map(actividad => {
+      // Mapear el tipo de actividad al tipo de notificación
+      let notificationType: 'stock' | 'order' | 'promotion' | 'route' | 'error' | 'conversation' = 'order';
+      if (actividad.tipo === 'conversacion') {
+        notificationType = 'conversation';
+      } else if (actividad.tipo === 'venta') {
+        notificationType = 'order';
+      } else if (actividad.tipo === 'inventario') {
+        notificationType = 'stock';
+      }
+
+      // Construir actionUrl basado en el tipo de actividad
+      let actionUrl: string | undefined;
+      if (actividad.datos?.conversacionId) {
+        actionUrl = `/dashboard/conversations/${actividad.datos.conversacionId}`;
+      } else if (actividad.datos?.pedidoId) {
+        actionUrl = `/dashboard/orders/${actividad.datos.pedidoId}`;
+      } else if (actividad.datos?.clienteId) {
+        actionUrl = `/dashboard/customers/${actividad.datos.clienteId}`;
+      } else if (actividad.datos?.inventarioId) {
+        actionUrl = `/dashboard/inventory`;
+      }
+
+      return {
+        id: actividad.id,
+        type: notificationType,
+        title: actividad.titulo,
+        message: actividad.descripcion,
+        timestamp: actividad.fechaFormateada || actividad.fecha,
+        priority: 'medium' as const,
+        read: false,
+        actionUrl: actionUrl,
+        conversationId: actividad.datos?.conversacionId?.toString(),
+      };
+    });
   }
 }
 

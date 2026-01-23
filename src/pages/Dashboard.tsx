@@ -152,49 +152,35 @@ const Dashboard = () => {
         params.tipo = 'venta';
       }
 
-      const activities = await notificationsService.getMappedRecentActivity(params);
+      // Obtener actividades directamente del endpoint (no mapeadas)
+      const response = await notificationsService.getRecentActivity(params);
       
-      // Convertir las notificaciones a actividades recientes
-      const mappedActivities: RecentActivity[] = activities.map(notif => {
-        // Determinar el tipo de actividad basado en el tipo de notificación
-        let activityType = notif.title;
-        let status = 'activa';
+      // Convertir las actividades del backend al formato del frontend
+      const mappedActivities: RecentActivity[] = response.data.map(act => {
+        // Determinar el tipo de actividad y status basado en el tipo del backend
+        let activityType = act.titulo;
+        let status = act.statusLabel || act.status;
         
-        if (notif.type === 'conversation') {
-          activityType = 'Nueva conversación';
-          status = 'activa';
-        } else if (notif.type === 'order') {
-          activityType = 'Venta completada';
-          status = 'completada';
-        } else if (notif.type === 'stock') {
-          activityType = 'Inventario bajo';
-          status = 'alerta';
-        } else if (notif.type === 'error') {
-          activityType = 'Error en sistema';
-          status = 'alerta';
+        // Construir actionUrl basado en el tipo de actividad
+        let actionUrl: string | undefined;
+        if (act.datos?.conversacionId) {
+          actionUrl = `/dashboard/conversations/${act.datos.conversacionId}`;
+        } else if (act.datos?.pedidoId) {
+          actionUrl = `/dashboard/orders/${act.datos.pedidoId}`;
+        } else if (act.datos?.clienteId) {
+          actionUrl = `/dashboard/customers/${act.datos.clienteId}`;
+        } else if (act.datos?.inventarioId) {
+          actionUrl = `/dashboard/inventory`;
         }
         
-        // Formatear el tiempo relativo
-        const formatTime = (timestamp: string) => {
-          const now = new Date();
-          const activityTime = new Date(timestamp);
-          const diffInMinutes = Math.floor((now.getTime() - activityTime.getTime()) / (1000 * 60));
-          
-          if (diffInMinutes < 1) return 'Hace un momento';
-          if (diffInMinutes < 60) return `Hace ${diffInMinutes} ${diffInMinutes === 1 ? 'minuto' : 'minutos'}`;
-          const hours = Math.floor(diffInMinutes / 60);
-          if (hours < 24) return `Hace ${hours} ${hours === 1 ? 'hora' : 'horas'}`;
-          const days = Math.floor(hours / 24);
-          return `Hace ${days} ${days === 1 ? 'día' : 'días'}`;
-        };
-        
         return {
-          id: notif.id,
+          id: act.id,
           type: activityType,
-          description: notif.message,
-          time: formatTime(notif.timestamp),
+          description: act.descripcion,
+          // Usar el tiempoRelativo que ya viene calculado del backend
+          time: act.tiempoRelativo || 'Hace un momento',
           status: status,
-          actionUrl: notif.actionUrl,
+          actionUrl: actionUrl,
         };
       });
       

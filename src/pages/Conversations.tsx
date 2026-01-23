@@ -67,10 +67,23 @@ const Conversations = () => {
           const chats = Array.isArray(c.chats) ? c.chats : [];
           const lastChat = chats.length > 0 ? chats[chats.length - 1] : null;
           const unreadCount = chats.filter((chat: any) => chat?.leido === false).length;
-          const customerNameRaw = c?.cliente?.nombre_completo || c?.from || `Conversación #${c.id}`;
-          const customerName = customerNameRaw.replace(/usuairo/gi, "usuario");
           const phoneNumberRaw = c?.from || '';
           const phoneNumber = getPhoneDisplay(phoneNumberRaw);
+          
+          // Determinar el nombre del cliente
+          let customerName = '';
+          if (c?.cliente?.nombre_completo) {
+            customerName = c.cliente.nombre_completo.replace(/usuairo/gi, "usuario");
+          } else if (phoneNumber && phoneNumber !== phoneNumberRaw) {
+            // Si tenemos un teléfono formateado, usarlo
+            customerName = phoneNumber;
+          } else if (c?.from && !c.from.toLowerCase().includes('cliente nuevo') && !c.from.toLowerCase().includes('nuevo cliente')) {
+            // Usar el campo 'from' solo si no contiene "cliente nuevo"
+            customerName = c.from;
+          } else {
+            // Fallback: mostrar ID de conversación
+            customerName = `Conversación #${c.id}`;
+          }
           const logs = Array.isArray(c.logs) ? c.logs : [];
           const errorLog = logs.find((l: any) => l?.tipo_log === 'error' || l?.nivel === 'error');
           const hasError = Boolean(errorLog);
@@ -544,10 +557,24 @@ const Conversations = () => {
                   const chats = Array.isArray(c.chats) ? c.chats : [];
                   const lastChat = chats.length > 0 ? chats[chats.length - 1] : null;
                   const unreadCount = chats.filter((chat: any) => chat?.leido === false).length;
-                  const customerNameRaw = c?.cliente?.nombre_completo || c?.from || `Conversación #${c.id}`;
-                  const customerName = customerNameRaw.replace(/usuairo/gi, "usuario");
                   const phoneNumberRaw = c?.from || '';
                   const phoneNumber = getPhoneDisplay(phoneNumberRaw);
+                  
+                  // Determinar el nombre del cliente
+                  let customerName = '';
+                  if (c?.cliente?.nombre_completo) {
+                    customerName = c.cliente.nombre_completo.replace(/usuairo/gi, "usuario");
+                  } else if (phoneNumber && phoneNumber !== phoneNumberRaw) {
+                    // Si tenemos un teléfono formateado, usarlo
+                    customerName = phoneNumber;
+                  } else if (c?.from && !c.from.toLowerCase().includes('cliente nuevo') && !c.from.toLowerCase().includes('nuevo cliente')) {
+                    // Usar el campo 'from' solo si no contiene "cliente nuevo"
+                    customerName = c.from;
+                  } else {
+                    // Fallback: mostrar ID de conversación
+                    customerName = `Conversación #${c.id}`;
+                  }
+                  
                   const logs = Array.isArray(c.logs) ? c.logs : [];
                   const errorLog = logs.find((l: any) => l?.tipo_log === 'error' || l?.nivel === 'error');
                   const hasError = Boolean(errorLog);
