@@ -44,17 +44,28 @@ const AssignFlagsModal = ({
   const loadData = async () => {
     setLoading(true);
     try {
+      // Cargar flags asignados a esta conversación primero (incluye eliminados)
+      const conversationFlagsResponse = await flagsService.getConversationFlags(conversacionId);
+      const assignedFlags = conversationFlagsResponse.data.flags || [];
+      const assignedFlagIds = assignedFlags.map((f) => f.id);
+      setSelectedFlagIds(assignedFlagIds);
+
       // Cargar todos los flags activos
       const flagsResponse = await flagsService.getFlags({
         activos: 'true',
         limit: 100,
       });
-      setFlags(flagsResponse.data.flags || []);
+      const activeFlags = flagsResponse.data.flags || [];
 
-      // Cargar flags asignados a esta conversación
-      const conversationFlagsResponse = await flagsService.getConversationFlags(conversacionId);
-      const assignedFlagIds = (conversationFlagsResponse.data.flags || []).map((f) => f.id);
-      setSelectedFlagIds(assignedFlagIds);
+      // Combinar flags activos con flags asignados (incluso si están eliminados)
+      // para poder ver y remover flags eliminados
+      const assignedFlagIdsSet = new Set(assignedFlagIds);
+      const allFlags = [
+        ...activeFlags,
+        ...assignedFlags.filter(f => !activeFlags.find(af => af.id === f.id))
+      ];
+
+      setFlags(allFlags);
     } catch (error: any) {
       toast({
         title: "Error",
@@ -158,9 +169,16 @@ const AssignFlagsModal = ({
                         style={{ backgroundColor: flag.color }}
                       />
                       <div className="flex-1 min-w-0">
-                        <Label className="cursor-pointer font-medium">
-                          {flag.nombre}
-                        </Label>
+                        <div className="flex items-center gap-2">
+                          <Label className="cursor-pointer font-medium">
+                            {flag.nombre}
+                          </Label>
+                          {(!flag.activo || flag.baja_logica) && (
+                            <Badge variant="outline" className="text-xs">
+                              Eliminado
+                            </Badge>
+                          )}
+                        </div>
                         {flag.descripcion && (
                           <p className="text-sm text-muted-foreground truncate">
                             {flag.descripcion}

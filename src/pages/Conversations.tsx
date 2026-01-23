@@ -387,18 +387,22 @@ const Conversations = () => {
                             <Badge
                               key={flag.id}
                               variant="secondary"
-                              className="text-xs flex items-center gap-1"
+                              className={`text-xs flex items-center gap-1 ${(!flag.activo || flag.baja_logica) ? 'opacity-60 line-through' : ''}`}
                               style={{
                                 backgroundColor: `${flag.color}20`,
                                 borderColor: flag.color,
                                 color: flag.color,
                               }}
+                              title={(!flag.activo || flag.baja_logica) ? 'Flag eliminado - Usa "Gestionar flags" para removerlo' : ''}
                             >
                               <div
                                 className="w-2 h-2 rounded-full"
                                 style={{ backgroundColor: flag.color }}
                               />
                               {flag.nombre}
+                              {(!flag.activo || flag.baja_logica) && (
+                                <span className="ml-1 text-[10px]">(eliminado)</span>
+                              )}
                             </Badge>
                           ))}
                         </div>
