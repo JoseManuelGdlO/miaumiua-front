@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { MessageCircle, Search, Filter, MoreVertical, AlertTriangle, XCircle, Info, Tag, X } from "lucide-react";
+import { MessageCircle, Search, Filter, MoreVertical, AlertTriangle, XCircle, Info, Tag, X, Flag } from "lucide-react";
 import { canChangeConversationStatus, canAssignConversation } from "@/utils/permissions";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useNavigate } from "react-router-dom";
@@ -237,7 +237,13 @@ const Conversations = () => {
             Gestiona las conversaciones con tus clientes
           </p>
         </div>
-        {/* Botón de crear conversación eliminado por solicitud */}
+        <Button
+          variant="outline"
+          onClick={() => navigate('/dashboard/flags')}
+        >
+          <Flag className="mr-2 h-4 w-4" />
+          Gestionar Flags
+        </Button>
       </div>
 
       {/* Statistics */}

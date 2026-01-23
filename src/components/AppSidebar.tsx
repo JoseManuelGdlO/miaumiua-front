@@ -16,6 +16,7 @@ import {
   Layers,
   Weight,
   Truck,
+  Flag,
 } from "lucide-react";
 import { hasSectionAccess } from "@/utils/permissions";
 import {
@@ -66,6 +67,7 @@ const menuItems = [
       { title: "Categorías Producto", url: "/dashboard/categorias-producto", permission: "categories" },
       { title: "Pesos", url: "/dashboard/pesos", permission: "weights" },
       { title: "Proveedores", url: "/dashboard/proveedores", permission: "suppliers" },
+      { title: "Flags", url: "/dashboard/flags", permission: "conversations" },
     ],
   },
 ];
