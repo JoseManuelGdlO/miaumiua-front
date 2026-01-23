@@ -60,9 +60,17 @@ const Flags = () => {
   const loadFlags = async () => {
     try {
       setLoading(true);
+      
+      // Mapear el filtro de estado a los valores que espera el backend
+      let activosParam: 'true' | 'false' | undefined = undefined;
+      if (statusFilter === 'active') {
+        activosParam = 'true';
+      } else if (statusFilter === 'inactive') {
+        activosParam = 'false';
+      }
+      
       const response = await flagsService.getFlags({
-        activos: statusFilter === 'all' ? undefined : statusFilter as 'true' | 'false',
-        activo: statusFilter === 'active' ? 'true' : statusFilter === 'inactive' ? 'false' : undefined,
+        activos: activosParam,
         search: searchTerm || undefined,
         page: currentPage,
         limit: itemsPerPage
