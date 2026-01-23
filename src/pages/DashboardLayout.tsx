@@ -78,8 +78,8 @@ const DashboardLayout = () => {
           <main className="flex-1 overflow-auto relative">
             <Outlet />
             
-            {/* Intelekia Logo - Bottom Left */}
-            <div className="fixed bottom-4 left-4 z-10">
+            {/* Intelekia Logo - Bottom Left - Ocultado temporalmente */}
+            {/* <div className="fixed bottom-4 left-4 z-10">
               <div className="bg-white/90 backdrop-blur-sm rounded-lg p-3 shadow-lg border max-w-xs">
                 <div className="flex items-center gap-3">
                   <img 
@@ -96,7 +96,7 @@ const DashboardLayout = () => {
                   </div>
                 </div>
               </div>
-            </div>
+            </div> */}
           </main>
         </div>
       </div>

@@ -15,6 +15,8 @@ export interface City {
   telefono: string;
   email_contacto: string;
   notas_adicionales: string;
+  max_pedidos_por_horario?: number;
+  dias_trabajo?: number[];
   baja_logica: boolean;
   created_at: string;
   updated_at: string;
@@ -33,6 +35,8 @@ export interface CreateCityData {
   telefono: string;
   email_contacto: string;
   notas_adicionales?: string;
+  max_pedidos_por_horario?: number;
+  dias_trabajo?: number[];
 }
 
 export interface UpdateCityData {
@@ -48,6 +52,8 @@ export interface UpdateCityData {
   telefono?: string;
   email_contacto?: string;
   notas_adicionales?: string;
+  max_pedidos_por_horario?: number;
+  dias_trabajo?: number[];
 }
 
 export interface CitiesResponse {

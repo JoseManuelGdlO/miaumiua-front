@@ -17,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { citiesService, City } from "@/services/citiesService";
 import { Loader2 } from "lucide-react";
@@ -38,7 +39,9 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
     manager: "",
     telefono: "",
     email_contacto: "",
-    estado_inicial: "activa" as const
+    estado_inicial: "activa" as const,
+    max_pedidos_por_horario: 5,
+    dias_trabajo: [0, 1, 2, 3, 4, 5, 6] as number[]
   });
 
   // Actualizar formulario cuando cambie la ciudad
@@ -51,7 +54,11 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
         manager: city.manager,
         telefono: city.telefono,
         email_contacto: city.email_contacto,
-        estado_inicial: city.estado_inicial
+        estado_inicial: city.estado_inicial,
+        max_pedidos_por_horario: city.max_pedidos_por_horario || 5,
+        dias_trabajo: city.dias_trabajo && city.dias_trabajo.length > 0 
+          ? city.dias_trabajo 
+          : [0, 1, 2, 3, 4, 5, 6]
       });
     }
   }, [city, open]);
@@ -88,6 +95,26 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
       return;
     }
 
+    // Validar max_pedidos_por_horario
+    if (formData.max_pedidos_por_horario < 1 || formData.max_pedidos_por_horario > 100) {
+      toast({
+        title: "Error",
+        description: "El máximo de pedidos por horario debe estar entre 1 y 100",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Validar que haya al menos un día de trabajo
+    if (!formData.dias_trabajo || formData.dias_trabajo.length === 0) {
+      toast({
+        title: "Error",
+        description: "Debe seleccionar al menos un día de trabajo",
+        variant: "destructive"
+      });
+      return;
+    }
+
     try {
       setLoading(true);
 
@@ -113,11 +140,31 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
     }
   };
 
-  const handleInputChange = (field: string, value: string) => {
+  const handleInputChange = (field: string, value: string | number) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
     }));
+  };
+
+  const handleDiaTrabajoChange = (dia: number, checked: boolean) => {
+    setFormData(prev => {
+      const diasTrabajo = [...prev.dias_trabajo];
+      if (checked) {
+        if (!diasTrabajo.includes(dia)) {
+          diasTrabajo.push(dia);
+        }
+      } else {
+        const index = diasTrabajo.indexOf(dia);
+        if (index > -1) {
+          diasTrabajo.splice(index, 1);
+        }
+      }
+      return {
+        ...prev,
+        dias_trabajo: diasTrabajo.sort((a, b) => a - b)
+      };
+    });
   };
 
   const estados = [
@@ -126,6 +173,16 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
     { value: "en_construccion", label: "En Construcción" },
     { value: "mantenimiento", label: "Mantenimiento" },
     { value: "suspendida", label: "Suspendida" }
+  ];
+
+  const diasSemana = [
+    { value: 0, label: "Domingo" },
+    { value: 1, label: "Lunes" },
+    { value: 2, label: "Martes" },
+    { value: 3, label: "Miércoles" },
+    { value: 4, label: "Jueves" },
+    { value: 5, label: "Viernes" },
+    { value: 6, label: "Sábado" }
   ];
 
   return (
@@ -225,6 +282,47 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
                 required
               />
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="max_pedidos_por_horario">Máximo de Pedidos por Horario *</Label>
+            <Input
+              id="max_pedidos_por_horario"
+              type="number"
+              min="1"
+              max="100"
+              value={formData.max_pedidos_por_horario}
+              onChange={(e) => handleInputChange('max_pedidos_por_horario', parseInt(e.target.value) || 5)}
+              placeholder="5"
+              required
+            />
+            <p className="text-sm text-muted-foreground">
+              Número máximo de pedidos que se pueden programar por horario (mañana o tarde)
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Días de Trabajo *</Label>
+            <div className="grid grid-cols-2 gap-3 p-4 border rounded-md">
+              {diasSemana.map((dia) => (
+                <div key={dia.value} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={`dia-${dia.value}`}
+                    checked={formData.dias_trabajo.includes(dia.value)}
+                    onCheckedChange={(checked) => handleDiaTrabajoChange(dia.value, checked as boolean)}
+                  />
+                  <Label
+                    htmlFor={`dia-${dia.value}`}
+                    className="text-sm font-normal cursor-pointer"
+                  >
+                    {dia.label}
+                  </Label>
+                </div>
+              ))}
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Selecciona los días de la semana en que se realizan entregas
+            </p>
           </div>
 
           <DialogFooter>
