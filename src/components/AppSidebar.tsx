@@ -99,9 +99,9 @@ export function AppSidebar() {
     }`;
 
   return (
-    <Sidebar className={`${isCollapsed ? "w-16" : "w-64"} border-r border-sidebar-border bg-sidebar transition-all duration-300`}>
+    <Sidebar className={`${isCollapsed ? "w-16" : "w-64"} border-r border-sidebar-border bg-sidebar transition-all duration-300 flex flex-col h-full`}>
       {/* Header */}
-      <div className="p-4 border-b border-sidebar-border">
+      <div className="p-4 border-b border-sidebar-border flex-shrink-0">
         <div className="flex items-center space-x-3">
           <div className="w-12 h-12 rounded-xl overflow-hidden">
             <img 
@@ -121,10 +121,10 @@ export function AppSidebar() {
 
       {/* Sidebar trigger - only visible when collapsed */}
       {isCollapsed && (
-        <SidebarTrigger className="m-2 self-start" />
+        <SidebarTrigger className="m-2 self-start flex-shrink-0" />
       )}
 
-      <SidebarContent className="p-2">
+      <SidebarContent className="p-2 flex-1 overflow-y-auto min-h-0">
         <SidebarGroup>
           <SidebarGroupLabel className="text-sidebar-foreground/70 text-xs font-medium mb-2">
             {!isCollapsed && "NAVEGACIÓN PRINCIPAL"}
