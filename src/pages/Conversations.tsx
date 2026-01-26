@@ -58,6 +58,7 @@ const Conversations = () => {
           conversationsService.getConversations({ 
             page, 
             limit,
+            search: searchTerm.trim() || undefined,
             flags: selectedFlags.length > 0 ? selectedFlags : undefined
           }),
           conversationsService.getStats(),
@@ -119,7 +120,7 @@ const Conversations = () => {
     };
 
     fetchData();
-  }, [page, limit, selectedFlags]);
+  }, [page, limit, selectedFlags, searchTerm]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -159,11 +160,8 @@ const Conversations = () => {
     }
   };
 
-  const filteredConversations = conversations.filter(conversation =>
-    conversation.customer.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    conversation.lastMessage.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    conversation.phoneNumber.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Ya no necesitamos filtrar localmente, el backend lo hace
+  const filteredConversations = conversations;
 
   const handlePauseConversation = async (conversationId: number) => {
     try {
@@ -294,7 +292,10 @@ const Conversations = () => {
           <Input
             placeholder="Buscar conversaciones..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setPage(1); // Resetear a la primera página cuando se busca
+            }}
             className="pl-10"
           />
         </div>
@@ -551,6 +552,7 @@ const Conversations = () => {
                 const listRes = await conversationsService.getConversations({ 
                   page, 
                   limit,
+                  search: searchTerm.trim() || undefined,
                   flags: selectedFlags.length > 0 ? selectedFlags : undefined
                 });
                 const mapped = (listRes?.data?.conversaciones || []).map((c: any) => {
