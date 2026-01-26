@@ -119,7 +119,7 @@ const EditUserModal = ({ open, onOpenChange, user, onUserUpdated }: EditUserModa
         nombre_completo: formData.nombre_completo,
         correo_electronico: formData.correo_electronico,
         rol_id: parseInt(formData.rol_id),
-        ciudad_id: formData.ciudad_id ? parseInt(formData.ciudad_id) : undefined,
+        ciudad_id: formData.ciudad_id ? parseInt(formData.ciudad_id) : null,
         isActive: formData.isActive
       };
 

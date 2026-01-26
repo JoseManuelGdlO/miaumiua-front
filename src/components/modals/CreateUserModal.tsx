@@ -125,7 +125,7 @@ const CreateUserModal = ({ open, onOpenChange, onUserCreated }: CreateUserModalP
         correo_electronico: formData.correo_electronico,
         contrasena: formData.contrasena,
         rol_id: parseInt(formData.rol_id),
-        ciudad_id: formData.ciudad_id ? parseInt(formData.ciudad_id) : undefined
+        ciudad_id: formData.ciudad_id ? parseInt(formData.ciudad_id) : null
       };
 
       const response = await usersService.createUser(userData);
