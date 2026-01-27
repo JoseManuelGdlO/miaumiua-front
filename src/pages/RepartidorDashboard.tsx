@@ -54,6 +54,18 @@ const RepartidorDashboard = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
+  // Función helper para parsear fecha en zona horaria local
+  const parseLocalDate = (dateString: string): Date => {
+    // Si la fecha viene en formato YYYY-MM-DD, parsearla manualmente
+    // para evitar problemas de zona horaria UTC
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+      const [year, month, day] = dateString.split('-').map(Number);
+      return new Date(year, month - 1, day);
+    }
+    // Si viene en otro formato, usar el constructor normal
+    return new Date(dateString);
+  };
+
   // Log para debug
   useEffect(() => {
     console.log('RepartidorDashboard - repartidor desde hook:', repartidor);
@@ -239,7 +251,7 @@ const RepartidorDashboard = () => {
             <h1 className="text-3xl font-bold">Mis Pedidos del Día</h1>
             <p className="text-muted-foreground">
               {repartidor?.nombre_completo} - {fechaActual 
-                ? new Date(fechaActual).toLocaleDateString('es-ES', { 
+                ? parseLocalDate(fechaActual).toLocaleDateString('es-ES', { 
                     weekday: 'long', 
                     year: 'numeric', 
                     month: 'long', 
