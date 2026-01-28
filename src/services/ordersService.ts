@@ -13,7 +13,7 @@ export interface Order {
   fecha_entrega_estimada?: string;
   metodo_pago: 'efectivo' | 'tarjeta' | 'transferencia' | 'pago_movil';
   notas?: string;
-  estado: 'pendiente' | 'confirmado' | 'en_preparacion' | 'en_camino' | 'entregado' | 'cancelado';
+  estado: 'pendiente' | 'confirmado' | 'en_preparacion' | 'en_camino' | 'entregado' | 'no_entregado' | 'cancelado';
   subtotal: number;
   descuento_total: number;
   total: number;
@@ -170,7 +170,7 @@ export interface OrdersQueryParams {
   limit?: number;
   fkid_cliente?: number;
   fkid_ciudad?: number;
-  estado?: 'pendiente' | 'confirmado' | 'en_preparacion' | 'en_camino' | 'entregado' | 'cancelado';
+  estado?: 'pendiente' | 'confirmado' | 'en_preparacion' | 'en_camino' | 'entregado' | 'no_entregado' | 'cancelado';
   metodo_pago?: 'efectivo' | 'tarjeta' | 'transferencia' | 'pago_movil';
   activos?: 'true' | 'false';
   search?: string;

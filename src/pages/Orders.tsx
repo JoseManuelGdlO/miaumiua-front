@@ -72,6 +72,7 @@ import { clientesService } from "@/services/clientesService";
 import { citiesService } from "@/services/citiesService";
 import CreateOrderModal from "@/components/modals/CreateOrderModal";
 import EditOrderModal from "@/components/modals/EditOrderModal";
+import ConfirmDeleteModal from "@/components/modals/ConfirmDeleteModal";
 
 // Extend the Order interface to match API response
 interface OrderWithAPI extends Order {
@@ -104,7 +105,9 @@ const Orders = () => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<OrderWithAPI | null>(null);
+  const [selectedOrderForDelete, setSelectedOrderForDelete] = useState<OrderWithAPI | null>(null);
   const itemsPerPage = 10;
 
   // Cargar pedidos y estadísticas al montar el componente
@@ -268,6 +271,7 @@ const Orders = () => {
       en_preparacion: { label: 'En Preparación', variant: 'default' as const, icon: Package },
       en_camino: { label: 'En Camino', variant: 'default' as const, icon: Truck },
       entregado: { label: 'Entregado', variant: 'default' as const, icon: CheckCircle },
+      no_entregado: { label: 'No Entregado', variant: 'destructive' as const, icon: XCircle },
       cancelado: { label: 'Cancelado', variant: 'destructive' as const, icon: XCircle }
     };
 
@@ -312,13 +316,16 @@ const Orders = () => {
     }
   };
 
-  const handleDeleteOrder = async (orderId: number) => {
+  const handleDeleteOrder = async () => {
+    if (!selectedOrderForDelete) return;
+
     try {
-      await ordersService.deleteOrder(orderId);
+      await ordersService.deleteOrder(selectedOrderForDelete.id);
       toast({
         title: "Pedido eliminado",
         description: "El pedido ha sido eliminado correctamente",
       });
+      setSelectedOrderForDelete(null);
       loadOrders();
     } catch (error) {
       console.error('Error al eliminar pedido:', error);
@@ -437,6 +444,7 @@ const Orders = () => {
                   <SelectItem value="en_preparacion">En Preparación</SelectItem>
                   <SelectItem value="en_camino">En Camino</SelectItem>
                   <SelectItem value="entregado">Entregado</SelectItem>
+                  <SelectItem value="no_entregado">No Entregado</SelectItem>
                   <SelectItem value="cancelado">Cancelado</SelectItem>
                 </SelectContent>
               </Select>
@@ -615,10 +623,25 @@ const Orders = () => {
                                 Marcar Entregado
                               </DropdownMenuItem>
                             )}
+                            {canDeliverOrder() && (order.estado as string) === 'no_entregado' && (
+                              <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'entregado')}>
+                                <CheckCircle className="mr-2 h-4 w-4" />
+                                Marcar Entregado
+                              </DropdownMenuItem>
+                            )}
+                            {canChangeOrderStatus() && (order.estado === 'pendiente' || order.estado === 'en_camino' || order.estado === 'confirmado') && (
+                              <DropdownMenuItem 
+                                onClick={() => handleStatusChange(order.id, 'no_entregado')}
+                                className="text-red-500"
+                              >
+                                <XCircle className="mr-2 h-4 w-4" />
+                                No Entregado
+                              </DropdownMenuItem>
+                            )}
                             {canCancelOrder() && order.estado !== 'cancelado' && order.estado !== 'entregado' && (
                               <DropdownMenuItem 
                                 onClick={() => handleStatusChange(order.id, 'cancelado')}
-                                className="text-red-600"
+                                className="text-red-700"
                               >
                                 <XCircle className="mr-2 h-4 w-4" />
                                 Cancelar
@@ -626,8 +649,11 @@ const Orders = () => {
                             )}
                             {canDelete('orders') && (
                               <DropdownMenuItem 
-                                onClick={() => handleDeleteOrder(order.id)}
-                                className="text-red-600"
+                                onClick={() => {
+                                  setSelectedOrderForDelete(order);
+                                  setIsDeleteModalOpen(true);
+                                }}
+                                className="text-red-900"
                               >
                                 <Trash2 className="mr-2 h-4 w-4" />
                                 Eliminar
@@ -804,6 +830,21 @@ const Orders = () => {
           onOrderUpdated={loadOrders}
       />
       )}
+
+      {/* Confirm Delete Modal */}
+      <ConfirmDeleteModal
+        open={isDeleteModalOpen}
+        onOpenChange={(open) => {
+          setIsDeleteModalOpen(open);
+          if (!open) {
+            setSelectedOrderForDelete(null);
+          }
+        }}
+        onConfirm={handleDeleteOrder}
+        title="Eliminar Pedido"
+        description={`¿Estás seguro de que deseas eliminar el pedido #${selectedOrderForDelete?.numero_pedido}? Esta acción no se puede deshacer.`}
+        itemType="pedido"
+      />
     </div>
   );
 };
