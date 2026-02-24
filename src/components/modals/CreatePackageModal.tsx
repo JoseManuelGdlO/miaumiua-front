@@ -19,6 +19,8 @@ import { Inventario } from "@/services/inventariosService";
 import ProductSelector from "@/components/ui/ProductSelector";
 import { Loader2, Plus, Trash2, Package as PackageIcon, DollarSign, Percent } from "lucide-react";
 
+const TITLE_MAX_LENGTH = 24; // Límite de WhatsApp para títulos de paquete
+
 interface CreatePackageModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -26,10 +28,13 @@ interface CreatePackageModalProps {
   editingPackage?: Package | null;
 }
 
+/** Campos de producto que usa el modal; compatible con Inventario y con la respuesta parcial del API de paquetes */
+type ProductoEnPaquete = Pick<Inventario, 'id' | 'nombre' | 'descripcion'> & { precio_venta?: number };
+
 interface ProductFormData {
   fkid_producto: number;
   cantidad: number;
-  producto?: Inventario;
+  producto?: ProductoEnPaquete;
 }
 
 const CreatePackageModal = ({ open, onOpenChange, onPackageCreated, editingPackage }: CreatePackageModalProps) => {
@@ -149,6 +154,15 @@ const CreatePackageModal = ({ open, onOpenChange, onPackageCreated, editingPacka
       toast({
         title: "Error",
         description: "El nombre del paquete es requerido",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (formData.nombre.trim().length > TITLE_MAX_LENGTH) {
+      toast({
+        title: "Error",
+        description: `El título del paquete no puede superar ${TITLE_MAX_LENGTH} caracteres (límite de WhatsApp)`,
         variant: "destructive"
       });
       return;
@@ -282,11 +296,15 @@ const CreatePackageModal = ({ open, onOpenChange, onPackageCreated, editingPacka
                 <Input
                   id="nombre"
                   value={formData.nombre}
-                  onChange={(e) => handleInputChange("nombre", e.target.value)}
+                  onChange={(e) => handleInputChange("nombre", e.target.value.slice(0, TITLE_MAX_LENGTH))}
                   placeholder="Ej: Paquete Premium 3 Meses"
+                  maxLength={TITLE_MAX_LENGTH}
                   required
                   disabled={loading}
                 />
+                <p className="text-xs text-muted-foreground">
+                  Máximo {TITLE_MAX_LENGTH} caracteres (límite de WhatsApp). {formData.nombre.length}/{TITLE_MAX_LENGTH}
+                </p>
               </div>
 
               <div className="space-y-2">
