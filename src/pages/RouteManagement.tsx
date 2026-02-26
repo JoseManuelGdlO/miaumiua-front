@@ -463,10 +463,17 @@ const RouteManagement = () => {
       const order = availableOrders.find(o => o.id === orderId);
     if (!order) return;
 
+      // Calcular el siguiente orden basado en los pedidos ya asignados a la ruta
+      const route = routes.find(r => r.id.toString() === routeId);
+      const maxOrder = route?.pedidos?.length
+        ? Math.max(...route.pedidos.map(p => Number(p.orden_entrega) || 0))
+        : 0;
+      const nextOrder = maxOrder + 1;
+
       const response = await routesService.assignOrdersToRoute(parseInt(routeId), {
         pedidos: [{
           fkid_pedido: orderId,
-          orden_entrega: 1, // Se puede calcular basado en pedidos existentes
+          orden_entrega: nextOrder,
           lat: order.cliente?.lat || 0,
           lng: order.cliente?.lng || 0,
           link_ubicacion: order.cliente?.lat && order.cliente?.lng ? 

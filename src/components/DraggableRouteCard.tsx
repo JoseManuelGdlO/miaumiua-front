@@ -47,7 +47,7 @@ export const DraggableRouteCard: React.FC<DraggableRouteCardProps> = ({
   } : undefined;
 
   const totalOrders = route.total_pedidos || 0;
-  const totalValue = route.pedidos?.reduce((sum, p) => sum + (p.pedido?.total || 0), 0) || 0;
+  const totalValue = route.pedidos?.reduce((sum, p) => sum + Number(p.pedido?.total ?? 0), 0) ?? 0;
 
   return (
     <div
@@ -132,7 +132,9 @@ export const DraggableRouteCard: React.FC<DraggableRouteCardProps> = ({
           </div>
           {route.pedidos && route.pedidos.length > 0 ? (
               <div className="space-y-1">
-                {route.pedidos.map((pedido) => (
+                {[...route.pedidos]
+                  .sort((a, b) => (a.orden_entrega ?? 0) - (b.orden_entrega ?? 0))
+                  .map((pedido) => (
                   <DraggableAssignedOrderCard
                     key={pedido.id}
                     routeOrder={pedido}
