@@ -40,7 +40,9 @@ const CreateCityModal = ({ open, onOpenChange, onCityCreated }: CreateCityModalP
     email_contacto: "",
     estado_inicial: "activa" as const,
     max_pedidos_por_horario: 5,
-    dias_trabajo: [0, 1, 2, 3, 4, 5, 6] as number[]
+    dias_trabajo: [0, 1, 2, 3, 4, 5, 6] as number[],
+    hora_inicio_entrega: 9,
+    hora_fin_entrega: 17
   });
 
   // Reset form cuando se abre el modal
@@ -54,7 +56,9 @@ const CreateCityModal = ({ open, onOpenChange, onCityCreated }: CreateCityModalP
       email_contacto: "",
       estado_inicial: "activa",
       max_pedidos_por_horario: 5,
-      dias_trabajo: [0, 1, 2, 3, 4, 5, 6]
+      dias_trabajo: [0, 1, 2, 3, 4, 5, 6],
+      hora_inicio_entrega: 9,
+      hora_fin_entrega: 17
     });
   };
 
@@ -103,6 +107,32 @@ const CreateCityModal = ({ open, onOpenChange, onCityCreated }: CreateCityModalP
       toast({
         title: "Error",
         description: "Debe seleccionar al menos un día de trabajo",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Validar horas de turno (0-23)
+    if (formData.hora_inicio_entrega < 0 || formData.hora_inicio_entrega > 23) {
+      toast({
+        title: "Error",
+        description: "La hora de inicio debe estar entre 0 y 23",
+        variant: "destructive"
+      });
+      return;
+    }
+    if (formData.hora_fin_entrega < 0 || formData.hora_fin_entrega > 23) {
+      toast({
+        title: "Error",
+        description: "La hora de fin debe estar entre 0 y 23",
+        variant: "destructive"
+      });
+      return;
+    }
+    if (formData.hora_inicio_entrega >= formData.hora_fin_entrega) {
+      toast({
+        title: "Error",
+        description: "La hora de inicio debe ser menor que la hora de fin",
         variant: "destructive"
       });
       return;
@@ -181,7 +211,7 @@ const CreateCityModal = ({ open, onOpenChange, onCityCreated }: CreateCityModalP
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Nueva Ciudad</DialogTitle>
           <DialogDescription>
@@ -317,6 +347,33 @@ const CreateCityModal = ({ open, onOpenChange, onCityCreated }: CreateCityModalP
             <p className="text-sm text-muted-foreground">
               Selecciona los días de la semana en que se realizan entregas
             </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="hora_inicio_entrega">Hora inicio turno</Label>
+              <Input
+                id="hora_inicio_entrega"
+                type="number"
+                min={0}
+                max={23}
+                value={formData.hora_inicio_entrega}
+                onChange={(e) => handleInputChange('hora_inicio_entrega', parseInt(e.target.value) || 0)}
+                placeholder="9"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="hora_fin_entrega">Hora fin turno</Label>
+              <Input
+                id="hora_fin_entrega"
+                type="number"
+                min={0}
+                max={23}
+                value={formData.hora_fin_entrega}
+                onChange={(e) => handleInputChange('hora_fin_entrega', parseInt(e.target.value) || 0)}
+                placeholder="17"
+              />
+            </div>
           </div>
 
           <DialogFooter>

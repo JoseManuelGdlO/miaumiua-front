@@ -17,6 +17,8 @@ export interface City {
   notas_adicionales: string;
   max_pedidos_por_horario?: number;
   dias_trabajo?: number[];
+  hora_inicio_entrega?: number;
+  hora_fin_entrega?: number;
   baja_logica: boolean;
   created_at: string;
   updated_at: string;
@@ -37,6 +39,8 @@ export interface CreateCityData {
   notas_adicionales?: string;
   max_pedidos_por_horario?: number;
   dias_trabajo?: number[];
+  hora_inicio_entrega?: number;
+  hora_fin_entrega?: number;
 }
 
 export interface UpdateCityData {
@@ -54,6 +58,8 @@ export interface UpdateCityData {
   notas_adicionales?: string;
   max_pedidos_por_horario?: number;
   dias_trabajo?: number[];
+  hora_inicio_entrega?: number;
+  hora_fin_entrega?: number;
 }
 
 export interface CitiesResponse {

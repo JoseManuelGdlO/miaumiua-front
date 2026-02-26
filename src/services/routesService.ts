@@ -354,7 +354,7 @@ class RoutesService {
     if (ciudad) queryParams.append('ciudad', ciudad.toString());
     
     const queryString = queryParams.toString();
-    return this.makeRequest(`/rutas/estadisticas${queryString ? `?${queryString}` : ''}`);
+    return this.makeRequest(`/rutas/estadisticas/general${queryString ? `?${queryString}` : ''}`);
   }
 
   // Rutas-Pedidos
