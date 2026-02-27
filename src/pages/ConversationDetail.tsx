@@ -20,6 +20,7 @@ const ConversationDetail = () => {
   const [sending, setSending] = useState<boolean>(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
+  const skipNextScrollRef = useRef<boolean>(false);
   const [chatPage, setChatPage] = useState<number>(1);
   const [chatTotalPages, setChatTotalPages] = useState<number>(1);
   const [loadingChats, setLoadingChats] = useState<boolean>(false);
@@ -62,6 +63,9 @@ const ConversationDetail = () => {
     } finally {
       setLoadingChats(false);
       setLoadingOlder(false);
+      if (options.prepend) {
+        skipNextScrollRef.current = true;
+      }
     }
   };
 
@@ -72,6 +76,10 @@ const ConversationDetail = () => {
 
   useEffect(() => {
     if (!loadingChats && !loadingOlder) {
+      if (skipNextScrollRef.current) {
+        skipNextScrollRef.current = false;
+        return;
+      }
       chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
   }, [lastChatId, loadingChats, loadingOlder]);
