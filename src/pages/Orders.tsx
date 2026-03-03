@@ -76,6 +76,8 @@ import ConfirmDeleteModal from "@/components/modals/ConfirmDeleteModal";
 
 // Extend the Order interface to match API response
 interface OrderWithAPI extends Order {
+  createdAt?: string;
+  fecha_creacion?: string;
   cliente?: {
     id: number;
     nombre_completo: string;
@@ -214,6 +216,12 @@ const Orders = () => {
     } catch (error) {
       return 'Fecha inválida';
     }
+  };
+
+  // Obtener fecha de creación del pedido (la API puede devolverla en diferentes campos)
+  const getOrderCreatedDate = (order: OrderWithAPI | null | undefined): string | undefined => {
+    if (!order) return undefined;
+    return order.created_at ?? order.createdAt ?? order.fecha_creacion;
   };
 
   const handleViewDetails = async (order: OrderWithAPI) => {
@@ -577,7 +585,7 @@ const Orders = () => {
                             <div className="text-muted-foreground">Sin fecha</div>
                           )}
                           <div className="text-xs text-muted-foreground">
-                            Creado: {formatDate(order.created_at)}
+                            Creado: {formatDate(getOrderCreatedDate(order))}
                           </div>
                         </div>
                       </TableCell>
@@ -722,11 +730,11 @@ const Orders = () => {
       {/* Order Details Modal */}
       {selectedOrder && (
         <Dialog open={isDetailsModalOpen} onOpenChange={setIsDetailsModalOpen}>
-          <DialogContent className="max-w-4xl">
-            <DialogHeader>
+          <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+            <DialogHeader className="flex-shrink-0">
               <DialogTitle>Detalles del Pedido #{selectedOrder.numero_pedido}</DialogTitle>
             </DialogHeader>
-            <div className="space-y-6">
+            <div className="space-y-6 overflow-y-auto min-h-0 flex-1 pr-2">
               {/* Order Info */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -734,7 +742,7 @@ const Orders = () => {
                   <div className="space-y-1 text-sm">
                     <p><strong>Número:</strong> {selectedOrder.numero_pedido}</p>
                     <p><strong>Estado:</strong> {getStatusBadge(selectedOrder.estado)}</p>
-                    <p><strong>Fecha:</strong> {formatDate(selectedOrder.created_at)}</p>
+                    <p><strong>Fecha:</strong> {formatDate(getOrderCreatedDate(selectedOrder))}</p>
                     <p><strong>Método de Pago:</strong> {selectedOrder.metodo_pago}</p>
                     <p><strong>Total:</strong> {formatCurrency(selectedOrder.total)}</p>
                   </div>

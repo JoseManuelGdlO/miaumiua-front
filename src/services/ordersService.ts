@@ -19,6 +19,8 @@ export interface Order {
   total: number;
   is_active: boolean;
   created_at: string;
+  createdAt?: string;  // alternativo que puede devolver la API
+  fecha_creacion?: string;  // alternativo que puede devolver la API
   updated_at: string;
   cliente?: {
     id: number;
