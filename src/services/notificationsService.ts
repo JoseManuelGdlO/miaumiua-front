@@ -286,9 +286,17 @@ class NotificationsService {
     return this.makeRequest<NotificationStatsResponse>('/notificaciones/stats');
   }
 
-  // Obtener KPIs del dashboard
-  async getDashboardKPIs(): Promise<DashboardKPIsResponse> {
-    return this.makeRequest<DashboardKPIsResponse>('/notificaciones/dashboard-kpis');
+  // Obtener KPIs del dashboard (opcional: filtrar por mes y año)
+  async getDashboardKPIs(anio?: number, mes?: number): Promise<DashboardKPIsResponse> {
+    const params = new URLSearchParams();
+    if (anio != null && mes != null) {
+      params.append('anio', String(anio));
+      params.append('mes', String(mes));
+    }
+    const query = params.toString();
+    return this.makeRequest<DashboardKPIsResponse>(
+      `/notificaciones/dashboard-kpis${query ? `?${query}` : ''}`
+    );
   }
 
   // Crear nueva notificación

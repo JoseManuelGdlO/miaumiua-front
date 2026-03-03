@@ -35,10 +35,20 @@ export interface ApiError {
   details?: any;
 }
 
+interface RefreshTokenResponse {
+  success: boolean;
+  data?: {
+    token: string;
+  };
+  message?: string;
+  error?: string;
+}
+
 // Clase para manejar la autenticación
 class AuthService {
   private baseUrl: string;
   private timeout: number;
+  private refreshPromise: Promise<string | null> | null = null;
 
   constructor() {
     const config = getCurrentConfig();
@@ -49,7 +59,7 @@ class AuthService {
   // Función para hacer peticiones HTTP con timeout y manejo de errores
   private async makeRequest<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit & { skipAuthErrorHandling?: boolean } = {}
   ): Promise<T> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
@@ -69,6 +79,7 @@ class AuthService {
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         let errorMessage = errorData.message || errorData.error || `HTTP ${response.status}: ${response.statusText}`;
+        const skipAuthErrorHandling = (options as any).skipAuthErrorHandling === true;
         
         // Manejar errores de validación (400)
         if (response.status === 400) {
@@ -84,14 +95,14 @@ class AuthService {
           // Para errores 401, usar el mensaje del servidor o un mensaje por defecto
           errorMessage = errorData.message || errorData.error || 'Credenciales incorrectas. Verifica tu email y contraseña.';
           // NO llamar handleAuthError aquí si estamos en la página de login
-          // Solo llamarlo para otras rutas que requieren autenticación
-          if (window.location.pathname !== '/login') {
+          // Solo llamarlo para otras rutas que requieren autenticación y cuando no se gestione desde authenticatedRequest
+          if (!skipAuthErrorHandling && window.location.pathname !== '/login') {
             this.handleAuthError(response);
           }
         } else if (response.status === 403) {
           errorMessage = errorData.message || errorData.error || 'Acceso denegado. Tu cuenta puede estar desactivada.';
-          // Solo manejar error de auth si no estamos en login
-          if (window.location.pathname !== '/login') {
+          // Solo manejar error de auth si no estamos en login y no se gestione desde authenticatedRequest
+          if (!skipAuthErrorHandling && window.location.pathname !== '/login') {
             this.handleAuthError(response);
           }
         } else if (response.status === 404) {
@@ -203,24 +214,116 @@ class AuthService {
     return permissions ? JSON.parse(permissions) : [];
   }
 
-  // Función para hacer peticiones autenticadas
+  private async queueRefreshAccessToken(): Promise<string | null> {
+    if (!this.refreshPromise) {
+      this.refreshPromise = this.refreshAccessToken().finally(() => {
+        this.refreshPromise = null;
+      });
+    }
+    return this.refreshPromise;
+  }
+
+  // Llama al endpoint de refresh-token para obtener un nuevo access token
+  private async refreshAccessToken(): Promise<string | null> {
+    const refreshToken = this.getRefreshToken();
+
+    if (!refreshToken) {
+      return null;
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+    try {
+      const response = await fetch(`${this.baseUrl}/auth/refresh-token`, {
+        method: 'POST',
+        signal: controller.signal,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ refreshToken }),
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        return null;
+      }
+
+      const data: RefreshTokenResponse = await response.json().catch(() => null as any);
+
+      if (!data || !data.success || !data.data?.token) {
+        return null;
+      }
+
+      // Guardar el nuevo access token
+      localStorage.setItem('auth_token', data.data.token);
+
+      return data.data.token;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      return null;
+    }
+  }
+
+  // Función para hacer peticiones autenticadas con manejo de refresh token
   async authenticatedRequest<T>(
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
-    const token = this.getToken();
-    
-    if (!token) {
-      throw new Error('No hay token de autenticación disponible');
-    }
+    const performRequest = async (): Promise<T> => {
+      const token = this.getToken();
 
-    return this.makeRequest<T>(endpoint, {
-      ...options,
-      headers: {
-        ...options.headers,
-        'Authorization': `Bearer ${token}`,
-      },
-    });
+      if (!token) {
+        throw new Error('No hay token de autenticación disponible');
+      }
+
+      return this.makeRequest<T>(endpoint, {
+        ...options,
+        headers: {
+          ...options.headers,
+          'Authorization': `Bearer ${token}`,
+        },
+        // Evitar que makeRequest haga logout automático: lo gestionamos aquí
+        skipAuthErrorHandling: true,
+      });
+    };
+
+    try {
+      return await performRequest();
+    } catch (error) {
+      const err = error as any;
+      const status = err?.response?.status;
+
+      // Intentar refresh ante 401 o 403 (token inválido/expirado o sesión); nunca para login/refresh
+      const shouldTryRefresh = (status === 401 || status === 403) && endpoint !== '/auth/login' && endpoint !== '/auth/refresh-token';
+      if (shouldTryRefresh) {
+        const newToken = await this.queueRefreshAccessToken();
+
+        if (!newToken) {
+          // No se pudo refrescar: desloguear y redirigir
+          if (window.location.pathname !== '/login') {
+            this.logout();
+            window.location.href = '/login';
+          }
+          throw err;
+        }
+
+        // Reintentar una vez con el nuevo token
+        try {
+          return await performRequest();
+        } catch (retryError) {
+          const retryStatus = (retryError as any)?.response?.status;
+          if ((retryStatus === 401 || retryStatus === 403) && window.location.pathname !== '/login') {
+            this.logout();
+            window.location.href = '/login';
+          }
+          throw retryError;
+        }
+      }
+
+      throw error;
+    }
   }
 
   // Función helper para procesar respuestas HTTP y manejar errores de autenticación

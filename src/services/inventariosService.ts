@@ -105,14 +105,13 @@ export interface InventarioResponse {
 export interface InventarioStatsResponse {
   success: boolean;
   data: {
-    total_inventarios: number;
-    active_inventarios: number;
-    low_stock_inventarios: number;
-    total_value: number;
-    inventarios_by_category: Array<{
-      categoria: string;
-      total: number;
-    }>;
+    totalInventarios: number;
+    inventariosActivos: number;
+    inventariosInactivos: number;
+    inventariosStockBajo: number;
+    totalStock: number;
+    valorTotalInventario: number;
+    precioPromedio: number;
   };
 }
 
