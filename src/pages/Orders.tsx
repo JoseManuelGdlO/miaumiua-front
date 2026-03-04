@@ -68,6 +68,7 @@ import {
 } from "@/utils/permissions";
 import { useToast } from "@/hooks/use-toast";
 import { ordersService, Order, OrderStatsResponse } from "@/services/ordersService";
+import { notificationsService } from "@/services/notificationsService";
 import { clientesService } from "@/services/clientesService";
 import { citiesService } from "@/services/citiesService";
 import CreateOrderModal from "@/components/modals/CreateOrderModal";
@@ -96,6 +97,7 @@ const Orders = () => {
   const [orders, setOrders] = useState<OrderWithAPI[]>([]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<OrderStatsResponse['data'] | null>(null);
+  const [ventasDelMes, setVentasDelMes] = useState<{ valor: number; formatoMoneda: string; cambioFormato: string } | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [paymentMethodFilter, setPaymentMethodFilter] = useState<string>("all");
@@ -151,9 +153,21 @@ const Orders = () => {
 
   const loadStats = async () => {
     try {
-      const response = await ordersService.getOrderStats();
-      if (response.success) {
-        setStats(response.data);
+      const [orderStatsRes, dashboardRes] = await Promise.all([
+        ordersService.getOrderStats(),
+        notificationsService.getDashboardKPIs(new Date().getFullYear(), new Date().getMonth() + 1),
+      ]);
+      if (orderStatsRes.success) {
+        setStats(orderStatsRes.data);
+      }
+      if (dashboardRes?.success && dashboardRes.data?.ventasDelMes) {
+        setVentasDelMes({
+          valor: dashboardRes.data.ventasDelMes.valor,
+          formatoMoneda: dashboardRes.data.ventasDelMes.formatoMoneda,
+          cambioFormato: dashboardRes.data.ventasDelMes.cambioFormato,
+        });
+      } else {
+        setVentasDelMes(null);
       }
     } catch (error) {
       console.error('Error al cargar estadísticas:', error);
@@ -398,9 +412,11 @@ const Orders = () => {
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{formatCurrency(stats.ventas_mes_actual || 0)}</div>
+              <div className="text-2xl font-bold">
+                {ventasDelMes ? ventasDelMes.formatoMoneda : formatCurrency(stats.ventas_mes_actual || 0)}
+              </div>
               <p className="text-xs text-muted-foreground">
-                {stats.crecimiento_ventas && stats.crecimiento_ventas > 0 ? '+' : ''}{stats.crecimiento_ventas?.toFixed(1) || '0.0'}% vs mes anterior
+                {ventasDelMes ? ventasDelMes.cambioFormato : `${stats.crecimiento_ventas != null && stats.crecimiento_ventas > 0 ? '+' : ''}${(stats.crecimiento_ventas ?? 0).toFixed(1)}% vs mes anterior`}
               </p>
             </CardContent>
           </Card>

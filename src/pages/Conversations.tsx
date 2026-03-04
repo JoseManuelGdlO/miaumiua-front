@@ -211,6 +211,27 @@ const Conversations = () => {
     }
   };
 
+  const handleMarkAsResolved = async (conversationId: number) => {
+    try {
+      await conversationsService.updateConversationStatus(conversationId, "activa");
+      setConversations(prev =>
+        prev.map(conv =>
+          conv.id === conversationId ? { ...conv, status: "activa" } : conv
+        )
+      );
+      toast({
+        title: "Éxito",
+        description: "Conversación marcada como resuelta",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "No se pudo marcar la conversación como resuelta",
+        variant: "destructive",
+      });
+    }
+  };
+
   const stats = [
     {
       title: "Conversaciones Activas",
@@ -470,7 +491,14 @@ const Conversations = () => {
                         Gestionar flags
                       </DropdownMenuItem>
                       {canChangeConversationStatus() && (
-                        <DropdownMenuItem>Marcar como resuelto</DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleMarkAsResolved(conversation.id);
+                          }}
+                        >
+                          Marcar como resuelto
+                        </DropdownMenuItem>
                       )}
                       {conversation.status === "pausada" ? (
                         <DropdownMenuItem 
