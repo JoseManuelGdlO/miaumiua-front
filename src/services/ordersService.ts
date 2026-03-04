@@ -272,7 +272,70 @@ class OrdersService {
 
   // Obtener estadísticas de pedidos
   async getOrderStats(): Promise<OrderStatsResponse> {
-    return this.makeRequest<OrderStatsResponse>('/pedidos/stats');
+    // La API devuelve las estadísticas en camelCase, aquí las normalizamos
+    const raw = await this.makeRequest<{ success: boolean; data: any }>('/pedidos/stats');
+
+    const data = raw?.data ?? {};
+
+    const totalPedidos = Number(data.totalPedidos ?? 0);
+    const totalVentas = Number(data.totalVentas ?? 0);
+
+    // Normalizar estadísticas por método de pago
+    const metodoPagoStats =
+      Array.isArray(data.pedidosPorMetodoPago)
+        ? data.pedidosPorMetodoPago.map((item: any) => ({
+            metodo_pago: String(item.metodo_pago),
+            total: Number(item.total ?? 0),
+            porcentaje: 0, // No se usa actualmente en el frontend
+          }))
+        : [];
+
+    // Normalizar estadísticas por estado
+    const totalPorEstado = Array.isArray(data.pedidosPorEstado)
+      ? data.pedidosPorEstado.reduce(
+          (sum: number, item: any) => sum + Number(item.total ?? 0),
+          0
+        )
+      : 0;
+
+    const estadoStats =
+      Array.isArray(data.pedidosPorEstado)
+        ? data.pedidosPorEstado.map((item: any) => {
+            const total = Number(item.total ?? 0);
+            const porcentaje =
+              totalPorEstado > 0 ? (total / totalPorEstado) * 100 : 0;
+            return {
+              estado: String(item.estado),
+              total,
+              porcentaje,
+            };
+          })
+        : [];
+
+    const normalized: OrderStatsResponse = {
+      success: raw.success,
+      data: {
+        total_pedidos: totalPedidos,
+        pedidos_pendientes: Number(data.pedidosPendientes ?? 0),
+        pedidos_confirmados: Number(data.pedidosConfirmados ?? 0),
+        pedidos_en_preparacion: Number(data.pedidosEnPreparacion ?? 0),
+        pedidos_en_camino: Number(data.pedidosEnCamino ?? 0),
+        pedidos_entregados: Number(data.pedidosEntregados ?? 0),
+        pedidos_cancelados: Number(data.pedidosCancelados ?? 0),
+        total_ventas: totalVentas,
+        ventas_mes_actual: Number(data.ventasMesActual ?? 0),
+        ventas_mes_anterior: Number(data.ventasMesAnterior ?? 0),
+        crecimiento_ventas: Number(data.crecimientoVentas ?? 0),
+        promedio_pedido:
+          totalPedidos > 0
+            ? totalVentas / totalPedidos
+            : 0,
+        metodo_pago_stats: metodoPagoStats,
+        estado_stats: estadoStats,
+      },
+    };
+
+    return normalized;
   }
 
   // Obtener pedidos recientes

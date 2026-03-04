@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import RouteMap from "@/components/RouteMap";
+// import RouteMap from "@/components/RouteMap";
 import AIRouteOptimizer from "@/components/AIRouteOptimizer";
 import { DraggableRouteCard } from "@/components/DraggableRouteCard";
 import { DraggableOrderCard } from "@/components/DraggableOrderCard";
@@ -1067,56 +1067,7 @@ const RouteManagement = () => {
         </div>
       </div>
 
-      {/* Mapa */}
-      {selectedCity && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <MapPin className="h-5 w-5" />
-              Mapa de Rutas - {cities.find(c => c.id.toString() === selectedCity)?.nombre || selectedCity}
-            </CardTitle>
-            <CardDescription>
-              Visualización de pedidos y rutas planificadas para {selectedDate}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <RouteMap 
-              orders={availableOrders.map(order => ({
-                id: order.id,
-                orderNumber: order.numero_pedido,
-                customer: order.cliente?.nombre_completo || 'Cliente',
-                phone: order.cliente?.telefono || '',
-                address: order.direccion_entrega,
-                city: cities.find(c => c.id === order.fkid_ciudad)?.nombre || 'Ciudad',
-                zone: 'Zona',
-                products: 'Productos',
-                total: order.total,
-                coordinates: { lat: 0, lng: 0 }, // Se puede obtener de geolocalización
-                route: routes.find(r => r.pedidos?.some(p => p.fkid_pedido === order.id))?.id.toString() || null,
-                driver: null
-              }))}
-              routes={routes.reduce((acc, route) => {
-                acc[route.id.toString()] = route.pedidos?.map(p => ({
-                  id: p.pedido?.id || 0,
-                  orderNumber: p.pedido?.numero_pedido || '',
-                  customer: p.pedido?.cliente?.nombre_completo || 'Cliente',
-                  phone: p.pedido?.cliente?.telefono || '',
-                  address: p.pedido?.direccion_entrega || '',
-                  city: 'Ciudad',
-                  zone: 'Zona',
-                  products: 'Productos',
-                  total: 0,
-                  coordinates: { lat: p.lat, lng: p.lng },
-                  route: route.id.toString(),
-                  driver: route.repartidor?.nombre_completo || null
-                })) || [];
-                return acc;
-              }, {} as { [key: string]: any[] })}
-              onOrderRouteChange={() => {}}
-            />
-          </CardContent>
-        </Card>
-      )}
+      {/* Mapa de Mapbox desactivado */}
 
       {/* AI Optimizer - Movido hasta abajo */}
       {selectedCity && availableOrders.length > 0 && (

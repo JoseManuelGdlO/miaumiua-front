@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { MessageCircle, Search, Filter, MoreVertical, AlertTriangle, XCircle, Info, Tag, X, Flag } from "lucide-react";
-import { canChangeConversationStatus, canAssignConversation } from "@/utils/permissions";
+import { canChangeConversationStatus } from "@/utils/permissions";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useNavigate } from "react-router-dom";
 import ErrorDetailsModal from "@/components/ErrorDetailsModal";
@@ -471,9 +471,6 @@ const Conversations = () => {
                       </DropdownMenuItem>
                       {canChangeConversationStatus() && (
                         <DropdownMenuItem>Marcar como resuelto</DropdownMenuItem>
-                      )}
-                      {canAssignConversation() && (
-                        <DropdownMenuItem>Asignar agente</DropdownMenuItem>
                       )}
                       {conversation.status === "pausada" ? (
                         <DropdownMenuItem 

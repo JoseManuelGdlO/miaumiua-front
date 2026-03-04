@@ -15,6 +15,30 @@ interface Coordinates {
   lng: number;
 }
 
+// Extraer partes útiles de una dirección completa:
+// - streetAddress: calle y número
+// - colonia: colonia/barrio si se puede inferir
+// - codigo_postal: primer CP de 5 dígitos que aparezca
+function parseAddressParts(rawAddress: string) {
+  const raw = rawAddress || '';
+
+  // Buscar código postal mexicano de 5 dígitos
+  const cpMatch = raw.match(/\b(\d{5})\b/);
+  const codigo_postal = cpMatch ? cpMatch[1] : undefined;
+
+  // Partir por comas asumiendo formato común:
+  // "Calle y número, Colonia, Ciudad, CP" (puede variar)
+  const parts = raw
+    .split(',')
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  const streetAddress = parts[0] ?? raw;
+  const colonia = parts.length > 1 ? parts[1] : undefined;
+
+  return { streetAddress, colonia, codigo_postal };
+}
+
 // Calcular distancia haversine entre dos puntos (en km)
 function haversineDistance(coord1: Coordinates, coord2: Coordinates): number {
   const R = 6371; // Radio de la Tierra en km
@@ -29,9 +53,24 @@ function haversineDistance(coord1: Coordinates, coord2: Coordinates): number {
 }
 
 // Geocodificar una dirección usando el backend
-async function geocodeAddress(address: string, estado?: string, ciudad?: string): Promise<Coordinates | null> {
+async function geocodeAddress(
+  address: string,
+  ciudad?: string,
+  colonia?: string,
+  codigo_postal?: string
+): Promise<Coordinates | null> {
+  const trimmedAddress = address?.trim();
+  if (!trimmedAddress) {
+    return null;
+  }
+
   try {
-    const response = await mapsService.geocodeAddress(address, estado, ciudad);
+    const response = await mapsService.geocodeAddress(
+      trimmedAddress,
+      ciudad,
+      colonia,
+      codigo_postal
+    );
     
     if (response.success && response.data) {
       return { lat: response.data.lat, lng: response.data.lng };
@@ -308,7 +347,6 @@ const AIRouteOptimizer: React.FC<AIRouteOptimizerProps> = ({
       console.log('Geocodificando dirección de bodega:', cityInfo.direccion_operaciones);
       const warehouseCoords = await geocodeAddress(
         cityInfo.direccion_operaciones,
-        cityInfo.departamento,
         cityInfo.nombre
       );
 
@@ -326,15 +364,21 @@ const AIRouteOptimizer: React.FC<AIRouteOptimizerProps> = ({
         
         // Si no tiene coordenadas o son (0,0), geocodificar
         if (!coords || (coords.lat === 0 && coords.lng === 0)) {
+          const { streetAddress, colonia, codigo_postal } = parseAddressParts(order.address);
           const geocoded = await geocodeAddress(
-            order.address,
-            order.estado, // Estado/departamento
-            order.ciudad  // Nombre de la ciudad
+            streetAddress,
+            order.ciudad, // Nombre de la ciudad
+            colonia,
+            codigo_postal
           );
           if (geocoded) {
             coords = geocoded;
           } else {
-            console.warn(`No se pudo geocodificar: ${order.address}, ${order.estado || ''}, ${order.ciudad || ''}`);
+            console.warn(
+              `No se pudo geocodificar: ${order.address}, ciudad: ${order.ciudad || ''}, colonia: ${
+                colonia || ''
+              }, CP: ${codigo_postal || ''}`
+            );
             continue;
           }
         }

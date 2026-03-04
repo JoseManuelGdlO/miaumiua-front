@@ -70,14 +70,21 @@ class MapsService {
     return response.json();
   }
 
-  async geocodeAddress(address: string, estado?: string, ciudad?: string): Promise<GeocodeResponse> {
+  async geocodeAddress(
+    address: string,
+    ciudad?: string,
+    colonia?: string,
+    codigo_postal?: string
+  ): Promise<GeocodeResponse> {
     return this.request<GeocodeResponse>('/maps/geocode', {
       method: 'POST',
-      body: JSON.stringify({ address, estado, ciudad }),
+      body: JSON.stringify({ address, ciudad, colonia, codigo_postal }),
     });
   }
 
-  async geocodeMultipleAddresses(addresses: string[]): Promise<GeocodeMultipleResponse> {
+  async geocodeMultipleAddresses(
+    addresses: Array<string | { address: string; ciudad?: string; colonia?: string; codigo_postal?: string }>
+  ): Promise<GeocodeMultipleResponse> {
     return this.request<GeocodeMultipleResponse>('/maps/geocode-multiple', {
       method: 'POST',
       body: JSON.stringify({ addresses }),
