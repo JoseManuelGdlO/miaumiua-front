@@ -34,6 +34,8 @@ interface CreateInventarioModalProps {
 const CreateInventarioModal = ({ isOpen, onClose, onSuccess }: CreateInventarioModalProps) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [pesos, setPesos] = useState<any[]>([]);
   const [categorias, setCategorias] = useState<any[]>([]);
   const [ciudades, setCiudades] = useState<any[]>([]);
@@ -100,8 +102,25 @@ const CreateInventarioModal = ({ isOpen, onClose, onSuccess }: CreateInventarioM
         fkid_ciudad: "",
         fkid_proveedor: "",
       });
+      setImageFile(null);
+      setImagePreview(null);
     }
   }, [isOpen]);
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (!file.type.startsWith('image/')) {
+        toast({ title: "Error", description: "Solo se permiten imágenes (JPG, PNG, GIF, WEBP)", variant: "destructive" });
+        return;
+      }
+      setImageFile(file);
+      setImagePreview(URL.createObjectURL(file));
+    } else {
+      setImageFile(null);
+      setImagePreview(null);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -124,13 +143,18 @@ const CreateInventarioModal = ({ isOpen, onClose, onSuccess }: CreateInventarioM
         fkid_proveedor: parseInt(formData.fkid_proveedor),
       };
 
-      await inventariosService.createInventario(createData);
-      
+      const createRes = await inventariosService.createInventario(createData);
+      const newId = createRes.data.inventario.id;
+
+      if (imageFile) {
+        await inventariosService.uploadInventarioImage(newId, imageFile);
+      }
+
       toast({
         title: "Éxito",
         description: "Inventario creado correctamente",
       });
-      
+
       onSuccess();
       onClose();
     } catch (error: any) {
@@ -177,6 +201,21 @@ const CreateInventarioModal = ({ isOpen, onClose, onSuccess }: CreateInventarioM
                 placeholder="Nombre del producto"
                 required
               />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Imagen del producto</Label>
+            <div className="flex items-center gap-4">
+              <Input
+                type="file"
+                accept="image/jpeg,image/png,image/gif,image/webp"
+                onChange={handleImageChange}
+                className="max-w-xs"
+              />
+              {imagePreview && (
+                <img src={imagePreview} alt="Vista previa" className="h-20 w-20 object-cover rounded border" />
+              )}
             </div>
           </div>
 

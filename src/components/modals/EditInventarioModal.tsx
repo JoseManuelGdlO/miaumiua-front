@@ -25,6 +25,7 @@ import { categoriasProductoService } from "@/services/categoriasProductoService"
 import { citiesService } from "@/services/citiesService";
 import { proveedoresService } from "@/services/proveedoresService";
 import { Loader2 } from "lucide-react";
+import { config } from "@/config/environment";
 
 interface EditInventarioModalProps {
   isOpen: boolean;
@@ -33,10 +34,18 @@ interface EditInventarioModalProps {
   inventario: Inventario;
 }
 
+function imageUrl(url: string | null | undefined): string {
+  if (!url) return '';
+  if (url.startsWith('http')) return url;
+  return `${config.imageBaseUrl}${url.startsWith('/') ? '' : '/'}${url}`;
+}
+
 const EditInventarioModal = ({ isOpen, onClose, onSuccess, inventario }: EditInventarioModalProps) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(false);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [pesos, setPesos] = useState<any[]>([]);
   const [categorias, setCategorias] = useState<any[]>([]);
   const [ciudades, setCiudades] = useState<any[]>([]);
@@ -122,6 +131,21 @@ const EditInventarioModal = ({ isOpen, onClose, onSuccess, inventario }: EditInv
     }
   }, [inventario, pesos, categorias, ciudades, proveedores]);
 
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (!file.type.startsWith('image/')) {
+        toast({ title: "Error", description: "Solo se permiten imágenes (JPG, PNG, GIF, WEBP)", variant: "destructive" });
+        return;
+      }
+      setImageFile(file);
+      setImagePreview(URL.createObjectURL(file));
+    } else {
+      setImageFile(null);
+      setImagePreview(null);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -143,13 +167,16 @@ const EditInventarioModal = ({ isOpen, onClose, onSuccess, inventario }: EditInv
         fkid_proveedor: parseInt(formData.fkid_proveedor),
       };
 
+      if (imageFile) {
+        await inventariosService.uploadInventarioImage(inventario.id, imageFile);
+      }
       await inventariosService.updateInventario(inventario.id, updateData);
-      
+
       toast({
         title: "Éxito",
         description: "Inventario actualizado correctamente",
       });
-      
+
       onSuccess();
       onClose();
     } catch (error: any) {
@@ -182,6 +209,25 @@ const EditInventarioModal = ({ isOpen, onClose, onSuccess, inventario }: EditInv
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="space-y-2">
+              <Label>Imagen del producto</Label>
+              <div className="flex items-center gap-4">
+                <Input
+                  type="file"
+                  accept="image/jpeg,image/png,image/gif,image/webp"
+                  onChange={handleImageChange}
+                  className="max-w-xs"
+                />
+                {(imagePreview || inventario.imagen_url) && (
+                  <img
+                    src={imagePreview || imageUrl(inventario.imagen_url)}
+                    alt="Producto"
+                    className="h-20 w-20 object-cover rounded border"
+                  />
+                )}
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="sku">SKU *</Label>

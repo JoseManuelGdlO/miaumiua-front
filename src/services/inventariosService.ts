@@ -16,6 +16,7 @@ export interface Inventario {
   fkid_ciudad: number;
   fkid_proveedor: number;
   baja_logica: boolean;
+  imagen_url?: string | null;
   created_at: string;
   updated_at: string;
   peso?: Peso;
@@ -208,6 +209,23 @@ class InventariosService {
     return this.makeRequest<{ success: boolean; message: string }>(`/inventarios/${id}/restore`, {
       method: 'PATCH',
     });
+  }
+
+  async uploadInventarioImage(id: number, file: File): Promise<InventarioResponse> {
+    const token = localStorage.getItem('auth_token');
+    if (!token) throw new Error('Token de acceso requerido');
+    const formData = new FormData();
+    formData.append('imagen', file);
+    const response = await fetch(`${config.apiBaseUrl}/inventarios/${id}/imagen`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+      body: formData,
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.message || `Error ${response.status}`);
+    }
+    return response.json();
   }
 
   async getInventarioStats(): Promise<InventarioStatsResponse> {

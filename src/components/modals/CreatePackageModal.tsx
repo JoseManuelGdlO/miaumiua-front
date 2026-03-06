@@ -18,6 +18,7 @@ import { packagesService, CreatePackageData, UpdatePackageData, Package } from "
 import { Inventario } from "@/services/inventariosService";
 import ProductSelector from "@/components/ui/ProductSelector";
 import { Loader2, Plus, Trash2, Package as PackageIcon, DollarSign, Percent } from "lucide-react";
+import { config } from "@/config/environment";
 
 const TITLE_MAX_LENGTH = 24; // Límite de WhatsApp para títulos de paquete
 
@@ -37,12 +38,20 @@ interface ProductFormData {
   producto?: ProductoEnPaquete;
 }
 
+function imageUrl(url: string | null | undefined): string {
+  if (!url) return '';
+  if (url.startsWith('http')) return url;
+  return `${config.imageBaseUrl}${url.startsWith('/') ? '' : '/'}${url}`;
+}
+
 const CreatePackageModal = ({ open, onOpenChange, onPackageCreated, editingPackage }: CreatePackageModalProps) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [products, setProducts] = useState<ProductFormData[]>([]);
   const isEditing = !!editingPackage;
-  
+
   const [formData, setFormData] = useState({
     nombre: "",
     descripcion: "",
@@ -82,8 +91,25 @@ const CreatePackageModal = ({ open, onOpenChange, onPackageCreated, editingPacka
         });
         setProducts([]);
       }
+      setImageFile(null);
+      setImagePreview(null);
     }
   }, [open, editingPackage]);
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (!file.type.startsWith('image/')) {
+        toast({ title: "Error", description: "Solo se permiten imágenes (JPG, PNG, GIF, WEBP)", variant: "destructive" });
+        return;
+      }
+      setImageFile(file);
+      setImagePreview(URL.createObjectURL(file));
+    } else {
+      setImageFile(null);
+      setImagePreview(null);
+    }
+  };
 
   const addProduct = () => {
     setProducts([...products, {
@@ -213,17 +239,16 @@ const CreatePackageModal = ({ open, onOpenChange, onPackageCreated, editingPacka
           }))
         };
 
-        const response = await packagesService.updatePackage(editingPackage.id, updateData);
-        
-        if (response.success) {
-          toast({
-            title: "Paquete actualizado",
-            description: `Paquete "${response.data.paquete.nombre}" actualizado exitosamente`,
-          });
-          
-          onPackageCreated();
-          onOpenChange(false);
+        await packagesService.updatePackage(editingPackage.id, updateData);
+        if (imageFile) {
+          await packagesService.uploadPackageImage(editingPackage.id, imageFile);
         }
+        toast({
+          title: "Paquete actualizado",
+          description: `Paquete "${formData.nombre.trim()}" actualizado exitosamente`,
+        });
+        onPackageCreated();
+        onOpenChange(false);
       } else {
         // Crear nuevo paquete
         const packageData: CreatePackageData = {
@@ -238,16 +263,15 @@ const CreatePackageModal = ({ open, onOpenChange, onPackageCreated, editingPacka
         };
 
         const response = await packagesService.createPackage(packageData);
-        
-        if (response.success) {
-          toast({
-            title: "Paquete creado",
-            description: `Paquete "${response.data.paquete.nombre}" creado exitosamente`,
-          });
-          
-          onPackageCreated();
-          onOpenChange(false);
+        if (response.success && response.data.paquete.id && imageFile) {
+          await packagesService.uploadPackageImage(response.data.paquete.id, imageFile);
         }
+        toast({
+          title: "Paquete creado",
+          description: `Paquete "${formData.nombre.trim()}" creado exitosamente`,
+        });
+        onPackageCreated();
+        onOpenChange(false);
       }
     } catch (error) {
       console.error(`Error al ${isEditing ? 'actualizar' : 'crear'} paquete:`, error);
@@ -317,6 +341,26 @@ const CreatePackageModal = ({ open, onOpenChange, onPackageCreated, editingPacka
                   rows={3}
                   disabled={loading}
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Imagen del combo</Label>
+                <div className="flex items-center gap-4">
+                  <Input
+                    type="file"
+                    accept="image/jpeg,image/png,image/gif,image/webp"
+                    onChange={handleImageChange}
+                    className="max-w-xs"
+                    disabled={loading}
+                  />
+                  {(imagePreview || (isEditing && editingPackage?.imagen_url)) && (
+                    <img
+                      src={imagePreview || (editingPackage && imageUrl(editingPackage.imagen_url))}
+                      alt="Combo"
+                      className="h-20 w-20 object-cover rounded border"
+                    />
+                  )}
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
