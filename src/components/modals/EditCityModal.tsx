@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { citiesService, City } from "@/services/citiesService";
+import { citiesService, City, HORARIO_POR_DIA_DEFAULT, type HorarioPorDia } from "@/services/citiesService";
 import { Loader2 } from "lucide-react";
 
 interface EditCityModalProps {
@@ -32,19 +32,48 @@ interface EditCityModalProps {
 const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModalProps) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    nombre: string;
+    departamento: string;
+    direccion_operaciones: string;
+    manager: string;
+    telefono: string;
+    email_contacto: string;
+    estado_inicial: City["estado_inicial"];
+    max_pedidos_por_horario: number;
+    dias_trabajo: number[];
+    horario_por_dia: HorarioPorDia;
+  }>({
     nombre: "",
     departamento: "",
     direccion_operaciones: "",
     manager: "",
     telefono: "",
     email_contacto: "",
-    estado_inicial: "activa" as const,
+    estado_inicial: "activa",
     max_pedidos_por_horario: 5,
-    dias_trabajo: [0, 1, 2, 3, 4, 5, 6] as number[],
-    hora_inicio_entrega: 9,
-    hora_fin_entrega: 17
+    dias_trabajo: [1, 2, 3, 4, 5],
+    horario_por_dia: { ...HORARIO_POR_DIA_DEFAULT } as HorarioPorDia,
   });
+
+  // Construir horario_por_dia desde backend: si viene horario_por_dia usarlo; si no, desde campos legacy
+  const getInitialHorarioPorDia = (c: City): HorarioPorDia => {
+    const hasAllKeys = c.horario_por_dia && ['0','1','2','3','4','5','6'].every(k => c.horario_por_dia![k]);
+    if (hasAllKeys) return { ...c.horario_por_dia! };
+    const legacyInicio = c.hora_inicio_entrega ?? 9;
+    const legacyFin = c.hora_fin_entrega ?? 18;
+    const legacySlot = { inicio: legacyInicio, fin: legacyFin };
+    const result: HorarioPorDia = {};
+    for (let i = 0; i <= 6; i++) {
+      const key = String(i);
+      if (c.dias_trabajo && c.dias_trabajo.includes(i)) {
+        result[key] = legacySlot;
+      } else {
+        result[key] = { ...HORARIO_POR_DIA_DEFAULT[key] };
+      }
+    }
+    return result;
+  };
 
   // Actualizar formulario cuando cambie la ciudad
   useEffect(() => {
@@ -58,11 +87,8 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
         email_contacto: city.email_contacto,
         estado_inicial: city.estado_inicial,
         max_pedidos_por_horario: city.max_pedidos_por_horario || 5,
-        dias_trabajo: city.dias_trabajo && city.dias_trabajo.length > 0 
-          ? city.dias_trabajo 
-          : [0, 1, 2, 3, 4, 5, 6],
-        hora_inicio_entrega: city.hora_inicio_entrega ?? 9,
-        hora_fin_entrega: city.hora_fin_entrega ?? 17
+        dias_trabajo: city.dias_trabajo && city.dias_trabajo.length > 0 ? city.dias_trabajo : [1, 2, 3, 4, 5],
+        horario_por_dia: getInitialHorarioPorDia(city),
       });
     }
   }, [city, open]);
@@ -109,7 +135,6 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
       return;
     }
 
-    // Validar que haya al menos un día de trabajo
     if (!formData.dias_trabajo || formData.dias_trabajo.length === 0) {
       toast({
         title: "Error",
@@ -119,30 +144,31 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
       return;
     }
 
-    // Validar horas de turno (0-23)
-    if (formData.hora_inicio_entrega < 0 || formData.hora_inicio_entrega > 23) {
-      toast({
-        title: "Error",
-        description: "La hora de inicio debe estar entre 0 y 23",
-        variant: "destructive"
-      });
-      return;
-    }
-    if (formData.hora_fin_entrega < 0 || formData.hora_fin_entrega > 23) {
-      toast({
-        title: "Error",
-        description: "La hora de fin debe estar entre 0 y 23",
-        variant: "destructive"
-      });
-      return;
-    }
-    if (formData.hora_inicio_entrega >= formData.hora_fin_entrega) {
-      toast({
-        title: "Error",
-        description: "La hora de inicio debe ser menor que la hora de fin",
-        variant: "destructive"
-      });
-      return;
+    // Validar horario por día: 0 <= inicio, fin <= 23 y inicio < fin
+    const diasLabels: Record<string, string> = {
+      '0': 'Domingo', '1': 'Lunes', '2': 'Martes', '3': 'Miércoles',
+      '4': 'Jueves', '5': 'Viernes', '6': 'Sábado',
+    };
+    for (const key of ['0', '1', '2', '3', '4', '5', '6']) {
+      const slot = formData.horario_por_dia[key];
+      if (!slot) continue;
+      const { inicio, fin } = slot;
+      if (inicio < 0 || inicio > 23 || fin < 0 || fin > 23) {
+        toast({
+          title: "Error",
+          description: `En ${diasLabels[key]}: hora inicio y fin deben estar entre 0 y 23`,
+          variant: "destructive"
+        });
+        return;
+      }
+      if (inicio >= fin) {
+        toast({
+          title: "Error",
+          description: `En ${diasLabels[key]}: la hora de inicio debe ser menor que la de fin`,
+          variant: "destructive"
+        });
+        return;
+      }
     }
 
     try {
@@ -177,23 +203,29 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
     }));
   };
 
+  const handleHorarioChange = (diaKey: string, field: 'inicio' | 'fin', value: number) => {
+    setFormData(prev => ({
+      ...prev,
+      horario_por_dia: {
+        ...prev.horario_por_dia,
+        [diaKey]: {
+          ...prev.horario_por_dia[diaKey],
+          [field]: value,
+        },
+      },
+    }));
+  };
+
   const handleDiaTrabajoChange = (dia: number, checked: boolean) => {
     setFormData(prev => {
       const diasTrabajo = [...prev.dias_trabajo];
       if (checked) {
-        if (!diasTrabajo.includes(dia)) {
-          diasTrabajo.push(dia);
-        }
+        if (!diasTrabajo.includes(dia)) diasTrabajo.push(dia);
       } else {
         const index = diasTrabajo.indexOf(dia);
-        if (index > -1) {
-          diasTrabajo.splice(index, 1);
-        }
+        if (index > -1) diasTrabajo.splice(index, 1);
       }
-      return {
-        ...prev,
-        dias_trabajo: diasTrabajo.sort((a, b) => a - b)
-      };
+      return { ...prev, dias_trabajo: diasTrabajo.sort((a, b) => a - b) };
     });
   };
 
@@ -341,44 +373,58 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
                     checked={formData.dias_trabajo.includes(dia.value)}
                     onCheckedChange={(checked) => handleDiaTrabajoChange(dia.value, checked as boolean)}
                   />
-                  <Label
-                    htmlFor={`dia-${dia.value}`}
-                    className="text-sm font-normal cursor-pointer"
-                  >
+                  <Label htmlFor={`dia-${dia.value}`} className="text-sm font-normal cursor-pointer">
                     {dia.label}
                   </Label>
                 </div>
               ))}
             </div>
             <p className="text-sm text-muted-foreground">
-              Selecciona los días de la semana en que se realizan entregas
+              Días en que la ciudad opera y realiza entregas (ej. lunes a viernes = [1,2,3,4,5])
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="hora_inicio_entrega">Hora inicio turno</Label>
-              <Input
-                id="hora_inicio_entrega"
-                type="number"
-                min={0}
-                max={23}
-                value={formData.hora_inicio_entrega}
-                onChange={(e) => handleInputChange('hora_inicio_entrega', parseInt(e.target.value) || 0)}
-                placeholder="9"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="hora_fin_entrega">Hora fin turno</Label>
-              <Input
-                id="hora_fin_entrega"
-                type="number"
-                min={0}
-                max={23}
-                value={formData.hora_fin_entrega}
-                onChange={(e) => handleInputChange('hora_fin_entrega', parseInt(e.target.value) || 0)}
-                placeholder="17"
-              />
+          <div className="space-y-2">
+            <Label>Horario por día</Label>
+            <p className="text-sm text-muted-foreground">
+              Hora de inicio y fin de atención por día (0-23). Inicio debe ser menor que fin.
+            </p>
+            <div className="border rounded-md overflow-hidden">
+              <div className="grid grid-cols-[1fr_80px_80px] gap-2 p-3 bg-muted/50 text-sm font-medium">
+                <span>Día</span>
+                <span>Inicio</span>
+                <span>Fin</span>
+              </div>
+              {diasSemana
+                .filter((dia) => formData.dias_trabajo.includes(dia.value))
+                .map((dia) => {
+                  const key = String(dia.value);
+                  const slot = formData.horario_por_dia[key] ?? { inicio: 9, fin: 18 };
+                  return (
+                    <div
+                      key={dia.value}
+                      className="grid grid-cols-[1fr_80px_80px] gap-2 p-3 border-t items-center"
+                    >
+                      <span className="text-sm">{dia.label}</span>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={23}
+                        value={slot.inicio}
+                        onChange={(e) => handleHorarioChange(key, 'inicio', parseInt(e.target.value) || 0)}
+                        className="h-8"
+                      />
+                      <Input
+                        type="number"
+                        min={0}
+                        max={23}
+                        value={slot.fin}
+                        onChange={(e) => handleHorarioChange(key, 'fin', parseInt(e.target.value) || 0)}
+                        className="h-8"
+                      />
+                    </div>
+                  );
+                })}
             </div>
           </div>
 

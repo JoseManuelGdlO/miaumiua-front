@@ -1,5 +1,23 @@
 import { config } from '@/config/environment';
 
+// Horario por día: claves "0" (domingo) a "6" (sábado), horas 0-23, inicio < fin
+export interface HorarioSlot {
+  inicio: number;
+  fin: number;
+}
+
+export type HorarioPorDia = Record<string, HorarioSlot>;
+
+export const HORARIO_POR_DIA_DEFAULT: HorarioPorDia = {
+  '0': { inicio: 9, fin: 18 },
+  '1': { inicio: 9, fin: 18 },
+  '2': { inicio: 9, fin: 18 },
+  '3': { inicio: 9, fin: 18 },
+  '4': { inicio: 9, fin: 18 },
+  '5': { inicio: 9, fin: 18 },
+  '6': { inicio: 9, fin: 14 },
+};
+
 // Tipos para las ciudades
 export interface City {
   id: number;
@@ -16,6 +34,7 @@ export interface City {
   email_contacto: string;
   notas_adicionales: string;
   max_pedidos_por_horario?: number;
+  horario_por_dia?: HorarioPorDia;
   dias_trabajo?: number[];
   hora_inicio_entrega?: number;
   hora_fin_entrega?: number;
@@ -39,8 +58,7 @@ export interface CreateCityData {
   notas_adicionales?: string;
   max_pedidos_por_horario?: number;
   dias_trabajo?: number[];
-  hora_inicio_entrega?: number;
-  hora_fin_entrega?: number;
+  horario_por_dia?: HorarioPorDia;
 }
 
 export interface UpdateCityData {
@@ -58,8 +76,7 @@ export interface UpdateCityData {
   notas_adicionales?: string;
   max_pedidos_por_horario?: number;
   dias_trabajo?: number[];
-  hora_inicio_entrega?: number;
-  hora_fin_entrega?: number;
+  horario_por_dia?: HorarioPorDia;
 }
 
 export interface CitiesResponse {
