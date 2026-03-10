@@ -77,6 +77,8 @@ const MESES = [
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
 ];
 
+const DASHBOARD_VERSION = "1.0.0";
+
 const getCurrentMonth = () => new Date().getMonth() + 1;
 const getCurrentYear = () => new Date().getFullYear();
 
@@ -465,7 +467,14 @@ const Dashboard = () => {
     <div className="p-6 space-y-8 max-w-7xl mx-auto">
       {/* Header */}
       <div className="space-y-2">
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">Panel de Control - Miau Miau</h1>
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">
+            Panel de Control - Miau Miau
+          </h1>
+          <Badge variant="outline" className="text-xs font-normal px-2 py-1">
+            Versión dashboard v{DASHBOARD_VERSION}
+          </Badge>
+        </div>
         <p className="text-muted-foreground">
           Gestiona tus bots de WhatsApp, Instagram y Facebook para la venta de arena para gatos
         </p>
