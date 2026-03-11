@@ -18,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { inventariosService, Inventario } from "@/services/inventariosService";
 import { pesosService } from "@/services/pesosService";
@@ -63,6 +64,8 @@ const EditInventarioModal = ({ isOpen, onClose, onSuccess, inventario }: EditInv
     fkid_categoria: "",
     fkid_ciudad: "",
     fkid_proveedor: "",
+    compra_minima_enabled: false,
+    compra_minima: "",
   });
 
   // Cargar datos de referencia e inicializar formulario
@@ -112,6 +115,8 @@ const EditInventarioModal = ({ isOpen, onClose, onSuccess, inventario }: EditInv
     if (inventario && pesos.length > 0 && categorias.length > 0 && ciudades.length > 0 && proveedores.length > 0) {
       console.log('Inicializando formulario con datos de referencia disponibles');
       console.log('Inventario:', inventario);
+      const compraMinima = inventario.compra_minima;
+      const compraMinimaEnabled = compraMinima != null && compraMinima > 0;
       const formData = {
         sku: inventario.sku,
         nombre: inventario.nombre,
@@ -125,6 +130,8 @@ const EditInventarioModal = ({ isOpen, onClose, onSuccess, inventario }: EditInv
         fkid_categoria: inventario.fkid_categoria.toString(),
         fkid_ciudad: inventario.fkid_ciudad.toString(),
         fkid_proveedor: inventario.fkid_proveedor.toString(),
+        compra_minima_enabled: compraMinimaEnabled,
+        compra_minima: compraMinimaEnabled ? compraMinima.toString() : "",
       };
       console.log('FormData a establecer:', formData);
       setFormData(formData);
@@ -148,6 +155,18 @@ const EditInventarioModal = ({ isOpen, onClose, onSuccess, inventario }: EditInv
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (formData.compra_minima_enabled) {
+      const valor = parseInt(formData.compra_minima, 10);
+      if (isNaN(valor) || valor <= 0) {
+        toast({
+          title: "Error",
+          description: "La compra mínima debe ser mayor a 0",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
     
     try {
       setLoading(true);
@@ -165,6 +184,7 @@ const EditInventarioModal = ({ isOpen, onClose, onSuccess, inventario }: EditInv
         fkid_categoria: parseInt(formData.fkid_categoria),
         fkid_ciudad: parseInt(formData.fkid_ciudad),
         fkid_proveedor: parseInt(formData.fkid_proveedor),
+        compra_minima: formData.compra_minima_enabled ? parseInt(formData.compra_minima, 10) : null,
       };
 
       if (imageFile) {
@@ -299,6 +319,38 @@ const EditInventarioModal = ({ isOpen, onClose, onSuccess, inventario }: EditInv
                 required
               />
             </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Switch
+                id="compra_minima_enabled"
+                checked={formData.compra_minima_enabled}
+                onCheckedChange={(checked) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    compra_minima_enabled: !!checked,
+                    compra_minima: checked ? prev.compra_minima : "",
+                  }))
+                }
+              />
+              <Label htmlFor="compra_minima_enabled" className="cursor-pointer">
+                Compra mínima
+              </Label>
+            </div>
+            {formData.compra_minima_enabled && (
+              <Input
+                id="compra_minima"
+                type="number"
+                min={1}
+                value={formData.compra_minima}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, compra_minima: e.target.value }))
+                }
+                placeholder="Cantidad"
+                className="w-28"
+              />
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-4">

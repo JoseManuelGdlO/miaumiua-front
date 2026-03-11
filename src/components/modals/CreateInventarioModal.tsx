@@ -18,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { inventariosService } from "@/services/inventariosService";
 import { pesosService } from "@/services/pesosService";
@@ -53,6 +54,8 @@ const CreateInventarioModal = ({ isOpen, onClose, onSuccess }: CreateInventarioM
     fkid_categoria: "",
     fkid_ciudad: "",
     fkid_proveedor: "",
+    compra_minima_enabled: false,
+    compra_minima: "",
   });
 
   // Cargar datos de referencia
@@ -101,6 +104,8 @@ const CreateInventarioModal = ({ isOpen, onClose, onSuccess }: CreateInventarioM
         fkid_categoria: "",
         fkid_ciudad: "",
         fkid_proveedor: "",
+        compra_minima_enabled: false,
+        compra_minima: "",
       });
       setImageFile(null);
       setImagePreview(null);
@@ -124,6 +129,18 @@ const CreateInventarioModal = ({ isOpen, onClose, onSuccess }: CreateInventarioM
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (formData.compra_minima_enabled) {
+      const valor = parseInt(formData.compra_minima, 10);
+      if (isNaN(valor) || valor <= 0) {
+        toast({
+          title: "Error",
+          description: "La compra mínima debe ser mayor a 0",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
     
     try {
       setLoading(true);
@@ -141,6 +158,7 @@ const CreateInventarioModal = ({ isOpen, onClose, onSuccess }: CreateInventarioM
         fkid_categoria: parseInt(formData.fkid_categoria),
         fkid_ciudad: parseInt(formData.fkid_ciudad),
         fkid_proveedor: parseInt(formData.fkid_proveedor),
+        compra_minima: formData.compra_minima_enabled ? parseInt(formData.compra_minima, 10) : null,
       };
 
       const createRes = await inventariosService.createInventario(createData);
@@ -267,6 +285,38 @@ const CreateInventarioModal = ({ isOpen, onClose, onSuccess }: CreateInventarioM
                 required
               />
             </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Switch
+                id="compra_minima_enabled"
+                checked={formData.compra_minima_enabled}
+                onCheckedChange={(checked) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    compra_minima_enabled: !!checked,
+                    compra_minima: checked ? prev.compra_minima : "",
+                  }))
+                }
+              />
+              <Label htmlFor="compra_minima_enabled" className="cursor-pointer">
+                Compra mínima
+              </Label>
+            </div>
+            {formData.compra_minima_enabled && (
+              <Input
+                id="compra_minima"
+                type="number"
+                min={1}
+                value={formData.compra_minima}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, compra_minima: e.target.value }))
+                }
+                placeholder="Cantidad"
+                className="w-28"
+              />
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-4">

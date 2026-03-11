@@ -15,6 +15,7 @@ export interface Inventario {
   fkid_categoria: number;
   fkid_ciudad: number;
   fkid_proveedor: number;
+  compra_minima?: number | null;
   baja_logica: boolean;
   imagen_url?: string | null;
   created_at: string;
@@ -66,6 +67,7 @@ export interface CreateInventarioData {
   fkid_categoria: number;
   fkid_ciudad: number;
   fkid_proveedor: number;
+  compra_minima?: number | null;
 }
 
 export interface UpdateInventarioData {
@@ -81,6 +83,7 @@ export interface UpdateInventarioData {
   fkid_categoria?: number;
   fkid_ciudad?: number;
   fkid_proveedor?: number;
+  compra_minima?: number | null;
 }
 
 export interface InventariosResponse {
