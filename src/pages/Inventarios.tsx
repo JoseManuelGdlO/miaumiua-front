@@ -26,6 +26,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { Search, Plus, MoreHorizontal, Edit, Trash2, Package, Package2, Loader2, AlertTriangle, RotateCcw } from "lucide-react";
 import { canCreate, canEdit, canDelete } from "@/utils/permissions";
 import CreateInventarioModal from "@/components/modals/CreateInventarioModal";
@@ -38,6 +40,7 @@ const Inventarios = () => {
   const [inventarios, setInventarios] = useState<Inventario[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
@@ -56,6 +59,7 @@ const Inventarios = () => {
         page: currentPage,
         limit: itemsPerPage,
         search: searchTerm || undefined,
+        activos: showArchived ? undefined : "true",
       });
 
       setInventarios(response.data.inventarios);
@@ -75,7 +79,7 @@ const Inventarios = () => {
 
   useEffect(() => {
     loadInventarios();
-  }, [currentPage, searchTerm]);
+  }, [currentPage, searchTerm, showArchived]);
 
   // Manejar búsqueda
   const handleSearch = (value: string) => {
@@ -221,11 +225,26 @@ const Inventarios = () => {
 
       {/* Search and Filters */}
       <Card>
-        <CardHeader>
-          <CardTitle>Inventarios</CardTitle>
-          <CardDescription>
-            Lista de todos los productos en inventario
-          </CardDescription>
+        <CardHeader className="flex flex-row items-start justify-between space-y-0 gap-4">
+          <div>
+            <CardTitle>Inventarios</CardTitle>
+            <CardDescription>
+              Lista de todos los productos en inventario
+            </CardDescription>
+          </div>
+          <div className="flex items-center space-x-2 shrink-0">
+            <Switch
+              id="ver-archivados"
+              checked={showArchived}
+              onCheckedChange={(checked) => {
+                setShowArchived(checked);
+                setCurrentPage(1);
+              }}
+            />
+            <Label htmlFor="ver-archivados" className="text-sm font-medium cursor-pointer whitespace-nowrap">
+              Ver archivados
+            </Label>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="flex items-center space-x-2 mb-4">
