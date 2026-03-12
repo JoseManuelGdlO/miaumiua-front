@@ -59,7 +59,7 @@ const Inventarios = () => {
         page: currentPage,
         limit: itemsPerPage,
         search: searchTerm || undefined,
-        activos: showArchived ? undefined : "true",
+        activos: showArchived ? "false" : "true",
       });
 
       setInventarios(response.data.inventarios);

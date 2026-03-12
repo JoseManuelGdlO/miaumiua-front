@@ -31,6 +31,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { 
   Search, 
   Plus, 
@@ -59,6 +61,7 @@ const Packages = () => {
   const [packages, setPackages] = useState<PackageType[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalPackages, setTotalPackages] = useState(0);
@@ -71,7 +74,7 @@ const Packages = () => {
   // Cargar paquetes al montar el componente
   useEffect(() => {
     loadPackages();
-  }, [currentPage, searchTerm]);
+  }, [currentPage, searchTerm, showArchived]);
 
   const loadPackages = async () => {
     try {
@@ -79,8 +82,8 @@ const Packages = () => {
       const response = await packagesService.getAllPackages({
         page: currentPage,
         limit: itemsPerPage,
-        search: searchTerm || undefined
-        // No filtrar por activos, mostrar todos
+        search: searchTerm || undefined,
+        activos: showArchived ? "false" : "true",
       });
       
       if (response.success) {
@@ -218,11 +221,26 @@ const Packages = () => {
 
       {/* Packages Table */}
       <Card>
-        <CardHeader>
-          <CardTitle>Paquetes Registrados</CardTitle>
-          <CardDescription>
-            Lista completa de paquetes con filtros y búsqueda
-          </CardDescription>
+        <CardHeader className="flex flex-row items-start justify-between space-y-0 gap-4">
+          <div>
+            <CardTitle>Paquetes Registrados</CardTitle>
+            <CardDescription>
+              Lista completa de paquetes con filtros y búsqueda
+            </CardDescription>
+          </div>
+          <div className="flex items-center space-x-2 shrink-0">
+            <Switch
+              id="ver-archivados"
+              checked={showArchived}
+              onCheckedChange={(checked) => {
+                setShowArchived(checked);
+                setCurrentPage(1);
+              }}
+            />
+            <Label htmlFor="ver-archivados" className="text-sm font-medium cursor-pointer whitespace-nowrap">
+              Ver archivados
+            </Label>
+          </div>
         </CardHeader>
         <CardContent>
           {/* Search */}
@@ -311,9 +329,9 @@ const Packages = () => {
                             Activo
                           </Badge>
                         ) : (
-                          <Badge variant="secondary" className="flex items-center gap-1 w-fit">
+                          <Badge variant="outline" className="flex items-center gap-1 w-fit">
                             <XCircle className="h-3 w-3" />
-                            Inactivo
+                            Archivado
                           </Badge>
                         )}
                       </TableCell>
