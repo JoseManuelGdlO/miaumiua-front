@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { citiesService, City, HORARIO_POR_DIA_DEFAULT, type HorarioPorDia } from "@/services/citiesService";
+import { citiesService, City, HORARIO_POR_DIA_DEFAULT, type HorarioPorDia, type PointOfSale } from "@/services/citiesService";
 import { Loader2 } from "lucide-react";
 
 interface EditCityModalProps {
@@ -32,6 +32,7 @@ interface EditCityModalProps {
 const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModalProps) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [loadingPoints, setLoadingPoints] = useState(false);
   const [formData, setFormData] = useState<{
     nombre: string;
     departamento: string;
@@ -56,6 +57,23 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
     horario_por_dia: { ...HORARIO_POR_DIA_DEFAULT } as HorarioPorDia,
   });
 
+  type DraftPointOfSale = {
+    id?: number;
+    nombre: string;
+    direccion: string;
+    telefono: string;
+    encargado: string;
+  };
+
+  const [pointsOfSale, setPointsOfSale] = useState<DraftPointOfSale[]>([]);
+  const [pointForm, setPointForm] = useState<DraftPointOfSale>({
+    nombre: "",
+    direccion: "",
+    telefono: "",
+    encargado: "",
+  });
+  const [editingPointId, setEditingPointId] = useState<number | null>(null);
+
   // Construir horario_por_dia desde backend: si viene horario_por_dia usarlo; si no, desde campos legacy
   const getInitialHorarioPorDia = (c: City): HorarioPorDia => {
     const hasAllKeys = c.horario_por_dia && ['0','1','2','3','4','5','6'].every(k => c.horario_por_dia![k]);
@@ -77,6 +95,34 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
 
   // Actualizar formulario cuando cambie la ciudad
   useEffect(() => {
+    const loadCityPoints = async (cityId: number) => {
+      try {
+        setLoadingPoints(true);
+        const response = await citiesService.getPointsOfSale(cityId);
+        if (response.success) {
+          const puntos = response.data.pointsOfSale || [];
+          setPointsOfSale(
+            puntos.map((p: PointOfSale) => ({
+              id: p.id,
+              nombre: p.nombre,
+              direccion: p.direccion,
+              telefono: p.telefono || "",
+              encargado: p.encargado || "",
+            }))
+          );
+        }
+      } catch (error) {
+        console.error("Error al cargar puntos de venta:", error);
+        toast({
+          title: "Error",
+          description: error instanceof Error ? error.message : "Error al cargar los puntos de venta",
+          variant: "destructive",
+        });
+      } finally {
+        setLoadingPoints(false);
+      }
+    };
+
     if (city && open) {
       setFormData({
         nombre: city.nombre,
@@ -90,8 +136,153 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
         dias_trabajo: city.dias_trabajo && city.dias_trabajo.length > 0 ? city.dias_trabajo : [1, 2, 3, 4, 5],
         horario_por_dia: getInitialHorarioPorDia(city),
       });
+      setPointForm({
+        nombre: "",
+        direccion: "",
+        telefono: "",
+        encargado: "",
+      });
+      setEditingPointId(null);
+      loadCityPoints(city.id);
+    } else if (!open) {
+      setPointsOfSale([]);
+      setPointForm({
+        nombre: "",
+        direccion: "",
+        telefono: "",
+        encargado: "",
+      });
+      setEditingPointId(null);
     }
   }, [city, open]);
+
+  const handlePointInputChange = (field: keyof DraftPointOfSale, value: string) => {
+    setPointForm(prev => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const handleEditPointClick = (point: DraftPointOfSale) => {
+    setEditingPointId(point.id ?? null);
+    setPointForm({
+      id: point.id,
+      nombre: point.nombre,
+      direccion: point.direccion,
+      telefono: point.telefono,
+      encargado: point.encargado,
+    });
+  };
+
+  const handleSavePoint = async () => {
+    if (!city) return;
+
+    if (!pointForm.nombre || !pointForm.direccion) {
+      toast({
+        title: "Error",
+        description: "Nombre y dirección del punto de venta son obligatorios",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setLoadingPoints(true);
+
+      if (editingPointId) {
+        const response = await citiesService.updatePointOfSale(city.id, editingPointId, {
+          nombre: pointForm.nombre,
+          direccion: pointForm.direccion,
+          telefono: pointForm.telefono || undefined,
+          encargado: pointForm.encargado || undefined,
+        });
+
+        if (response.success) {
+          setPointsOfSale(prev =>
+            prev.map(p =>
+              p.id === editingPointId
+                ? {
+                    id: response.data.pointOfSale.id,
+                    nombre: response.data.pointOfSale.nombre,
+                    direccion: response.data.pointOfSale.direccion,
+                    telefono: response.data.pointOfSale.telefono || "",
+                    encargado: response.data.pointOfSale.encargado || "",
+                  }
+                : p
+            )
+          );
+        }
+      } else {
+        const response = await citiesService.createPointOfSale(city.id, {
+          nombre: pointForm.nombre,
+          direccion: pointForm.direccion,
+          telefono: pointForm.telefono || undefined,
+          encargado: pointForm.encargado || undefined,
+        });
+
+        if (response.success) {
+          const created = response.data.pointOfSale;
+          setPointsOfSale(prev => [
+            ...prev,
+            {
+              id: created.id,
+              nombre: created.nombre,
+              direccion: created.direccion,
+              telefono: created.telefono || "",
+              encargado: created.encargado || "",
+            },
+          ]);
+        }
+      }
+
+      setPointForm({
+        nombre: "",
+        direccion: "",
+        telefono: "",
+        encargado: "",
+      });
+      setEditingPointId(null);
+    } catch (error) {
+      console.error("Error al guardar punto de venta:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Error al guardar el punto de venta",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingPoints(false);
+    }
+  };
+
+  const handleDeletePoint = async (point: DraftPointOfSale) => {
+    if (!city || !point.id) return;
+
+    try {
+      setLoadingPoints(true);
+      const response = await citiesService.deletePointOfSale(city.id, point.id);
+      if (response.success) {
+        setPointsOfSale(prev => prev.filter(p => p.id !== point.id));
+        if (editingPointId === point.id) {
+          setEditingPointId(null);
+          setPointForm({
+            nombre: "",
+            direccion: "",
+            telefono: "",
+            encargado: "",
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Error al eliminar punto de venta:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Error al eliminar el punto de venta",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingPoints(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -425,6 +616,128 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
                     </div>
                   );
                 })}
+            </div>
+          </div>
+
+          <div className="space-y-3 border rounded-md p-4">
+            <div>
+              <Label className="font-semibold">Puntos de venta de la ciudad</Label>
+              <p className="text-sm text-muted-foreground">
+                Administra los puntos de venta asociados a esta ciudad (nombre, dirección, teléfono y encargado).
+              </p>
+            </div>
+
+            {loadingPoints && (
+              <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Cargando puntos de venta...</span>
+              </div>
+            )}
+
+            {!loadingPoints && pointsOfSale.length > 0 && (
+              <div className="space-y-2">
+                {pointsOfSale.map((point) => (
+                  <div
+                    key={point.id}
+                    className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 border rounded-md p-2"
+                  >
+                    <div className="text-sm">
+                      <div className="font-medium">{point.nombre}</div>
+                      <div className="text-muted-foreground">{point.direccion}</div>
+                      <div className="text-muted-foreground">
+                        {point.telefono && <span className="mr-2">Tel: {point.telefono}</span>}
+                        {point.encargado && <span>Encargado: {point.encargado}</span>}
+                      </div>
+                    </div>
+                    <div className="flex gap-2 self-start md:self-auto">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleEditPointClick(point)}
+                      >
+                        Editar
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-destructive"
+                        onClick={() => handleDeletePoint(point)}
+                      >
+                        Eliminar
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="pv-nombre-edit">Nombre *</Label>
+                <Input
+                  id="pv-nombre-edit"
+                  value={pointForm.nombre}
+                  onChange={(e) => handlePointInputChange("nombre", e.target.value)}
+                  placeholder="Nombre del punto de venta"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="pv-telefono-edit">Teléfono</Label>
+                <Input
+                  id="pv-telefono-edit"
+                  value={pointForm.telefono}
+                  onChange={(e) => handlePointInputChange("telefono", e.target.value)}
+                  placeholder="+52 55 0000 0000"
+                />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="pv-direccion-edit">Dirección *</Label>
+                <Input
+                  id="pv-direccion-edit"
+                  value={pointForm.direccion}
+                  onChange={(e) => handlePointInputChange("direccion", e.target.value)}
+                  placeholder="Dirección del punto de venta"
+                />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="pv-encargado-edit">Encargado</Label>
+                <Input
+                  id="pv-encargado-edit"
+                  value={pointForm.encargado}
+                  onChange={(e) => handlePointInputChange("encargado", e.target.value)}
+                  placeholder="Nombre del encargado"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              {editingPointId && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setEditingPointId(null);
+                    setPointForm({
+                      nombre: "",
+                      direccion: "",
+                      telefono: "",
+                      encargado: "",
+                    });
+                  }}
+                >
+                  Cancelar edición
+                </Button>
+              )}
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={handleSavePoint}
+                disabled={loadingPoints}
+              >
+                {editingPointId ? "Guardar cambios" : "Agregar punto de venta"}
+              </Button>
             </div>
           </div>
 

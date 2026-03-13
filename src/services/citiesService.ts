@@ -43,6 +43,32 @@ export interface City {
   updated_at: string;
 }
 
+export interface PointOfSale {
+  id: number;
+  city_id: number;
+  nombre: string;
+  direccion: string;
+  telefono: string | null;
+  encargado: string | null;
+  baja_logica: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreatePointOfSaleData {
+  nombre: string;
+  direccion: string;
+  telefono?: string;
+  encargado?: string;
+}
+
+export interface UpdatePointOfSaleData {
+  nombre?: string;
+  direccion?: string;
+  telefono?: string;
+  encargado?: string;
+}
+
 export interface CreateCityData {
   nombre: string;
   departamento: string;
@@ -111,6 +137,22 @@ export interface CityStatsResponse {
       count: number;
     }>;
   };
+}
+
+export interface PointsOfSaleResponse {
+  success: boolean;
+  data: {
+    pointsOfSale: PointOfSale[];
+    total: number;
+  };
+}
+
+export interface PointOfSaleResponse {
+  success: boolean;
+  data: {
+    pointOfSale: PointOfSale;
+  };
+  message?: string;
 }
 
 // Parámetros de consulta
@@ -209,6 +251,31 @@ class CitiesService {
   // Obtener ciudades activas
   async getActiveCities(): Promise<{ success: boolean; data: { cities: City[]; total: number } }> {
     return this.makeRequest<{ success: boolean; data: { cities: City[]; total: number } }>(`${this.baseUrl}/active`);
+  }
+
+  // Puntos de venta por ciudad
+  async getPointsOfSale(cityId: number): Promise<PointsOfSaleResponse> {
+    return this.makeRequest<PointsOfSaleResponse>(`${this.baseUrl}/${cityId}/points-of-sale`);
+  }
+
+  async createPointOfSale(cityId: number, data: CreatePointOfSaleData): Promise<PointOfSaleResponse> {
+    return this.makeRequest<PointOfSaleResponse>(`${this.baseUrl}/${cityId}/points-of-sale`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updatePointOfSale(cityId: number, pointId: number, data: UpdatePointOfSaleData): Promise<PointOfSaleResponse> {
+    return this.makeRequest<PointOfSaleResponse>(`${this.baseUrl}/${cityId}/points-of-sale/${pointId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deletePointOfSale(cityId: number, pointId: number): Promise<{ success: boolean; message: string }> {
+    return this.makeRequest<{ success: boolean; message: string }>(`${this.baseUrl}/${cityId}/points-of-sale/${pointId}`, {
+      method: 'DELETE',
+    });
   }
 }
 

@@ -31,6 +31,7 @@ interface CreateCityModalProps {
 const CreateCityModal = ({ open, onOpenChange, onCityCreated }: CreateCityModalProps) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [savingPoints, setSavingPoints] = useState(false);
   const [formData, setFormData] = useState({
     nombre: "",
     departamento: "",
@@ -42,6 +43,21 @@ const CreateCityModal = ({ open, onOpenChange, onCityCreated }: CreateCityModalP
     max_pedidos_por_horario: 5,
     dias_trabajo: [1, 2, 3, 4, 5] as number[],
     horario_por_dia: { ...HORARIO_POR_DIA_DEFAULT } as HorarioPorDia,
+  });
+
+  type DraftPointOfSale = {
+    nombre: string;
+    direccion: string;
+    telefono: string;
+    encargado: string;
+  };
+
+  const [pointsOfSale, setPointsOfSale] = useState<DraftPointOfSale[]>([]);
+  const [pointForm, setPointForm] = useState<DraftPointOfSale>({
+    nombre: "",
+    direccion: "",
+    telefono: "",
+    encargado: "",
   });
 
   // Reset form cuando se abre el modal
@@ -58,6 +74,43 @@ const CreateCityModal = ({ open, onOpenChange, onCityCreated }: CreateCityModalP
       dias_trabajo: [1, 2, 3, 4, 5],
       horario_por_dia: { ...HORARIO_POR_DIA_DEFAULT } as HorarioPorDia,
     });
+    setPointsOfSale([]);
+    setPointForm({
+      nombre: "",
+      direccion: "",
+      telefono: "",
+      encargado: "",
+    });
+  };
+
+  const handlePointInputChange = (field: keyof DraftPointOfSale, value: string) => {
+    setPointForm(prev => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const handleAddPoint = () => {
+    if (!pointForm.nombre || !pointForm.direccion) {
+      toast({
+        title: "Error",
+        description: "Nombre y dirección del punto de venta son obligatorios",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setPointsOfSale(prev => [...prev, pointForm]);
+    setPointForm({
+      nombre: "",
+      direccion: "",
+      telefono: "",
+      encargado: "",
+    });
+  };
+
+  const handleRemovePoint = (index: number) => {
+    setPointsOfSale(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -142,6 +195,29 @@ const CreateCityModal = ({ open, onOpenChange, onCityCreated }: CreateCityModalP
       const response = await citiesService.createCity(formData);
 
       if (response.success) {
+        const createdCity = response.data?.city;
+
+        if (createdCity && pointsOfSale.length > 0) {
+          setSavingPoints(true);
+          for (const point of pointsOfSale) {
+            try {
+              await citiesService.createPointOfSale(createdCity.id, {
+                nombre: point.nombre,
+                direccion: point.direccion,
+                telefono: point.telefono || undefined,
+                encargado: point.encargado || undefined,
+              });
+            } catch (error) {
+              console.error("Error al crear punto de venta:", error);
+              toast({
+                title: "Aviso",
+                description: "La ciudad se creó, pero hubo errores creando algunos puntos de venta.",
+                variant: "destructive",
+              });
+            }
+          }
+        }
+
         toast({
           title: "Ciudad creada",
           description: `${formData.nombre} ha sido registrada exitosamente`,
@@ -158,6 +234,7 @@ const CreateCityModal = ({ open, onOpenChange, onCityCreated }: CreateCityModalP
         variant: "destructive"
       });
     } finally {
+      setSavingPoints(false);
       setLoading(false);
     }
   };
@@ -394,6 +471,92 @@ const CreateCityModal = ({ open, onOpenChange, onCityCreated }: CreateCityModalP
             </div>
           </div>
 
+          <div className="space-y-3 border rounded-md p-4">
+            <div>
+              <Label className="font-semibold">Puntos de venta de la ciudad</Label>
+              <p className="text-sm text-muted-foreground">
+                Agrega los puntos de venta asociados a esta ciudad (nombre, dirección, teléfono y encargado).
+              </p>
+            </div>
+
+            {pointsOfSale.length > 0 && (
+              <div className="space-y-2">
+                {pointsOfSale.map((point, index) => (
+                  <div
+                    key={`${point.nombre}-${index}`}
+                    className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 border rounded-md p-2"
+                  >
+                    <div className="text-sm">
+                      <div className="font-medium">{point.nombre}</div>
+                      <div className="text-muted-foreground">{point.direccion}</div>
+                      <div className="text-muted-foreground">
+                        {point.telefono && <span className="mr-2">Tel: {point.telefono}</span>}
+                        {point.encargado && <span>Encargado: {point.encargado}</span>}
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="self-start md:self-auto text-destructive"
+                      onClick={() => handleRemovePoint(index)}
+                    >
+                      Quitar
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="pv-nombre">Nombre *</Label>
+                <Input
+                  id="pv-nombre"
+                  value={pointForm.nombre}
+                  onChange={(e) => handlePointInputChange("nombre", e.target.value)}
+                  placeholder="Nombre del punto de venta"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="pv-telefono">Teléfono</Label>
+                <Input
+                  id="pv-telefono"
+                  value={pointForm.telefono}
+                  onChange={(e) => handlePointInputChange("telefono", e.target.value)}
+                  placeholder="+52 55 0000 0000"
+                />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="pv-direccion">Dirección *</Label>
+                <Input
+                  id="pv-direccion"
+                  value={pointForm.direccion}
+                  onChange={(e) => handlePointInputChange("direccion", e.target.value)}
+                  placeholder="Dirección del punto de venta"
+                />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="pv-encargado">Encargado</Label>
+                <Input
+                  id="pv-encargado"
+                  value={pointForm.encargado}
+                  onChange={(e) => handlePointInputChange("encargado", e.target.value)}
+                  placeholder="Nombre del encargado"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={handleAddPoint}
+              >
+                Agregar punto de venta
+              </Button>
+            </div>
+          </div>
+
           <DialogFooter>
             <Button
               type="button"
@@ -407,7 +570,7 @@ const CreateCityModal = ({ open, onOpenChange, onCityCreated }: CreateCityModalP
               Cancelar
             </Button>
             <Button type="submit" disabled={loading}>
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {(loading || savingPoints) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Crear Ciudad
             </Button>
           </DialogFooter>
