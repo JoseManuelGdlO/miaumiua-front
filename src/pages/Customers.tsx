@@ -32,7 +32,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, Plus, MoreHorizontal, Edit, Trash2, UserCheck, Star, MessageSquare, Phone, Loader2, Upload, FileSpreadsheet } from "lucide-react";
+import { Search, Plus, MoreHorizontal, Edit, Trash2, UserCheck, Star, MessageSquare, Phone, Loader2, Upload, FileSpreadsheet, KeyRound } from "lucide-react";
 import { canCreate, canEdit, canDelete, canViewStats } from "@/utils/permissions";
 import { useToast } from "@/hooks/use-toast";
 import { clientesService, Cliente } from "@/services/clientesService";
@@ -58,6 +58,7 @@ interface ClienteWithAPI extends Cliente {
 }
 import EditCustomerModal from "@/components/modals/EditCustomerModal";
 import ConfirmDeleteModal from "@/components/modals/ConfirmDeleteModal";
+import ChangeClientePortalPasswordModal from "@/components/modals/ChangeClientePortalPasswordModal";
 
 const Customers = () => {
   const { toast } = useToast();
@@ -67,6 +68,7 @@ const Customers = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isBulkUploadModalOpen, setIsBulkUploadModalOpen] = useState(false);
+  const [isPortalPasswordModalOpen, setIsPortalPasswordModalOpen] = useState(false);
   const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
   const [clientes, setClientes] = useState<ClienteWithAPI[]>([]);
   const [loading, setLoading] = useState(true);
@@ -141,6 +143,11 @@ const Customers = () => {
   const handleEditCliente = (cliente: Cliente) => {
     setSelectedCliente(cliente);
     setIsEditModalOpen(true);
+  };
+
+  const handlePortalPasswordCliente = (cliente: Cliente) => {
+    setSelectedCliente(cliente);
+    setIsPortalPasswordModalOpen(true);
   };
 
   const handleSearch = (value: string) => {
@@ -307,6 +314,12 @@ const Customers = () => {
                                 Editar Cliente
                               </DropdownMenuItem>
                             )}
+                            {canEdit('customers') && (
+                              <DropdownMenuItem onClick={() => handlePortalPasswordCliente(cliente)}>
+                                <KeyRound className="mr-2 h-4 w-4" />
+                                Contraseña portal (web)
+                              </DropdownMenuItem>
+                            )}
                             {canDelete('customers') && (
                               <DropdownMenuItem 
                                 className="text-destructive"
@@ -406,6 +419,13 @@ const Customers = () => {
         open={isBulkUploadModalOpen}
         onOpenChange={setIsBulkUploadModalOpen}
         onUploadComplete={loadClientes}
+      />
+
+      <ChangeClientePortalPasswordModal
+        open={isPortalPasswordModalOpen}
+        onOpenChange={setIsPortalPasswordModalOpen}
+        cliente={selectedCliente}
+        onPasswordChanged={loadClientes}
       />
     </div>
   );

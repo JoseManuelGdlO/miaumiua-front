@@ -171,6 +171,24 @@ class ClientesService {
     });
   }
 
+  /** Contraseña del portal de clientes (sitio web público) */
+  async resetPortalPassword(
+    id: number,
+    data: { newPassword: string; forcePasswordChange?: boolean }
+  ): Promise<{
+    success: boolean;
+    message?: string;
+    data?: { cliente: { id: number; must_change_password: boolean } };
+  }> {
+    return this.makeRequest(`${this.baseUrl}/${id}/portal-password`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        newPassword: data.newPassword,
+        forcePasswordChange: data.forcePasswordChange ?? true,
+      }),
+    });
+  }
+
   // Eliminar cliente (baja lógica)
   async deleteCliente(id: number): Promise<{ success: boolean; message: string }> {
     return this.makeRequest<{ success: boolean; message: string }>(`${this.baseUrl}/${id}`, {
