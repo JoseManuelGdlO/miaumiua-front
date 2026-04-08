@@ -2,12 +2,23 @@ import { config } from '@/config/environment';
 
 export interface PublicSiteSettingsData {
   heroYoutubeVideoId: string;
+  socialInstagramUrl: string;
+  socialFacebookUrl: string;
+  socialTiktokUrl: string;
+  mercadolibreUrl: string;
 }
 
 export interface UpdateHeroVideoResponse {
   success: boolean;
   data: PublicSiteSettingsData;
   message?: string;
+}
+
+export interface UpdatePublicLinksBody {
+  socialInstagramUrl: string;
+  socialFacebookUrl: string;
+  socialTiktokUrl: string;
+  mercadolibreUrl: string;
 }
 
 class SiteSettingsService {
@@ -42,6 +53,38 @@ class SiteSettingsService {
       try {
         const body = await res.json();
         if (body?.message) message = body.message;
+      } catch {
+        /* ignore */
+      }
+      throw new Error(message);
+    }
+
+    return res.json();
+  }
+
+  async updatePublicLinks(body: UpdatePublicLinksBody): Promise<UpdateHeroVideoResponse> {
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+      throw new Error('Token de acceso requerido');
+    }
+
+    const res = await fetch(`${config.apiBaseUrl}/site-settings/public-links`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const { authService } = await import('./authService');
+      authService.handleAuthError(res);
+
+      let message = `Error ${res.status}`;
+      try {
+        const json = await res.json();
+        if (json?.message) message = json.message;
       } catch {
         /* ignore */
       }

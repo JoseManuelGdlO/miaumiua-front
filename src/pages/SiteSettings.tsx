@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
-import { Globe, Loader2 } from "lucide-react";
+import { Globe, Loader2, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,16 +18,26 @@ import { siteSettingsService } from "@/services/siteSettingsService";
 const SiteSettings = () => {
   const { toast } = useToast();
   const [videoInput, setVideoInput] = useState("");
+  const [instagramUrl, setInstagramUrl] = useState("");
+  const [facebookUrl, setFacebookUrl] = useState("");
+  const [tiktokUrl, setTiktokUrl] = useState("");
+  const [mercadolibreUrl, setMercadolibreUrl] = useState("");
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [savingVideo, setSavingVideo] = useState(false);
+  const [savingLinks, setSavingLinks] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       try {
         const res = await siteSettingsService.getPublic();
-        if (!cancelled && res.success && res.data?.heroYoutubeVideoId) {
-          setVideoInput(res.data.heroYoutubeVideoId);
+        if (!cancelled && res.success && res.data) {
+          const d = res.data;
+          if (d.heroYoutubeVideoId) setVideoInput(d.heroYoutubeVideoId);
+          setInstagramUrl(d.socialInstagramUrl ?? "");
+          setFacebookUrl(d.socialFacebookUrl ?? "");
+          setTiktokUrl(d.socialTiktokUrl ?? "");
+          setMercadolibreUrl(d.mercadolibreUrl ?? "");
         }
       } catch (e) {
         if (!cancelled) {
@@ -48,7 +58,7 @@ const SiteSettings = () => {
     };
   }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmitVideo = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!videoInput.trim()) {
       toast({
@@ -60,7 +70,7 @@ const SiteSettings = () => {
     }
 
     try {
-      setSaving(true);
+      setSavingVideo(true);
       const res = await siteSettingsService.updateHeroYoutubeVideoId(videoInput.trim());
       if (res.success && res.data?.heroYoutubeVideoId) {
         setVideoInput(res.data.heroYoutubeVideoId);
@@ -76,7 +86,38 @@ const SiteSettings = () => {
         variant: "destructive",
       });
     } finally {
-      setSaving(false);
+      setSavingVideo(false);
+    }
+  };
+
+  const handleSubmitLinks = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setSavingLinks(true);
+      const res = await siteSettingsService.updatePublicLinks({
+        socialInstagramUrl: instagramUrl.trim(),
+        socialFacebookUrl: facebookUrl.trim(),
+        socialTiktokUrl: tiktokUrl.trim(),
+        mercadolibreUrl: mercadolibreUrl.trim(),
+      });
+      if (res.success && res.data) {
+        setInstagramUrl(res.data.socialInstagramUrl ?? "");
+        setFacebookUrl(res.data.socialFacebookUrl ?? "");
+        setTiktokUrl(res.data.socialTiktokUrl ?? "");
+        setMercadolibreUrl(res.data.mercadolibreUrl ?? "");
+      }
+      toast({
+        title: "Guardado",
+        description: res.message ?? "Enlaces actualizados",
+      });
+    } catch (err) {
+      toast({
+        title: "Error al guardar",
+        description: err instanceof Error ? err.message : "No se pudo actualizar",
+        variant: "destructive",
+      });
+    } finally {
+      setSavingLinks(false);
     }
   };
 
@@ -85,13 +126,13 @@ const SiteSettings = () => {
   }
 
   return (
-    <div className="p-6 max-w-xl">
+    <div className="p-6 max-w-xl space-y-8">
       <div className="flex items-center gap-3 mb-6">
         <Globe className="h-8 w-8 text-primary" />
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Sitio web público</h1>
           <p className="text-muted-foreground text-sm">
-            Contenido mostrado en la página principal (hero)
+            Contenido mostrado en la página principal (hero) y pie de página
           </p>
         </div>
       </div>
@@ -113,7 +154,7 @@ const SiteSettings = () => {
               Cargando…
             </div>
           ) : (
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmitVideo} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="hero-youtube">ID o enlace de YouTube</Label>
                 <Input
@@ -124,9 +165,82 @@ const SiteSettings = () => {
                   autoComplete="off"
                 />
               </div>
-              <Button type="submit" disabled={saving}>
-                {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                Guardar
+              <Button type="submit" disabled={savingVideo}>
+                {savingVideo && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Guardar video
+              </Button>
+            </form>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Link2 className="h-5 w-5" />
+            Redes sociales y Mercado Libre
+          </CardTitle>
+          <CardDescription>
+            Enlaces mostrados en el pie de página (Instagram, Facebook, TikTok) y botón para comprar
+            en Mercado Libre en la página principal. Deja vacío lo que no quieras mostrar. Las URLs
+            deben empezar con <code className="text-xs">https://</code>.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="flex items-center gap-2 text-muted-foreground py-4">
+              <Loader2 className="h-5 w-5 animate-spin" />
+              Cargando…
+            </div>
+          ) : (
+            <form onSubmit={handleSubmitLinks} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="social-instagram">Instagram</Label>
+                <Input
+                  id="social-instagram"
+                  value={instagramUrl}
+                  onChange={(e) => setInstagramUrl(e.target.value)}
+                  placeholder="https://instagram.com/..."
+                  autoComplete="off"
+                  type="url"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="social-facebook">Facebook</Label>
+                <Input
+                  id="social-facebook"
+                  value={facebookUrl}
+                  onChange={(e) => setFacebookUrl(e.target.value)}
+                  placeholder="https://facebook.com/..."
+                  autoComplete="off"
+                  type="url"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="social-tiktok">TikTok</Label>
+                <Input
+                  id="social-tiktok"
+                  value={tiktokUrl}
+                  onChange={(e) => setTiktokUrl(e.target.value)}
+                  placeholder="https://www.tiktok.com/@..."
+                  autoComplete="off"
+                  type="url"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="mercadolibre">Mercado Libre (tienda o publicación)</Label>
+                <Input
+                  id="mercadolibre"
+                  value={mercadolibreUrl}
+                  onChange={(e) => setMercadolibreUrl(e.target.value)}
+                  placeholder="https://www.mercadolibre.com.mx/..."
+                  autoComplete="off"
+                  type="url"
+                />
+              </div>
+              <Button type="submit" disabled={savingLinks}>
+                {savingLinks && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Guardar enlaces
               </Button>
             </form>
           )}
