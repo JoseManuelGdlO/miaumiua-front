@@ -185,6 +185,11 @@ export const canDelete = (section: keyof typeof SECTION_PERMISSIONS): boolean =>
   return hasPermission(sectionPermissions.delete);
 };
 
+/** Restablecer contraseña del portal (tienda web) del cliente — soporte suele tener solo lectura de clientes */
+export const canResetClientePortalPassword = (): boolean => {
+  return hasPermission('editar_clientes') || hasPermission('ver_clientes');
+};
+
 // Función para verificar si el usuario puede ver estadísticas
 export const canViewStats = (section: keyof typeof SECTION_PERMISSIONS): boolean => {
   const sectionPermissions = SECTION_PERMISSIONS[section];

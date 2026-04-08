@@ -33,7 +33,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Search, Plus, MoreHorizontal, Edit, Trash2, UserCheck, Star, MessageSquare, Phone, Loader2, Upload, FileSpreadsheet, KeyRound } from "lucide-react";
-import { canCreate, canEdit, canDelete, canViewStats } from "@/utils/permissions";
+import { canCreate, canEdit, canDelete, canViewStats, canResetClientePortalPassword } from "@/utils/permissions";
 import { useToast } from "@/hooks/use-toast";
 import { clientesService, Cliente } from "@/services/clientesService";
 import CreateCustomerModal from "@/components/modals/CreateCustomerModal";
@@ -314,7 +314,7 @@ const Customers = () => {
                                 Editar Cliente
                               </DropdownMenuItem>
                             )}
-                            {canEdit('customers') && (
+                            {canResetClientePortalPassword() && (
                               <DropdownMenuItem onClick={() => handlePortalPasswordCliente(cliente)}>
                                 <KeyRound className="mr-2 h-4 w-4" />
                                 Contraseña portal (web)
