@@ -17,8 +17,9 @@ import {
   Weight,
   Truck,
   Flag,
+  Globe,
 } from "lucide-react";
-import { hasSectionAccess } from "@/utils/permissions";
+import { canConfigureSystem, hasSectionAccess } from "@/utils/permissions";
 import {
   Sidebar,
   SidebarContent,
@@ -59,6 +60,13 @@ const menuItems = [
   { title: "Paquetes", url: "/dashboard/packages", icon: Package2, permission: "packages" },
   { title: "Ciudades", url: "/dashboard/cities", icon: MapPin, permission: "cities" },
   { title: "Clientes", url: "/dashboard/customers", icon: UserCheck, permission: "customers" },
+  {
+    title: "Sitio web",
+    url: "/dashboard/settings",
+    icon: Globe,
+    permission: null,
+    requireConfigureSystem: true,
+  },
   {
     title: "Configuraciones",
     icon: Settings,
@@ -132,6 +140,13 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu className="space-y-1">
               {menuItems.map((item) => {
+                if (
+                  "requireConfigureSystem" in item &&
+                  item.requireConfigureSystem &&
+                  !canConfigureSystem()
+                ) {
+                  return null;
+                }
                 // Check if user has access to this section
                 if (item.permission && !hasSectionAccess(item.permission as any)) {
                   return null;
