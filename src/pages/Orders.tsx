@@ -112,7 +112,11 @@ const Orders = () => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<OrderWithAPI | null>(null);
   const [selectedOrderForDelete, setSelectedOrderForDelete] = useState<OrderWithAPI | null>(null);
+  const [detailsStripeRetryLoading, setDetailsStripeRetryLoading] = useState(false);
   const itemsPerPage = 10;
+
+  const getStripeCheckoutUrl = (order: OrderWithAPI): string | null =>
+    order.stripe_link_url ?? order.url ?? null;
 
   // Cargar pedidos y estadísticas al montar el componente
   useEffect(() => {
@@ -335,6 +339,34 @@ const Orders = () => {
         description: "No se pudo cambiar el estado del pedido",
         variant: "destructive"
       });
+    }
+  };
+
+  const handleRetryStripeFromDetails = async () => {
+    if (!selectedOrder) return;
+    try {
+      setDetailsStripeRetryLoading(true);
+      await ordersService.createStripePaymentLink(selectedOrder.id);
+      const refreshed = await ordersService.getOrderById(selectedOrder.id);
+      if (refreshed.success) {
+        setSelectedOrder(refreshed.data.pedido as OrderWithAPI);
+        const url = getStripeCheckoutUrl(refreshed.data.pedido as OrderWithAPI);
+        toast({
+          title: url ? "Enlace listo" : "Actualizado",
+          description: url
+            ? "El enlace de pago con Stripe está disponible."
+            : "Se procesó la solicitud; revisa el enlace en unos segundos.",
+        });
+      }
+    } catch (error) {
+      console.error("Error al generar link Stripe:", error);
+      toast({
+        title: "No se pudo generar el link",
+        description: error instanceof Error ? error.message : "Error desconocido",
+        variant: "destructive",
+      });
+    } finally {
+      setDetailsStripeRetryLoading(false);
     }
   };
 
@@ -761,6 +793,45 @@ const Orders = () => {
                     <p><strong>Fecha:</strong> {formatDate(getOrderCreatedDate(selectedOrder))}</p>
                     <p><strong>Método de Pago:</strong> {selectedOrder.metodo_pago}</p>
                     <p><strong>Total:</strong> {formatCurrency(selectedOrder.total)}</p>
+                    {selectedOrder.metodo_pago === "tarjeta" &&
+                      (() => {
+                        const checkoutUrl = getStripeCheckoutUrl(selectedOrder);
+                        return (
+                          <div className="mt-3 space-y-2 rounded-md border bg-muted/40 p-3">
+                            <p className="text-xs font-medium text-muted-foreground">
+                              Pago con tarjeta (Stripe)
+                            </p>
+                            {checkoutUrl ? (
+                              <a
+                                href={checkoutUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm text-primary underline break-all"
+                              >
+                                {checkoutUrl}
+                              </a>
+                            ) : (
+                              <div className="space-y-2">
+                                <p className="text-sm text-muted-foreground">
+                                  El enlace de pago aún no está disponible. Puedes generarlo de nuevo.
+                                </p>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={handleRetryStripeFromDetails}
+                                  disabled={detailsStripeRetryLoading}
+                                >
+                                  {detailsStripeRetryLoading && (
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                  )}
+                                  Reintentar generar link
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                   </div>
                 </div>
                 <div>
