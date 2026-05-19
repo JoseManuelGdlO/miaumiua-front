@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -16,9 +17,95 @@ import AssignFlagsModal from "@/components/modals/AssignFlagsModal";
 import FlagsSelector from "@/components/FlagsSelector";
 import { conversationsService } from "@/services/conversationsService";
 import { useToast } from "@/hooks/use-toast";
+import {
+  buildListQueryParams,
+  buildListScopeParams,
+  type ConversationListFilter,
+  CONVERSATION_LIST_FILTER_OPTIONS,
+  fetchConversationKpiStats,
+  getListFilterLabel,
+} from "@/utils/conversationListFilters";
+import { cn } from "@/lib/utils";
+
+const normalizePhone = (value: string) => value.replace(/\D/g, "");
+
+const formatPhone = (value: string) => {
+  const digits = normalizePhone(value);
+  return digits ? `+${digits}` : "";
+};
+
+const getPhoneDisplay = (value: string) => {
+  if (!value) return "";
+  if (value.toLowerCase().startsWith("whatsapp:")) {
+    return formatPhone(value);
+  }
+  const digits = normalizePhone(value);
+  return digits.length >= 5 ? formatPhone(value) : value;
+};
+
+const mapConversationFromApi = (c: any) => {
+  const chats = Array.isArray(c.chats) ? c.chats : [];
+  const lastChat = chats.length > 0 ? chats[chats.length - 1] : null;
+  const unreadCount = chats.filter((chat: any) => chat?.leido === false).length;
+  const phoneNumberRaw = c?.from || "";
+  const phoneNumber = getPhoneDisplay(phoneNumberRaw);
+
+  let customerName = "";
+  if (c?.cliente?.nombre_completo) {
+    customerName = c.cliente.nombre_completo.replace(/usuairo/gi, "usuario");
+  } else if (phoneNumber && phoneNumber !== phoneNumberRaw) {
+    customerName = phoneNumber;
+  } else if (
+    c?.from &&
+    !c.from.toLowerCase().includes("cliente nuevo") &&
+    !c.from.toLowerCase().includes("nuevo cliente")
+  ) {
+    customerName = c.from;
+  } else {
+    customerName = `Conversación #${c.id}`;
+  }
+
+  const logs = Array.isArray(c.logs) ? c.logs : [];
+  const errorLog = logs.find(
+    (l: any) => l?.tipo_log === "error" || l?.nivel === "error"
+  );
+  const hasErrorLog = Boolean(errorLog);
+  const hasEscalationLog = logs.some((l: any) => l?.tipo_log === "escalacion");
+  const rawStatus = c.status || "activa";
+  const displayStatus = hasErrorLog
+    ? "error"
+    : hasEscalationLog
+      ? "escalado"
+      : rawStatus;
+  const flags = Array.isArray(c.flags) ? c.flags : [];
+
+  return {
+    id: c.id,
+    customer: customerName,
+    avatar: "",
+    lastMessage: lastChat?.mensaje || "",
+    timestamp: lastChat?.created_at
+      ? new Date(lastChat.created_at).toLocaleString()
+      : c?.updatedAt
+        ? new Date(c.updatedAt).toLocaleString()
+        : "",
+    rawStatus,
+    status: displayStatus,
+    unread: unreadCount,
+    agent: c?.agente?.nombre || "Bot Assistant",
+    errorDetails: hasErrorLog
+      ? errorLog?.descripcion || "Error en la conversación"
+      : undefined,
+    phoneNumber,
+    flags,
+    hasErrorLog,
+    hasEscalationLog,
+  };
+};
 
 const Conversations = () => {
   const [searchTerm, setSearchTerm] = useState("");
+  const [listFilter, setListFilter] = useState<ConversationListFilter>("all");
   const [selectedFlags, setSelectedFlags] = useState<number[]>([]);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [assignFlagsModalOpen, setAssignFlagsModalOpen] = useState(false);
@@ -33,102 +120,73 @@ const Conversations = () => {
   const [statsData, setStatsData] = useState<Record<string, number>>({});
   const [page, setPage] = useState<number>(1);
   const [totalPages, setTotalPages] = useState<number>(1);
+  const [totalCount, setTotalCount] = useState<number>(0);
   const [limit] = useState<number>(20);
 
-  const normalizePhone = (value: string) => value.replace(/\D/g, "");
-  const formatPhone = (value: string) => {
-    const digits = normalizePhone(value);
-    return digits ? `+${digits}` : "";
-  };
-  const getPhoneDisplay = (value: string) => {
-    if (!value) return "";
-    if (value.toLowerCase().startsWith("whatsapp:")) {
-      return formatPhone(value);
+  const loadConversations = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const scope = buildListScopeParams(searchTerm, selectedFlags);
+      const useScopedKpis =
+        listFilter !== "all" || Boolean(scope.search || scope.flags);
+
+      const [listRes, kpiCounts] = await Promise.all([
+        conversationsService.getConversations({
+          page,
+          limit,
+          ...scope,
+          ...buildListQueryParams(listFilter),
+        }),
+        useScopedKpis
+          ? fetchConversationKpiStats(scope)
+          : conversationsService
+              .getStats()
+              .then((res) => res?.data ?? {}),
+      ]);
+
+      const mapped = (listRes?.data?.conversaciones || []).map(mapConversationFromApi);
+
+      setConversations(mapped);
+      setStatsData(kpiCounts);
+      setTotalPages(listRes?.data?.pagination?.totalPages || 1);
+      setTotalCount(listRes?.data?.pagination?.total ?? mapped.length);
+    } catch (e: any) {
+      setError(e?.message || "Error al cargar conversaciones");
+    } finally {
+      setLoading(false);
     }
-    const digits = normalizePhone(value);
-    return digits.length >= 5 ? formatPhone(value) : value;
-  };
+  }, [page, limit, selectedFlags, searchTerm, listFilter]);
 
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const [listRes, statsRes] = await Promise.all([
-          conversationsService.getConversations({ 
-            page, 
-            limit,
-            search: searchTerm.trim() || undefined,
-            flags: selectedFlags.length > 0 ? selectedFlags : undefined
-          }),
-          conversationsService.getStats(),
-        ]);
+    loadConversations();
+  }, [loadConversations]);
 
-        const mapped = (listRes?.data?.conversaciones || []).map((c: any) => {
-          const chats = Array.isArray(c.chats) ? c.chats : [];
-          const lastChat = chats.length > 0 ? chats[chats.length - 1] : null;
-          const unreadCount = chats.filter((chat: any) => chat?.leido === false).length;
-          const phoneNumberRaw = c?.from || '';
-          const phoneNumber = getPhoneDisplay(phoneNumberRaw);
-          
-          // Determinar el nombre del cliente
-          let customerName = '';
-          if (c?.cliente?.nombre_completo) {
-            customerName = c.cliente.nombre_completo.replace(/usuairo/gi, "usuario");
-          } else if (phoneNumber && phoneNumber !== phoneNumberRaw) {
-            // Si tenemos un teléfono formateado, usarlo
-            customerName = phoneNumber;
-          } else if (c?.from && !c.from.toLowerCase().includes('cliente nuevo') && !c.from.toLowerCase().includes('nuevo cliente')) {
-            // Usar el campo 'from' solo si no contiene "cliente nuevo"
-            customerName = c.from;
-          } else {
-            // Fallback: mostrar ID de conversación
-            customerName = `Conversación #${c.id}`;
-          }
-          const logs = Array.isArray(c.logs) ? c.logs : [];
-          const errorLog = logs.find((l: any) => l?.tipo_log === 'error' || l?.nivel === 'error');
-          const hasError = Boolean(errorLog);
-          const flags = Array.isArray(c.flags) ? c.flags : [];
+  const handleListFilterChange = (value: ConversationListFilter) => {
+    setListFilter(value);
+    setPage(1);
+  };
 
-          return {
-            id: c.id,
-            customer: customerName,
-            avatar: "",
-            lastMessage: lastChat?.mensaje || "",
-            timestamp: lastChat?.created_at
-              ? new Date(lastChat.created_at).toLocaleString()
-              : c?.updatedAt
-                ? new Date(c.updatedAt).toLocaleString()
-                : "",
-            status: hasError ? "error" : (c.status || "pendiente"),
-            unread: unreadCount,
-            agent: c?.agente?.nombre || "Bot Assistant",
-            errorDetails: hasError ? (errorLog?.descripcion || "Error en la conversación") : undefined,
-            phoneNumber,
-            flags,
-          };
-        });
+  const handleKpiClick = (filterKey: ConversationListFilter) => {
+    setListFilter((current) => (current === filterKey ? "all" : filterKey));
+    setPage(1);
+  };
 
-        setConversations(mapped);
-        setStatsData(statsRes?.data || {});
-        setTotalPages(listRes?.data?.pagination?.totalPages || 1);
-      } catch (e: any) {
-        setError(e?.message || 'Error al cargar conversaciones');
-      } finally {
-        setLoading(false);
-      }
-    };
+  const activeFiltersCount =
+    (listFilter !== "all" ? 1 : 0) + selectedFlags.length;
 
-    fetchData();
-  }, [page, limit, selectedFlags, searchTerm]);
+  const clearAllFilters = () => {
+    setListFilter("all");
+    setSelectedFlags([]);
+    setPage(1);
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case "activo":
+      case "activa":
         return "bg-green-500";
-      case "pendiente":
-        return "bg-yellow-500";
-      case "resuelto":
+      case "cerrada":
         return "bg-gray-500";
       case "error":
         return "bg-red-500";
@@ -136,6 +194,8 @@ const Conversations = () => {
         return "bg-orange-500";
       case "pausada":
         return "bg-blue-500";
+      case "en_espera":
+        return "bg-yellow-500";
       default:
         return "bg-gray-500";
     }
@@ -144,35 +204,26 @@ const Conversations = () => {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "activo":
+      case "activa":
         return "default";
-      case "pendiente":
-        return "secondary";
-      case "resuelto":
+      case "cerrada":
         return "outline";
       case "error":
         return "destructive";
       case "escalado":
         return "secondary";
       case "pausada":
+      case "en_espera":
         return "secondary";
       default:
         return "outline";
     }
   };
 
-  // Ya no necesitamos filtrar localmente, el backend lo hace
-  const filteredConversations = conversations;
-
   const handlePauseConversation = async (conversationId: number) => {
     try {
       await conversationsService.updateConversationStatus(conversationId, "pausada");
-      
-      // Actualizar estado local
-      setConversations(prevConversations =>
-        prevConversations.map(conv =>
-          conv.id === conversationId ? { ...conv, status: "pausada" } : conv
-        )
-      );
+      await loadConversations();
 
       toast({
         title: "Éxito",
@@ -190,13 +241,7 @@ const Conversations = () => {
   const handleActivateConversation = async (conversationId: number) => {
     try {
       await conversationsService.updateConversationStatus(conversationId, "activa");
-      
-      // Actualizar estado local
-      setConversations(prevConversations =>
-        prevConversations.map(conv =>
-          conv.id === conversationId ? { ...conv, status: "activa" } : conv
-        )
-      );
+      await loadConversations();
 
       toast({
         title: "Éxito",
@@ -213,12 +258,8 @@ const Conversations = () => {
 
   const handleMarkAsResolved = async (conversationId: number) => {
     try {
-      await conversationsService.updateConversationStatus(conversationId, "activa");
-      setConversations(prev =>
-        prev.map(conv =>
-          conv.id === conversationId ? { ...conv, status: "activa" } : conv
-        )
-      );
+      await conversationsService.updateConversationStatus(conversationId, "cerrada");
+      await loadConversations();
       toast({
         title: "Éxito",
         description: "Conversación marcada como resuelta",
@@ -235,29 +276,43 @@ const Conversations = () => {
   const stats = [
     {
       title: "Conversaciones Activas",
-      value: statsData.activas ?? conversations.filter(c => c.status === "activo" || c.status === "activa").length,
+      filterKey: "activa" as ConversationListFilter,
+      value:
+        statsData.activas ??
+        statsData.conversacionesActivas ??
+        0,
       icon: MessageCircle,
-      color: "text-green-600"
+      color: "text-green-600",
     },
     {
       title: "Con Errores",
-      value: statsData.errores ?? conversations.filter(c => c.status === "error").length,
+      filterKey: "error" as ConversationListFilter,
+      value: statsData.errores ?? 0,
       icon: XCircle,
-      color: "text-red-600"
+      color: "text-red-600",
     },
     {
       title: "Escaladas",
-      value: statsData.escaladas ?? conversations.filter(c => c.status === "escalado").length,
+      filterKey: "escalado" as ConversationListFilter,
+      value: statsData.escaladas ?? 0,
       icon: AlertTriangle,
-      color: "text-orange-600"
+      color: "text-orange-600",
     },
     {
-      title: "Resueltas Hoy",
-      value: statsData.resueltas_hoy ?? conversations.filter(c => c.status === "resuelto").length,
+      title: "Resueltas",
+      filterKey: "cerrada" as ConversationListFilter,
+      value:
+        statsData.cerradas ??
+        statsData.resueltas_hoy ??
+        statsData.conversacionesCerradas ??
+        0,
       icon: MessageCircle,
-      color: "text-gray-600"
-    }
+      color: "text-gray-600",
+    },
   ];
+
+  const erroresCount = statsData.errores ?? 0;
+  const escaladasCount = statsData.escaladas ?? 0;
 
   return (
     <div className="p-6 space-y-6 max-w-6xl mx-auto">
@@ -280,8 +335,23 @@ const Conversations = () => {
 
       {/* Statistics */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat, index) => (
-          <Card key={index}>
+        {stats.map((stat) => (
+          <Card
+            key={stat.filterKey}
+            role="button"
+            tabIndex={0}
+            className={cn(
+              "cursor-pointer transition-all hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              listFilter === stat.filterKey && "ring-2 ring-primary"
+            )}
+            onClick={() => handleKpiClick(stat.filterKey)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                handleKpiClick(stat.filterKey);
+              }
+            }}
+          >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
                 {stat.title}
@@ -296,17 +366,18 @@ const Conversations = () => {
       </div>
 
       {/* Error Alert */}
-      {conversations.some(c => c.status === "error" || c.status === "escalado") && (
+      {(erroresCount > 0 || escaladasCount > 0) && (
         <Alert className="border-destructive/20 bg-destructive/5">
           <AlertTriangle className="h-4 w-4 text-destructive" />
           <AlertDescription className="text-destructive">
-            Hay {conversations.filter(c => c.status === "error").length} conversaciones con errores y{" "}
-            {conversations.filter(c => c.status === "escalado").length} escaladas que requieren atención inmediata.
+            Hay {erroresCount} conversaciones con errores y{" "}
+            {escaladasCount} escaladas que requieren atención inmediata.
           </AlertDescription>
         </Alert>
       )}
 
       {/* Search and Filters */}
+      <div className="flex flex-col gap-3">
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
@@ -325,9 +396,9 @@ const Conversations = () => {
             <Button variant="outline">
               <Filter className="mr-2 h-4 w-4" />
               Filtros
-              {selectedFlags.length > 0 && (
+              {activeFiltersCount > 0 && (
                 <Badge variant="secondary" className="ml-2">
-                  {selectedFlags.length}
+                  {activeFiltersCount}
                 </Badge>
               )}
             </Button>
@@ -336,31 +407,88 @@ const Conversations = () => {
             <SheetHeader>
               <SheetTitle>Filtros de Conversaciones</SheetTitle>
               <SheetDescription>
-                Filtra las conversaciones por flags
+                Filtra por estado y flags
               </SheetDescription>
             </SheetHeader>
             <div className="mt-6 space-y-4">
               <div>
+                <label className="text-sm font-medium mb-2 block">Estado</label>
+                <Select
+                  value={listFilter}
+                  onValueChange={(value) =>
+                    handleListFilterChange(value as ConversationListFilter)
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Todos los estados" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CONVERSATION_LIST_FILTER_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
                 <label className="text-sm font-medium mb-2 block">Flags</label>
                 <FlagsSelector
                   value={selectedFlags}
-                  onValueChange={setSelectedFlags}
+                  onValueChange={(ids) => {
+                    setSelectedFlags(ids);
+                    setPage(1);
+                  }}
                   placeholder="Seleccionar flags para filtrar..."
                 />
               </div>
-              {selectedFlags.length > 0 && (
+              {activeFiltersCount > 0 && (
                 <Button
                   variant="outline"
                   className="w-full"
-                  onClick={() => setSelectedFlags([])}
+                  onClick={clearAllFilters}
                 >
                   <X className="mr-2 h-4 w-4" />
-                  Limpiar Filtros
+                  Limpiar filtros
                 </Button>
               )}
             </div>
           </SheetContent>
         </Sheet>
+      </div>
+      {(listFilter !== "all" || selectedFlags.length > 0) && (
+        <div className="flex flex-wrap items-center gap-2">
+          {listFilter !== "all" && (
+            <Badge variant="secondary" className="gap-1 pr-1">
+              Estado: {getListFilterLabel(listFilter)}
+              <button
+                type="button"
+                className="ml-1 rounded-full hover:bg-muted p-0.5"
+                onClick={() => handleListFilterChange("all")}
+                aria-label="Quitar filtro de estado"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          )}
+          {selectedFlags.length > 0 && (
+            <Badge variant="secondary" className="gap-1 pr-1">
+              {selectedFlags.length} flag{selectedFlags.length > 1 ? "s" : ""}
+              <button
+                type="button"
+                className="ml-1 rounded-full hover:bg-muted p-0.5"
+                onClick={() => {
+                  setSelectedFlags([]);
+                  setPage(1);
+                }}
+                aria-label="Quitar filtro de flags"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          )}
+        </div>
+      )}
       </div>
 
       {/* Conversations List */}
@@ -368,7 +496,9 @@ const Conversations = () => {
         <CardHeader>
           <CardTitle>Lista de Conversaciones</CardTitle>
           <CardDescription>
-            {loading ? 'Cargando...' : `${filteredConversations.length} conversaciones encontradas`}
+            {loading
+              ? "Cargando..."
+              : `${totalCount} conversaciones encontradas`}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -378,7 +508,7 @@ const Conversations = () => {
             </Alert>
           )}
           <div className="space-y-4">
-            {filteredConversations.map((conversation) => (
+            {conversations.map((conversation) => (
               <div
                 key={conversation.id}
                 className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer overflow-hidden"
@@ -442,7 +572,10 @@ const Conversations = () => {
                           ))}
                         </div>
                       )}
-                      {(conversation.status === "error" || conversation.status === "escalado") && (
+                      {(conversation.hasErrorLog ||
+                        conversation.hasEscalationLog ||
+                        conversation.status === "error" ||
+                        conversation.status === "escalado") && (
                         <Button
                           variant="ghost"
                           size="sm"
@@ -500,7 +633,7 @@ const Conversations = () => {
                           Marcar como resuelto
                         </DropdownMenuItem>
                       )}
-                      {conversation.status === "pausada" ? (
+                      {conversation.rawStatus === "pausada" ? (
                         <DropdownMenuItem 
                           className="text-green-600"
                           onClick={(e) => {
@@ -571,66 +704,7 @@ const Conversations = () => {
           }}
           conversacionId={selectedConversationForFlags}
           onSuccess={() => {
-            // Recargar conversaciones para actualizar flags
-            const fetchData = async () => {
-              try {
-                const listRes = await conversationsService.getConversations({ 
-                  page, 
-                  limit,
-                  search: searchTerm.trim() || undefined,
-                  flags: selectedFlags.length > 0 ? selectedFlags : undefined
-                });
-                const mapped = (listRes?.data?.conversaciones || []).map((c: any) => {
-                  const chats = Array.isArray(c.chats) ? c.chats : [];
-                  const lastChat = chats.length > 0 ? chats[chats.length - 1] : null;
-                  const unreadCount = chats.filter((chat: any) => chat?.leido === false).length;
-                  const phoneNumberRaw = c?.from || '';
-                  const phoneNumber = getPhoneDisplay(phoneNumberRaw);
-                  
-                  // Determinar el nombre del cliente
-                  let customerName = '';
-                  if (c?.cliente?.nombre_completo) {
-                    customerName = c.cliente.nombre_completo.replace(/usuairo/gi, "usuario");
-                  } else if (phoneNumber && phoneNumber !== phoneNumberRaw) {
-                    // Si tenemos un teléfono formateado, usarlo
-                    customerName = phoneNumber;
-                  } else if (c?.from && !c.from.toLowerCase().includes('cliente nuevo') && !c.from.toLowerCase().includes('nuevo cliente')) {
-                    // Usar el campo 'from' solo si no contiene "cliente nuevo"
-                    customerName = c.from;
-                  } else {
-                    // Fallback: mostrar ID de conversación
-                    customerName = `Conversación #${c.id}`;
-                  }
-                  
-                  const logs = Array.isArray(c.logs) ? c.logs : [];
-                  const errorLog = logs.find((l: any) => l?.tipo_log === 'error' || l?.nivel === 'error');
-                  const hasError = Boolean(errorLog);
-                  const flags = Array.isArray(c.flags) ? c.flags : [];
-
-                  return {
-                    id: c.id,
-                    customer: customerName,
-                    avatar: "",
-                    lastMessage: lastChat?.mensaje || "",
-                    timestamp: lastChat?.created_at
-                      ? new Date(lastChat.created_at).toLocaleString()
-                      : c?.updatedAt
-                        ? new Date(c.updatedAt).toLocaleString()
-                        : "",
-                    status: hasError ? "error" : (c.status || "pendiente"),
-                    unread: unreadCount,
-                    agent: c?.agente?.nombre || "Bot Assistant",
-                    errorDetails: hasError ? (errorLog?.descripcion || "Error en la conversación") : undefined,
-                    phoneNumber,
-                    flags,
-                  };
-                });
-                setConversations(mapped);
-              } catch (e: any) {
-                console.error('Error al recargar conversaciones:', e);
-              }
-            };
-            fetchData();
+            loadConversations();
           }}
         />
       )}

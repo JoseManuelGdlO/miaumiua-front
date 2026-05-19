@@ -42,10 +42,12 @@ export interface ConversationStatsResponse {
 	success: boolean;
 	data: Record<string, number> & {
 		activas?: number;
-		pendientes?: number;
+		cerradas?: number;
 		errores?: number;
 		escaladas?: number;
 		resueltas_hoy?: number;
+		conversacionesActivas?: number;
+		conversacionesCerradas?: number;
 	};
 }
 
@@ -70,12 +72,20 @@ export interface ConversationChatsResponse {
 	};
 }
 
+export type ConversationStatus =
+	| 'activa'
+	| 'pausada'
+	| 'cerrada'
+	| 'en_espera';
+
 export interface ConversationsQueryParams {
-	status?: string; // activa | pendiente | resuelto | error | escalado
+	status?: ConversationStatus;
+	has_error?: boolean;
+	has_escalation?: boolean;
 	page?: number;
 	limit?: number;
 	search?: string;
-	flags?: number[]; // Array de IDs de flags para filtrar
+	flags?: number[];
 }
 
 class ConversationsService {
@@ -111,6 +121,8 @@ class ConversationsService {
 	async getConversations(params: ConversationsQueryParams = {}): Promise<ConversationsResponse> {
 		const qs = new URLSearchParams();
 		if (params.status) qs.append('status', params.status);
+		if (params.has_error) qs.append('has_error', 'true');
+		if (params.has_escalation) qs.append('has_escalation', 'true');
 		if (params.page) qs.append('page', String(params.page));
 		if (params.limit) qs.append('limit', String(params.limit));
 		if (params.search) qs.append('search', params.search);
@@ -126,11 +138,22 @@ class ConversationsService {
 		return this.makeRequest<ConversationResponse>(`/conversaciones/${id}`);
 	}
 
-	// Public: stats
-	async getStats(): Promise<ConversationStatsResponse> {
-		return this.makeRequest<ConversationStatsResponse>('/conversaciones/stats', {
-			headers: {}, // ensures no auth header required
-		});
+	// Stats; optional search/flags scope when the API supports them
+	async getStats(
+		params: Pick<ConversationsQueryParams, 'search' | 'flags'> = {}
+	): Promise<ConversationStatsResponse> {
+		const qs = new URLSearchParams();
+		if (params.search) qs.append('search', params.search);
+		if (params.flags && params.flags.length > 0) {
+			qs.append('flags', params.flags.join(','));
+		}
+		const query = qs.toString();
+		return this.makeRequest<ConversationStatsResponse>(
+			`/conversaciones/stats${query ? `?${query}` : ''}`,
+			{
+				headers: {},
+			}
+		);
 	}
 
 	// Public: active conversations
