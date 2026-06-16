@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
-import { notificationsService, Notification } from "@/services/notificationsService";
+import { notificationsService, Notification, handleNotificationNavigation } from "@/services/notificationsService";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -302,9 +302,12 @@ const Notifications = () => {
   };
 
   const handleNotificationClick = (notification: Notification) => {
-    markAsRead(notification.id);
-    if (notification.actionUrl) {
-      navigate(notification.actionUrl);
+    const navigated = handleNotificationNavigation(notification, navigate, {
+      markAsRead,
+    });
+
+    if (!navigated && !notification.read) {
+      markAsRead(notification.id);
     }
   };
 

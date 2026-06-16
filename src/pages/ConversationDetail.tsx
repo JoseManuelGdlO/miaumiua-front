@@ -4,15 +4,20 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { conversationsService } from "@/services/conversationsService";
-import { hasPermission } from "@/utils/permissions";
+import { canChangeConversationStatus, hasPermission } from "@/utils/permissions";
+import { useToast } from "@/hooks/use-toast";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import WhatsAppMessageStatus from "@/components/WhatsAppMessageStatus";
 
 const ConversationDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [loading, setLoading] = useState<boolean>(false);
+  const [updatingStatus, setUpdatingStatus] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [conversation, setConversation] = useState<any>(null);
   const [chats, setChats] = useState<any[]>([]);
@@ -44,6 +49,39 @@ const ConversationDetail = () => {
 
     fetchDetail();
   }, [id]);
+
+  const isPaused = conversation?.status === "pausada";
+  const conversationId = Number(id);
+
+  const handleToggleConversationStatus = async (shouldBeActive: boolean) => {
+    if (!id || Number.isNaN(conversationId)) return;
+
+    const nextStatus = shouldBeActive ? "activa" : "pausada";
+    setUpdatingStatus(true);
+    try {
+      await conversationsService.updateConversationStatus(conversationId, nextStatus);
+      const res = await conversationsService.getConversationById(id);
+      setConversation(res?.data?.conversacion || null);
+      toast({
+        title: "Éxito",
+        description: shouldBeActive
+          ? `Conversación con id ${conversationId} se ha activado`
+          : `Conversación con id ${conversationId} se ha pausado`,
+      });
+    } catch (e: any) {
+      toast({
+        title: "Error",
+        description:
+          e?.message ||
+          (shouldBeActive
+            ? `La conversación con id ${conversationId} no se ha podido activar`
+            : `La conversación con id ${conversationId} no se ha podido pausar`),
+        variant: "destructive",
+      });
+    } finally {
+      setUpdatingStatus(false);
+    }
+  };
 
   const loadChats = async (pageToLoad: number, options: { prepend?: boolean } = {}) => {
     if (!id) return;
@@ -140,12 +178,14 @@ const ConversationDetail = () => {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Detalle de Conversación</h1>
           <p className="text-muted-foreground">ID: {id}</p>
         </div>
-        <Button variant="outline" onClick={() => navigate(-1)}>Volver</Button>
+        <div className="flex flex-wrap items-center gap-4">
+          <Button variant="outline" onClick={() => navigate(-1)}>Volver</Button>
+        </div>
       </div>
 
       {error && (
@@ -380,8 +420,28 @@ const ConversationDetail = () => {
                   rows={3}
                   disabled={sending}
                 />
-                <div className="flex justify-end">
-                  <Button onClick={handleSendMessage} disabled={sending || !newMessage.trim()}>
+                <div className="flex items-center gap-3">
+                  {canChangeConversationStatus() && conversation && (
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        id="conversation-status"
+                        checked={!isPaused}
+                        disabled={updatingStatus || loading || sending}
+                        onCheckedChange={handleToggleConversationStatus}
+                      />
+                      <Label
+                        htmlFor="conversation-status"
+                        className="cursor-pointer text-sm font-medium whitespace-nowrap"
+                      >
+                        {isPaused ? "Activar conversación" : "Pausar conversación"}
+                      </Label>
+                    </div>
+                  )}
+                  <Button
+                    className="ml-auto"
+                    onClick={handleSendMessage}
+                    disabled={sending || !newMessage.trim()}
+                  >
                     {sending ? 'Enviando...' : 'Enviar mensaje'}
                   </Button>
                 </div>
