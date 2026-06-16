@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -32,31 +32,51 @@ const ConversationDetail = () => {
   const [loadingOlder, setLoadingOlder] = useState<boolean>(false);
   const chatLimit = 10;
 
-  useEffect(() => {
-    const fetchDetail = async () => {
-      if (!id) return;
+  const fetchDetail = useCallback(async (options: { silent?: boolean } = {}) => {
+    if (!id) return;
+    if (!options.silent) {
       setLoading(true);
       setError(null);
-      try {
-        const res = await conversationsService.getConversationById(id);
-        setConversation(res?.data?.conversacion || null);
-      } catch (e: any) {
+    }
+    try {
+      const res = await conversationsService.getConversationById(id);
+      setConversation(res?.data?.conversacion || null);
+    } catch (e: any) {
+      if (!options.silent) {
         setError(e?.message || 'Error al cargar la conversación');
-      } finally {
+      }
+    } finally {
+      if (!options.silent) {
         setLoading(false);
       }
-    };
-
-    fetchDetail();
+    }
   }, [id]);
 
+  useEffect(() => {
+    fetchDetail();
+  }, [fetchDetail]);
+
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        fetchDetail({ silent: true });
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [fetchDetail]);
+
   const isPaused = conversation?.status === "pausada";
+  const canTogglePause =
+    conversation?.status === "activa" || conversation?.status === "pausada";
   const conversationId = Number(id);
 
   const handleToggleConversationStatus = async (shouldBeActive: boolean) => {
-    if (!id || Number.isNaN(conversationId)) return;
+    if (!id || Number.isNaN(conversationId) || !conversation) return;
 
+    const previousStatus = conversation.status;
     const nextStatus = shouldBeActive ? "activa" : "pausada";
+    setConversation((prev) => (prev ? { ...prev, status: nextStatus } : prev));
     setUpdatingStatus(true);
     try {
       await conversationsService.updateConversationStatus(conversationId, nextStatus);
@@ -69,6 +89,7 @@ const ConversationDetail = () => {
           : `Conversación con id ${conversationId} se ha pausado`,
       });
     } catch (e: any) {
+      setConversation((prev) => (prev ? { ...prev, status: previousStatus } : prev));
       toast({
         title: "Error",
         description:
@@ -406,22 +427,27 @@ const ConversationDetail = () => {
               <div ref={chatEndRef} />
             </div>
 
-            {hasPermission("enviar_conversaciones_chat") && (
+            {(hasPermission("enviar_conversaciones_chat") ||
+              (canChangeConversationStatus() && conversation && canTogglePause)) && (
               <div className="mt-4 space-y-2">
-                {sendError && (
-                  <Alert>
-                    <AlertDescription className="text-destructive">{sendError}</AlertDescription>
-                  </Alert>
+                {hasPermission("enviar_conversaciones_chat") && (
+                  <>
+                    {sendError && (
+                      <Alert>
+                        <AlertDescription className="text-destructive">{sendError}</AlertDescription>
+                      </Alert>
+                    )}
+                    <Textarea
+                      placeholder="Escribe tu mensaje..."
+                      value={newMessage}
+                      onChange={(event) => setNewMessage(event.target.value)}
+                      rows={3}
+                      disabled={sending}
+                    />
+                  </>
                 )}
-                <Textarea
-                  placeholder="Escribe tu mensaje..."
-                  value={newMessage}
-                  onChange={(event) => setNewMessage(event.target.value)}
-                  rows={3}
-                  disabled={sending}
-                />
                 <div className="flex items-center gap-3">
-                  {canChangeConversationStatus() && conversation && (
+                  {canChangeConversationStatus() && conversation && canTogglePause && (
                     <div className="flex items-center gap-2">
                       <Switch
                         id="conversation-status"
@@ -433,17 +459,19 @@ const ConversationDetail = () => {
                         htmlFor="conversation-status"
                         className="cursor-pointer text-sm font-medium whitespace-nowrap"
                       >
-                        {isPaused ? "Activar conversación" : "Pausar conversación"}
+                        {isPaused ? "Conversación pausada" : " Conversación activa"}
                       </Label>
                     </div>
                   )}
-                  <Button
-                    className="ml-auto"
-                    onClick={handleSendMessage}
-                    disabled={sending || !newMessage.trim()}
-                  >
-                    {sending ? 'Enviando...' : 'Enviar mensaje'}
-                  </Button>
+                  {hasPermission("enviar_conversaciones_chat") && (
+                    <Button
+                      className="ml-auto"
+                      onClick={handleSendMessage}
+                      disabled={sending || !newMessage.trim()}
+                    >
+                      {sending ? 'Enviando...' : 'Enviar mensaje'}
+                    </Button>
+                  )}
                 </div>
               </div>
             )}

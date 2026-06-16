@@ -220,7 +220,20 @@ const Conversations = () => {
     }
   };
 
+  const getAvatarStatusColor = (conversation: { status: string; rawStatus: string }) => {
+    if (conversation.status === "error" || conversation.status === "escalado") {
+      return getStatusColor(conversation.status);
+    }
+    return getStatusColor(conversation.rawStatus);
+  };
+
   const handlePauseConversation = async (conversationId: number) => {
+    const previous = conversations;
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.id === conversationId ? { ...c, rawStatus: "pausada", status: c.status === "activa" ? "pausada" : c.status } : c
+      )
+    );
     try {
       await conversationsService.updateConversationStatus(conversationId, "pausada");
       await loadConversations();
@@ -230,6 +243,7 @@ const Conversations = () => {
         description: `Conversación con id ${conversationId} se ha pausado`,
       });
     } catch (error) {
+      setConversations(previous);
       toast({
         title: "Error",
         description: `La conversación con id ${conversationId} no se ha podido pausar`,
@@ -239,6 +253,12 @@ const Conversations = () => {
   };
 
   const handleActivateConversation = async (conversationId: number) => {
+    const previous = conversations;
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.id === conversationId ? { ...c, rawStatus: "activa", status: c.status === "pausada" ? "activa" : c.status } : c
+      )
+    );
     try {
       await conversationsService.updateConversationStatus(conversationId, "activa");
       await loadConversations();
@@ -248,6 +268,7 @@ const Conversations = () => {
         description: `Conversación con id ${conversationId} se ha activado`,
       });
     } catch (error) {
+      setConversations(previous);
       toast({
         title: "Error",
         description: `La conversación con id ${conversationId} no se ha podido activar`,
@@ -521,7 +542,7 @@ const Conversations = () => {
                         {conversation.customer.split(' ').map(n => n[0]).join('').toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
-                    <div className={`absolute -bottom-1 -right-1 w-3 h-3 ${getStatusColor(conversation.status)} rounded-full border-2 border-background`}></div>
+                    <div className={`absolute -bottom-1 -right-1 w-3 h-3 ${getAvatarStatusColor(conversation)} rounded-full border-2 border-background`}></div>
                   </div>
                   
                   <div className="flex-1 min-w-0 overflow-hidden">
@@ -539,10 +560,22 @@ const Conversations = () => {
                     <div className="flex items-center gap-2 mt-1 flex-wrap">
                       <Badge 
                         variant={getStatusBadge(conversation.status)} 
-                        className={`text-xs flex-shrink-0 ${conversation.status === "pausada" ? "bg-yellow-500 text-white" : ""}`}
+                        className={`text-xs flex-shrink-0 ${
+                          conversation.rawStatus === "pausada" && conversation.status === "pausada"
+                            ? "bg-yellow-500 text-white"
+                            : ""
+                        }`}
                       >
                         {conversation.status}
                       </Badge>
+                      {conversation.rawStatus === "pausada" && conversation.status !== "pausada" && (
+                        <Badge
+                          variant="secondary"
+                          className="text-xs flex-shrink-0 bg-yellow-500 text-white"
+                        >
+                          Pausada
+                        </Badge>
+                      )}
                       <span className="text-xs text-muted-foreground truncate">
                         Agente: {conversation.agent}
                       </span>
