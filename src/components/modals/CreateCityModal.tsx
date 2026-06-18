@@ -39,6 +39,7 @@ const CreateCityModal = ({ open, onOpenChange, onCityCreated }: CreateCityModalP
     manager: "",
     telefono: "",
     email_contacto: "",
+    numero_soporte_cliente: "",
     estado_inicial: "activa" as const,
     max_pedidos_por_horario: 5,
     dias_trabajo: [1, 2, 3, 4, 5] as number[],
@@ -69,6 +70,7 @@ const CreateCityModal = ({ open, onOpenChange, onCityCreated }: CreateCityModalP
       manager: "",
       telefono: "",
       email_contacto: "",
+      numero_soporte_cliente: "",
       estado_inicial: "activa",
       max_pedidos_por_horario: 5,
       dias_trabajo: [1, 2, 3, 4, 5],
@@ -143,6 +145,15 @@ const CreateCityModal = ({ open, onOpenChange, onCityCreated }: CreateCityModalP
       return;
     }
 
+    if (formData.numero_soporte_cliente.trim() && !/^[\+]?[0-9\s\-\(\)]+$/.test(formData.numero_soporte_cliente)) {
+      toast({
+        title: "Error",
+        description: "El número de soporte al cliente no tiene un formato válido",
+        variant: "destructive"
+      });
+      return;
+    }
+
     // Validar max_pedidos_por_horario
     if (formData.max_pedidos_por_horario < 1 || formData.max_pedidos_por_horario > 100) {
       toast({
@@ -192,7 +203,12 @@ const CreateCityModal = ({ open, onOpenChange, onCityCreated }: CreateCityModalP
     try {
       setLoading(true);
 
-      const response = await citiesService.createCity(formData);
+      const response = await citiesService.createCity({
+        ...formData,
+        ...(formData.numero_soporte_cliente.trim()
+          ? { numero_soporte_cliente: formData.numero_soporte_cliente.trim() }
+          : {}),
+      });
 
       if (response.success) {
         const createdCity = response.data?.city;
@@ -387,6 +403,16 @@ const CreateCityModal = ({ open, onOpenChange, onCityCreated }: CreateCityModalP
                 required
               />
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="numero_soporte_cliente">Número de soporte al cliente</Label>
+            <Input
+              id="numero_soporte_cliente"
+              value={formData.numero_soporte_cliente}
+              onChange={(e) => handleInputChange('numero_soporte_cliente', e.target.value)}
+              placeholder="618 1892035"
+            />
           </div>
 
           <div className="space-y-2">

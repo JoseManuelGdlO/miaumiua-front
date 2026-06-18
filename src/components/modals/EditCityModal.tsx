@@ -40,6 +40,7 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
     manager: string;
     telefono: string;
     email_contacto: string;
+    numero_soporte_cliente: string;
     estado_inicial: City["estado_inicial"];
     max_pedidos_por_horario: number;
     dias_trabajo: number[];
@@ -51,6 +52,7 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
     manager: "",
     telefono: "",
     email_contacto: "",
+    numero_soporte_cliente: "",
     estado_inicial: "activa",
     max_pedidos_por_horario: 5,
     dias_trabajo: [1, 2, 3, 4, 5],
@@ -131,6 +133,7 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
         manager: city.manager,
         telefono: city.telefono,
         email_contacto: city.email_contacto,
+        numero_soporte_cliente: city.numero_soporte_cliente || "",
         estado_inicial: city.estado_inicial,
         max_pedidos_por_horario: city.max_pedidos_por_horario || 5,
         dias_trabajo: city.dias_trabajo && city.dias_trabajo.length > 0 ? city.dias_trabajo : [1, 2, 3, 4, 5],
@@ -316,6 +319,15 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
       return;
     }
 
+    if (formData.numero_soporte_cliente.trim() && !/^[\+]?[0-9\s\-\(\)]+$/.test(formData.numero_soporte_cliente)) {
+      toast({
+        title: "Error",
+        description: "El número de soporte al cliente no tiene un formato válido",
+        variant: "destructive"
+      });
+      return;
+    }
+
     // Validar max_pedidos_por_horario
     if (formData.max_pedidos_por_horario < 1 || formData.max_pedidos_por_horario > 100) {
       toast({
@@ -365,7 +377,10 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
     try {
       setLoading(true);
 
-      const response = await citiesService.updateCity(city.id, formData);
+      const response = await citiesService.updateCity(city.id, {
+        ...formData,
+        numero_soporte_cliente: formData.numero_soporte_cliente.trim() || null,
+      });
 
       if (response.success) {
         toast({
@@ -535,6 +550,16 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
                 required
               />
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="numero_soporte_cliente">Número de soporte al cliente</Label>
+            <Input
+              id="numero_soporte_cliente"
+              value={formData.numero_soporte_cliente}
+              onChange={(e) => handleInputChange('numero_soporte_cliente', e.target.value)}
+              placeholder="618 1892035"
+            />
           </div>
 
           <div className="space-y-2">
