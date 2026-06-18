@@ -6,11 +6,15 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { conversationsService } from "@/services/conversationsService";
+import { conversationsService, resolveChatImageUrl } from "@/services/conversationsService";
 import { canChangeConversationStatus, hasPermission } from "@/utils/permissions";
 import { useToast } from "@/hooks/use-toast";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import WhatsAppMessageStatus from "@/components/WhatsAppMessageStatus";
+import { ImagePlus } from "lucide-react";
+
+const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 const ConversationDetail = () => {
   const { id } = useParams();
@@ -24,6 +28,9 @@ const ConversationDetail = () => {
   const [newMessage, setNewMessage] = useState<string>('');
   const [sending, setSending] = useState<boolean>(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const skipNextScrollRef = useRef<boolean>(false);
   const [chatPage, setChatPage] = useState<number>(1);
@@ -178,6 +185,61 @@ const ConversationDetail = () => {
       setNewMessage('');
     } catch (e: any) {
       setSendError(e?.message || 'Error al enviar el mensaje');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const clearImageSelection = () => {
+    setImageFile(null);
+    setImagePreview(null);
+    if (imageInputRef.current) {
+      imageInputRef.current.value = '';
+    }
+  };
+
+  const handleImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    setSendError(null);
+
+    if (!file) {
+      clearImageSelection();
+      return;
+    }
+
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      setSendError('Solo se permiten imágenes JPG, PNG o WEBP.');
+      clearImageSelection();
+      return;
+    }
+
+    if (file.size > MAX_IMAGE_SIZE_BYTES) {
+      setSendError('La imagen no debe superar 5 MB.');
+      clearImageSelection();
+      return;
+    }
+
+    setImageFile(file);
+    const reader = new FileReader();
+    reader.onload = () => setImagePreview(typeof reader.result === 'string' ? reader.result : null);
+    reader.readAsDataURL(file);
+  };
+
+  const handleSendImage = async () => {
+    if (!id || !imageFile) return;
+
+    setSending(true);
+    setSendError(null);
+    try {
+      const res = await conversationsService.sendWhatsAppImage(id, imageFile, newMessage.trim() || undefined);
+      const chat = res?.data?.chat;
+      if (chat) {
+        setChats((prev) => [...prev, chat]);
+      }
+      setNewMessage('');
+      clearImageSelection();
+    } catch (e: any) {
+      setSendError(e?.message || 'Error al enviar la imagen');
     } finally {
       setSending(false);
     }
@@ -379,10 +441,11 @@ const ConversationDetail = () => {
               {chats.map((chat: any) => {
                 const isUser = (chat?.from || '').toLowerCase() === 'usuario';
                 const timestamp = chat.created_at ? new Date(chat.created_at).toLocaleString() : `${chat.fecha} ${chat.hora}`;
-                // Extraer estado de WhatsApp del metadata
                 const whatsappStatus = chat?.metadata?.whatsapp_status || null;
-                // Solo mostrar estado para mensajes enviados por agente/bot (no para mensajes del usuario)
                 const shouldShowStatus = !isUser && whatsappStatus;
+                const isImageMessage = chat?.tipo_mensaje === 'imagen';
+                const imageUrl = isImageMessage ? resolveChatImageUrl(chat?.metadata?.image_url) : '';
+                const showCaption = chat?.mensaje && chat.mensaje !== '[imagen]';
                 
                 return (
                   <div key={chat.id} className={`flex ${isUser ? 'justify-start' : 'justify-end'} px-1`}>
@@ -410,7 +473,22 @@ const ConversationDetail = () => {
                           }}
                         />
                       )}
-                      <div className="text-base whitespace-pre-wrap break-words">{chat.mensaje}</div>
+                      {isImageMessage && imageUrl ? (
+                        <div className="space-y-2">
+                          <a href={imageUrl} target="_blank" rel="noopener noreferrer">
+                            <img
+                              src={imageUrl}
+                              alt={showCaption ? chat.mensaje : 'Imagen'}
+                              className="max-w-full max-h-64 rounded-lg object-contain"
+                            />
+                          </a>
+                          {showCaption && (
+                            <div className="text-base whitespace-pre-wrap break-words">{chat.mensaje}</div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="text-base whitespace-pre-wrap break-words">{chat.mensaje}</div>
+                      )}
                       <div className={`mt-1 flex items-center justify-end gap-1 text-xs ${isUser ? 'text-muted-foreground' : 'text-blue-100'}`}>
                         <span>{timestamp}</span>
                         {shouldShowStatus && (
@@ -444,9 +522,29 @@ const ConversationDetail = () => {
                       rows={3}
                       disabled={sending}
                     />
+                    <input
+                      ref={imageInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="hidden"
+                      onChange={handleImageSelect}
+                      disabled={sending}
+                    />
+                    {imagePreview && (
+                      <div className="flex items-start gap-3 rounded-md border p-2">
+                        <img src={imagePreview} alt="Vista previa" className="h-20 w-20 rounded object-cover border" />
+                        <div className="flex-1 text-sm text-muted-foreground">
+                          <p className="font-medium text-foreground">{imageFile?.name}</p>
+                          <p>{imageFile ? `${(imageFile.size / 1024).toFixed(0)} KB` : ''}</p>
+                        </div>
+                        <Button type="button" variant="ghost" size="sm" onClick={clearImageSelection} disabled={sending}>
+                          Quitar
+                        </Button>
+                      </div>
+                    )}
                   </>
                 )}
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
                   {canChangeConversationStatus() && conversation && canTogglePause && (
                     <div className="flex items-center gap-2">
                       <Switch
@@ -464,13 +562,31 @@ const ConversationDetail = () => {
                     </div>
                   )}
                   {hasPermission("enviar_conversaciones_chat") && (
-                    <Button
-                      className="ml-auto"
-                      onClick={handleSendMessage}
-                      disabled={sending || !newMessage.trim()}
-                    >
-                      {sending ? 'Enviando...' : 'Enviar mensaje'}
-                    </Button>
+                    <div className="ml-auto flex items-center gap-3 flex-wrap">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => imageInputRef.current?.click()}
+                        disabled={sending}
+                      >
+                        <ImagePlus className="mr-2 h-4 w-4" />
+                        Adjuntar imagen
+                      </Button>
+                      {imageFile && (
+                        <Button
+                          onClick={handleSendImage}
+                          disabled={sending}
+                        >
+                          {sending ? 'Enviando...' : 'Enviar imagen'}
+                        </Button>
+                      )}
+                      <Button
+                        onClick={handleSendMessage}
+                        disabled={sending || !newMessage.trim()}
+                      >
+                        {sending ? 'Enviando...' : 'Enviar mensaje'}
+                      </Button>
+                    </div>
                   )}
                 </div>
               </div>

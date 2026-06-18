@@ -1,6 +1,12 @@
 import { config } from '../config/environment';
 import { authService } from './authService';
 
+export function resolveChatImageUrl(url: string | null | undefined): string {
+	if (!url) return '';
+	if (url.startsWith('http://') || url.startsWith('https://')) return url;
+	return `${config.imageBaseUrl}${url.startsWith('/') ? '' : '/'}${url}`;
+}
+
 export interface Conversation {
 	id: number;
 	title?: string;
@@ -169,6 +175,43 @@ class ConversationsService {
 			method: 'POST',
 			body: JSON.stringify({ conversacionId, mensaje }),
 		});
+	}
+
+	async sendWhatsAppImage(
+		conversacionId: number | string,
+		file: File,
+		caption?: string
+	): Promise<ConversationChatResponse> {
+		const formData = new FormData();
+		formData.append('conversacionId', String(conversacionId));
+		formData.append('imagen', file);
+		if (caption?.trim()) {
+			formData.append('caption', caption.trim());
+		}
+
+		const token = localStorage.getItem('auth_token');
+		const headers: HeadersInit = {};
+		if (token) {
+			headers['Authorization'] = `Bearer ${token}`;
+		}
+
+		const response = await fetch(`${config.apiBaseUrl}/mensajeria/send-whatsapp-image`, {
+			method: 'POST',
+			headers,
+			body: formData,
+		});
+
+		if (!response.ok) {
+			authService.handleAuthError(response);
+			let message = `Error ${response.status}: ${response.statusText}`;
+			try {
+				const err = await response.json();
+				message = err?.message || message;
+			} catch {}
+			throw new Error(message);
+		}
+
+		return response.json();
 	}
 
 	// Authenticated: conversation chats with pagination

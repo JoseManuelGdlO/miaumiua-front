@@ -83,7 +83,7 @@ const mapConversationFromApi = (c: any) => {
     id: c.id,
     customer: customerName,
     avatar: "",
-    lastMessage: lastChat?.mensaje || "",
+    lastMessage: lastChat?.tipo_mensaje === 'imagen' ? 'Imagen' : (lastChat?.mensaje || ''),
     timestamp: lastChat?.created_at
       ? new Date(lastChat.created_at).toLocaleString()
       : c?.updatedAt
