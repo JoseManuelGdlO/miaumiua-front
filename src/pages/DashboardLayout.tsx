@@ -12,10 +12,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import NotificationPanel from "@/components/NotificationPanel";
+import { PushNotificationSync } from "@/components/PushNotificationSync";
 import { useAuth } from "@/hooks/useAuth";
+import { hasPermission } from "@/utils/permissions";
 
 const DashboardLayout = () => {
   const { logout, user } = useAuth();
+  const canViewNotifications = hasPermission("ver_notificaciones");
 
   return (
     <SidebarProvider>
@@ -33,8 +36,7 @@ const DashboardLayout = () => {
             </div>
             
             <div className="flex items-center gap-3">
-              {/* Notifications */}
-              <NotificationPanel />
+              {canViewNotifications && <NotificationPanel />}
               
               {/* User Menu */}
               <DropdownMenu>
@@ -73,6 +75,8 @@ const DashboardLayout = () => {
               </DropdownMenu>
             </div>
           </header>
+
+          <PushNotificationSync />
           
           {/* Main Content */}
           <main className="flex-1 overflow-auto relative">
