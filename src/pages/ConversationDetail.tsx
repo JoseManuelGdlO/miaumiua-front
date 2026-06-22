@@ -311,16 +311,8 @@ const ConversationDetail = () => {
               <div className="font-medium break-all">{conversation?.cliente?.email || '—'}</div>
             </div>
             <div>
-              <div className="text-muted-foreground">Origen</div>
-              <div className="font-medium">{conversation?.from || '—'}</div>
-            </div>
-            <div>
               <div className="text-muted-foreground">Estado</div>
               <div className="font-medium capitalize">{conversation?.status || '—'}</div>
-            </div>
-            <div>
-              <div className="text-muted-foreground">Actualizado</div>
-              <div className="font-medium">{conversation?.updatedAt ? new Date(conversation.updatedAt).toLocaleString() : '—'}</div>
             </div>
           </div>
         </CardContent>
