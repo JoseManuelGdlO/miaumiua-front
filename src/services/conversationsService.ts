@@ -62,6 +62,9 @@ export interface ConversationChatResponse {
 	message?: string;
 	data: {
 		chat: any;
+		template_used?: boolean;
+		operator_whatsapp_text_sent?: boolean;
+		delivered?: boolean;
 	};
 }
 

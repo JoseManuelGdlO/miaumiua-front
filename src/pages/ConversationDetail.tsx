@@ -183,6 +183,19 @@ const ConversationDetail = () => {
         setChats((prev) => [...prev, chat]);
       }
       setNewMessage('');
+
+      if (res?.data?.template_used && res?.data?.operator_whatsapp_text_sent === false) {
+        toast({
+          title: 'Plantilla de apertura enviada',
+          description:
+            'Tu mensaje quedó en el historial del panel. El cliente debe contestar primero en WhatsApp para poder recibir ese texto por el chat.',
+        });
+      } else {
+        toast({
+          title: 'Enviado',
+          description: 'Tu mensaje se envió por WhatsApp.',
+        });
+      }
     } catch (e: any) {
       setSendError(e?.message || 'Error al enviar el mensaje');
     } finally {
@@ -442,6 +455,7 @@ const ConversationDetail = () => {
                 const isUser = (chat?.from || '').toLowerCase() === 'usuario';
                 const timestamp = chat.created_at ? new Date(chat.created_at).toLocaleString() : `${chat.fecha} ${chat.hora}`;
                 const whatsappStatus = chat?.metadata?.whatsapp_status || null;
+                const isPendingWhatsAppDelivery = chat?.metadata?.whatsapp_pending_delivery === true;
                 const shouldShowStatus = !isUser && whatsappStatus;
                 const isImageMessage = chat?.tipo_mensaje === 'imagen';
                 const imageUrl = isImageMessage ? resolveChatImageUrl(chat?.metadata?.image_url) : '';
@@ -491,6 +505,9 @@ const ConversationDetail = () => {
                       )}
                       <div className={`mt-1 flex items-center justify-end gap-1 text-xs ${isUser ? 'text-muted-foreground' : 'text-blue-100'}`}>
                         <span>{timestamp}</span>
+                        {!isUser && isPendingWhatsAppDelivery && (
+                          <span className="italic opacity-90">Pendiente de envío por WhatsApp</span>
+                        )}
                         {shouldShowStatus && (
                           <WhatsAppMessageStatus 
                             status={whatsappStatus} 
