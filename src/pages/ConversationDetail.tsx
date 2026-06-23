@@ -7,7 +7,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { conversationsService, resolveChatImageUrl } from "@/services/conversationsService";
+import { conversationLogsService, type ConversacionLogEntry } from "@/services/conversationLogsService";
 import { canChangeConversationStatus, hasPermission } from "@/utils/permissions";
+import {
+	getLogDetailRows,
+	getLogTimestamp,
+	getLogTypeLabel,
+	isLogError,
+	sortLogsDesc,
+} from "@/utils/formatConversationLog";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import WhatsAppMessageStatus from "@/components/WhatsAppMessageStatus";
@@ -37,7 +46,12 @@ const ConversationDetail = () => {
   const [chatTotalPages, setChatTotalPages] = useState<number>(1);
   const [loadingChats, setLoadingChats] = useState<boolean>(false);
   const [loadingOlder, setLoadingOlder] = useState<boolean>(false);
+  const [logs, setLogs] = useState<ConversacionLogEntry[]>([]);
+  const [loadingLogs, setLoadingLogs] = useState<boolean>(false);
+  const [logsError, setLogsError] = useState<string | null>(null);
+  const [logsLoaded, setLogsLoaded] = useState<boolean>(false);
   const chatLimit = 10;
+  const canViewLogs = hasPermission("ver_conversaciones_logs");
 
   const fetchDetail = useCallback(async (options: { silent?: boolean } = {}) => {
     if (!id) return;
@@ -135,10 +149,37 @@ const ConversationDetail = () => {
     }
   };
 
-  const logs = Array.isArray(conversation?.logs) ? conversation.logs : [];
+  const loadLogs = useCallback(async () => {
+    if (!id || !canViewLogs) return;
+    setLoadingLogs(true);
+    setLogsError(null);
+    try {
+      const res = await conversationLogsService.getLogsByConversacion(id);
+      const items = Array.isArray(res?.data?.logs) ? res.data.logs : [];
+      setLogs(sortLogsDesc(items));
+      setLogsLoaded(true);
+    } catch (e: any) {
+      setLogsError(e?.message || "Error al cargar logs");
+    } finally {
+      setLoadingLogs(false);
+    }
+  }, [id, canViewLogs]);
+
+  const handleAccordionChange = (values: string[]) => {
+    if (values.includes("logs") && !logsLoaded && !loadingLogs) {
+      loadLogs();
+    }
+  };
+
   const pedido = conversation?.pedido || null;
   const productos = Array.isArray(pedido?.productos) ? pedido.productos : [];
   const lastChatId = chats.length > 0 ? chats[chats.length - 1]?.id : null;
+
+  useEffect(() => {
+    setLogs([]);
+    setLogsLoaded(false);
+    setLogsError(null);
+  }, [id]);
 
   useEffect(() => {
     if (!loadingChats && !loadingOlder) {
@@ -319,7 +360,9 @@ const ConversationDetail = () => {
       </Card>
 
       {/* Acordeones superiores: Pedido y Logs */}
-      <Accordion type="multiple" className="space-y-2">
+      <Accordion type="multiple" className="space-y-2" 
+      defaultValue={conversation?.pedido ? ["pedido"] : []} 
+      onValueChange={handleAccordionChange}>
         <AccordionItem value="pedido">
           <AccordionTrigger>Detalles del pedido</AccordionTrigger>
           <AccordionContent>
@@ -392,26 +435,57 @@ const ConversationDetail = () => {
           </AccordionContent>
         </AccordionItem>
 
-        {hasPermission("ver_conversaciones_logs") && (
+        {canViewLogs && (
           <AccordionItem value="logs">
             <AccordionTrigger>Ver logs</AccordionTrigger>
             <AccordionContent>
               <div className="space-y-2 max-h-80 overflow-auto pr-1">
-                {loading && <div className="text-xs text-muted-foreground">Cargando logs...</div>}
-                {!loading && logs.length === 0 && (
+                {loadingLogs && <div className="text-xs text-muted-foreground">Cargando logs...</div>}
+                {logsError && <div className="text-xs text-destructive">{logsError}</div>}
+                {!loadingLogs && !logsError && logs.length === 0 && (
                   <div className="text-xs text-muted-foreground">Sin logs</div>
                 )}
-                {logs.map((log: any) => (
-                  <div key={log.id} className="p-2 border rounded">
-                    <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-                      <span className={(log.nivel === 'error' || log.tipo_log === 'error') ? 'text-destructive' : ''}>
-                        {log.tipo_log} ({log.nivel})
-                      </span>
-                      <span>{log.created_at ? new Date(log.created_at).toLocaleString() : `${log.fecha} ${log.hora}`}</span>
+                {logs.map((log) => {
+                  const timestamp = getLogTimestamp(log);
+                  const details = getLogDetailRows(log);
+                  const hasError = isLogError(log);
+
+                  return (
+                    <div
+                      key={log.id}
+                      className={`rounded-lg border p-3 ${hasError ? "border-destructive/40 bg-destructive/5" : "bg-muted/30"}`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <Badge variant={hasError ? "destructive" : "secondary"} className="text-[10px]">
+                            {getLogTypeLabel(log.tipo_log)}
+                          </Badge>
+                          <Badge variant="outline" className="text-[10px] capitalize">
+                            {log.nivel}
+                          </Badge>
+                        </div>
+                        <span className="shrink-0 text-[10px] text-muted-foreground">
+                          {timestamp ? timestamp.toLocaleString("es-MX") : "—"}
+                        </span>
+                      </div>
+                      {log.descripcion && (
+                        <p className={`mt-2 text-sm ${hasError ? "text-destructive" : ""}`}>
+                          {log.descripcion}
+                        </p>
+                      )}
+                      {details.length > 0 && (
+                        <dl className="mt-2 grid gap-1 border-t border-border/60 pt-2">
+                          {details.map((row) => (
+                            <div key={`${log.id}-${row.label}`} className="grid grid-cols-[minmax(0,38%)_1fr] gap-2 text-xs">
+                              <dt className="text-muted-foreground">{row.label}</dt>
+                              <dd className="break-words font-medium">{row.value}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                      )}
                     </div>
-                    <div className="mt-1 text-xs">{log.descripcion}</div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </AccordionContent>
           </AccordionItem>
