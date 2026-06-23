@@ -50,6 +50,8 @@ const ConversationDetail = () => {
   const [loadingLogs, setLoadingLogs] = useState<boolean>(false);
   const [logsError, setLogsError] = useState<string | null>(null);
   const [logsLoaded, setLogsLoaded] = useState<boolean>(false);
+  const [accordionValue, setAccordionValue] = useState<string[]>([]);
+  const initialPedidoOpenRef = useRef<boolean>(false);
   const chatLimit = 10;
   const canViewLogs = hasPermission("ver_conversaciones_logs");
 
@@ -166,6 +168,7 @@ const ConversationDetail = () => {
   }, [id, canViewLogs]);
 
   const handleAccordionChange = (values: string[]) => {
+    setAccordionValue(values);
     if (values.includes("logs") && !logsLoaded && !loadingLogs) {
       loadLogs();
     }
@@ -179,7 +182,17 @@ const ConversationDetail = () => {
     setLogs([]);
     setLogsLoaded(false);
     setLogsError(null);
+    setAccordionValue([]);
+    initialPedidoOpenRef.current = false;
   }, [id]);
+
+  useEffect(() => {
+    const hasPedido = Boolean(conversation?.id_pedido || conversation?.pedido);
+    if (!initialPedidoOpenRef.current && hasPedido) {
+      setAccordionValue((prev) => (prev.includes("pedido") ? prev : [...prev, "pedido"]));
+      initialPedidoOpenRef.current = true;
+    }
+  }, [conversation?.id_pedido, conversation?.pedido]);
 
   useEffect(() => {
     if (!loadingChats && !loadingOlder) {
@@ -360,9 +373,12 @@ const ConversationDetail = () => {
       </Card>
 
       {/* Acordeones superiores: Pedido y Logs */}
-      <Accordion type="multiple" className="space-y-2" 
-      defaultValue={conversation?.pedido ? ["pedido"] : []} 
-      onValueChange={handleAccordionChange}>
+      <Accordion
+        type="multiple"
+        className="space-y-2"
+        value={accordionValue}
+        onValueChange={handleAccordionChange}
+      >
         <AccordionItem value="pedido">
           <AccordionTrigger>Detalles del pedido</AccordionTrigger>
           <AccordionContent>
