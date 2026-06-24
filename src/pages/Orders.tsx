@@ -20,6 +20,7 @@ import {
 import {
   Pagination,
   PaginationContent,
+  PaginationEllipsis,
   PaginationItem,
   PaginationLink,
   PaginationNext,
@@ -114,6 +115,27 @@ const Orders = () => {
   const [selectedOrderForDelete, setSelectedOrderForDelete] = useState<OrderWithAPI | null>(null);
   const [detailsStripeRetryLoading, setDetailsStripeRetryLoading] = useState(false);
   const itemsPerPage = 10;
+  const maxVisiblePages = 5;
+
+  const getVisiblePageNumbers = (): number[] => {
+    if (totalPages <= maxVisiblePages) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+    let endPage = startPage + maxVisiblePages - 1;
+
+    if (endPage > totalPages) {
+      endPage = totalPages;
+      startPage = Math.max(1, endPage - maxVisiblePages + 1);
+    }
+
+    return Array.from({ length: endPage - startPage + 1 }, (_, i) => startPage + i);
+  };
+
+  const visiblePages = getVisiblePageNumbers();
+  const showStartEllipsis = visiblePages[0] > 1;
+  const showEndEllipsis = visiblePages[visiblePages.length - 1] < totalPages;
 
   const getStripeCheckoutUrl = (order: OrderWithAPI): string | null =>
     order.stripe_link_url ?? order.url ?? null;
@@ -740,20 +762,49 @@ const Orders = () => {
                   />
                 </PaginationItem>
                   
-                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                    const page = i + 1;
-                  return (
+                  {showStartEllipsis && (
+                    <>
+                      <PaginationItem>
+                        <PaginationLink
+                          onClick={() => setCurrentPage(1)}
+                          className="cursor-pointer"
+                        >
+                          1
+                        </PaginationLink>
+                      </PaginationItem>
+                      <PaginationItem>
+                        <PaginationEllipsis />
+                      </PaginationItem>
+                    </>
+                  )}
+
+                  {visiblePages.map((page) => (
                     <PaginationItem key={page}>
                       <PaginationLink
-                          onClick={() => setCurrentPage(page)}
+                        onClick={() => setCurrentPage(page)}
                         isActive={currentPage === page}
                         className="cursor-pointer"
                       >
                         {page}
                       </PaginationLink>
                     </PaginationItem>
-                  );
-                })}
+                  ))}
+
+                  {showEndEllipsis && (
+                    <>
+                      <PaginationItem>
+                        <PaginationEllipsis />
+                      </PaginationItem>
+                      <PaginationItem>
+                        <PaginationLink
+                          onClick={() => setCurrentPage(totalPages)}
+                          className="cursor-pointer"
+                        >
+                          {totalPages}
+                        </PaginationLink>
+                      </PaginationItem>
+                    </>
+                  )}
                 
                 <PaginationItem>
                   <PaginationNext 
