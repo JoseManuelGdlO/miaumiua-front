@@ -603,7 +603,7 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
           <div className="space-y-2">
             <Label>Horario por día</Label>
             <p className="text-sm text-muted-foreground">
-              Hora de inicio y fin de atención por día (0-23). Inicio debe ser menor que fin.
+              Hora de inicio y fin de atención por día (0-23). Inicio debe ser menor que fin. Este horario se usa para entregas y para determinar si un cliente recibe aviso de fuera de horario al solicitar ayuda con pedido activo.
             </p>
             <div className="border rounded-md overflow-hidden">
               <div className="grid grid-cols-[1fr_80px_80px] gap-2 p-3 bg-muted/50 text-sm font-medium">
