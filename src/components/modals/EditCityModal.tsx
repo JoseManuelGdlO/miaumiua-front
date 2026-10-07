@@ -20,6 +20,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { citiesService, City, HORARIO_POR_DIA_DEFAULT, type HorarioPorDia, type PointOfSale } from "@/services/citiesService";
+import { formatHour24To12, parseHour12To24 } from "@/utils/businessHoursTime";
 import { Loader2 } from "lucide-react";
 
 interface EditCityModalProps {
@@ -40,6 +41,7 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
     manager: string;
     telefono: string;
     email_contacto: string;
+    numero_soporte_cliente: string;
     estado_inicial: City["estado_inicial"];
     max_pedidos_por_horario: number;
     dias_trabajo: number[];
@@ -51,6 +53,7 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
     manager: "",
     telefono: "",
     email_contacto: "",
+    numero_soporte_cliente: "",
     estado_inicial: "activa",
     max_pedidos_por_horario: 5,
     dias_trabajo: [1, 2, 3, 4, 5],
@@ -73,6 +76,8 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
     encargado: "",
   });
   const [editingPointId, setEditingPointId] = useState<number | null>(null);
+  const [editingHorario, setEditingHorario] = useState<string | null>(null);
+  const [horarioDraft, setHorarioDraft] = useState("");
 
   // Construir horario_por_dia desde backend: si viene horario_por_dia usarlo; si no, desde campos legacy
   const getInitialHorarioPorDia = (c: City): HorarioPorDia => {
@@ -131,6 +136,7 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
         manager: city.manager,
         telefono: city.telefono,
         email_contacto: city.email_contacto,
+        numero_soporte_cliente: city.numero_soporte_cliente || "",
         estado_inicial: city.estado_inicial,
         max_pedidos_por_horario: city.max_pedidos_por_horario || 5,
         dias_trabajo: city.dias_trabajo && city.dias_trabajo.length > 0 ? city.dias_trabajo : [1, 2, 3, 4, 5],
@@ -316,6 +322,15 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
       return;
     }
 
+    if (formData.numero_soporte_cliente.trim() && !/^[\+]?[0-9\s\-\(\)]+$/.test(formData.numero_soporte_cliente)) {
+      toast({
+        title: "Error",
+        description: "El número de soporte al cliente no tiene un formato válido",
+        variant: "destructive"
+      });
+      return;
+    }
+
     // Validar max_pedidos_por_horario
     if (formData.max_pedidos_por_horario < 1 || formData.max_pedidos_por_horario > 100) {
       toast({
@@ -347,7 +362,7 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
       if (inicio < 0 || inicio > 23 || fin < 0 || fin > 23) {
         toast({
           title: "Error",
-          description: `En ${diasLabels[key]}: hora inicio y fin deben estar entre 0 y 23`,
+          description: `En ${diasLabels[key]}: hora inicio y fin deben ser válidas (ej. 9 am, 5 pm)`,
           variant: "destructive"
         });
         return;
@@ -365,7 +380,10 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
     try {
       setLoading(true);
 
-      const response = await citiesService.updateCity(city.id, formData);
+      const response = await citiesService.updateCity(city.id, {
+        ...formData,
+        numero_soporte_cliente: formData.numero_soporte_cliente.trim() || null,
+      });
 
       if (response.success) {
         toast({
@@ -405,6 +423,36 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
         },
       },
     }));
+  };
+
+  const getHorarioFieldKey = (diaKey: string, field: 'inicio' | 'fin') => `${diaKey}-${field}`;
+
+  const handleHorarioFocus = (diaKey: string, field: 'inicio' | 'fin', currentValue: number) => {
+    const fieldKey = getHorarioFieldKey(diaKey, field);
+    setEditingHorario(fieldKey);
+    setHorarioDraft(formatHour24To12(currentValue));
+  };
+
+  const handleHorarioBlur = (diaKey: string, field: 'inicio' | 'fin', currentValue: number, dayLabel: string) => {
+    const parsed = parseHour12To24(horarioDraft);
+    if (parsed === null) {
+      toast({
+        title: "Error",
+        description: `En ${dayLabel}: usa formato de 12 horas (ej. 9 am, 5 pm)`,
+        variant: "destructive",
+      });
+      setHorarioDraft(formatHour24To12(currentValue));
+    } else {
+      handleHorarioChange(diaKey, field, parsed);
+    }
+    setEditingHorario(null);
+    setHorarioDraft("");
+  };
+
+  const getHorarioDisplayValue = (diaKey: string, field: 'inicio' | 'fin', hour24: number) => {
+    const fieldKey = getHorarioFieldKey(diaKey, field);
+    if (editingHorario === fieldKey) return horarioDraft;
+    return formatHour24To12(hour24);
   };
 
   const handleDiaTrabajoChange = (dia: number, checked: boolean) => {
@@ -538,6 +586,16 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
           </div>
 
           <div className="space-y-2">
+            <Label htmlFor="numero_soporte_cliente">Número de soporte al cliente</Label>
+            <Input
+              id="numero_soporte_cliente"
+              value={formData.numero_soporte_cliente}
+              onChange={(e) => handleInputChange('numero_soporte_cliente', e.target.value)}
+              placeholder="618 1892035"
+            />
+          </div>
+
+          <div className="space-y-2">
             <Label htmlFor="max_pedidos_por_horario">Máximo de Pedidos por Horario *</Label>
             <Input
               id="max_pedidos_por_horario"
@@ -578,10 +636,10 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
           <div className="space-y-2">
             <Label>Horario por día</Label>
             <p className="text-sm text-muted-foreground">
-              Hora de inicio y fin de atención por día (0-23). Inicio debe ser menor que fin.
+              Usa formato de 12 horas (ej. 9 am, 5 pm). Inicio debe ser menor que fin. Este horario se usa para entregas y para determinar si un cliente recibe aviso de fuera de horario al solicitar ayuda con pedido activo.
             </p>
             <div className="border rounded-md overflow-hidden">
-              <div className="grid grid-cols-[1fr_80px_80px] gap-2 p-3 bg-muted/50 text-sm font-medium">
+              <div className="grid grid-cols-[1fr_110px_110px] gap-2 p-3 bg-muted/50 text-sm font-medium">
                 <span>Día</span>
                 <span>Inicio</span>
                 <span>Fin</span>
@@ -594,23 +652,25 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
                   return (
                     <div
                       key={dia.value}
-                      className="grid grid-cols-[1fr_80px_80px] gap-2 p-3 border-t items-center"
+                      className="grid grid-cols-[1fr_110px_110px] gap-2 p-3 border-t items-center"
                     >
                       <span className="text-sm">{dia.label}</span>
                       <Input
-                        type="number"
-                        min={0}
-                        max={23}
-                        value={slot.inicio}
-                        onChange={(e) => handleHorarioChange(key, 'inicio', parseInt(e.target.value) || 0)}
+                        type="text"
+                        value={getHorarioDisplayValue(key, 'inicio', slot.inicio)}
+                        placeholder="9 am"
+                        onFocus={() => handleHorarioFocus(key, 'inicio', slot.inicio)}
+                        onChange={(e) => setHorarioDraft(e.target.value)}
+                        onBlur={() => handleHorarioBlur(key, 'inicio', slot.inicio, dia.label)}
                         className="h-8"
                       />
                       <Input
-                        type="number"
-                        min={0}
-                        max={23}
-                        value={slot.fin}
-                        onChange={(e) => handleHorarioChange(key, 'fin', parseInt(e.target.value) || 0)}
+                        type="text"
+                        value={getHorarioDisplayValue(key, 'fin', slot.fin)}
+                        placeholder="5 pm"
+                        onFocus={() => handleHorarioFocus(key, 'fin', slot.fin)}
+                        onChange={(e) => setHorarioDraft(e.target.value)}
+                        onBlur={() => handleHorarioBlur(key, 'fin', slot.fin, dia.label)}
                         className="h-8"
                       />
                     </div>

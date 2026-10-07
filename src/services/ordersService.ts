@@ -64,6 +64,10 @@ export interface Order {
       precio_final: number;
     };
   }>;
+  /** Presentes en GET cuando se generó (o reutilizó) el Payment Link de Stripe */
+  stripe_link_id?: string | null;
+  stripe_link_url?: string | null;
+  url?: string | null;
 }
 
 export interface CreateOrderData {
@@ -123,6 +127,16 @@ export interface OrderResponse {
   success: boolean;
   data: {
     pedido: Order;
+  };
+}
+
+export interface StripePaymentLinkResponse {
+  success: boolean;
+  data: {
+    stripe_link_id: string;
+    stripe_link_url: string;
+    /** Alias de stripe_link_url en la API */
+    url?: string;
   };
 }
 
@@ -246,6 +260,51 @@ class OrdersService {
       method: 'POST',
       body: JSON.stringify(data),
     });
+  }
+
+  /** POST idempotente: crea o devuelve el link de pago Stripe (solo pedidos con metodo_pago tarjeta). */
+  async createStripePaymentLink(pedidoId: number): Promise<StripePaymentLinkResponse> {
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+      throw new Error('Token de acceso requerido');
+    }
+
+    const response = await fetch(
+      `${config.apiBaseUrl}/pedidos/${pedidoId}/stripe-payment-link`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({}),
+      }
+    );
+
+    let body: unknown;
+    try {
+      body = await response.json();
+    } catch {
+      body = null;
+    }
+
+    if (!response.ok) {
+      authService.handleAuthError(response);
+      const b = body as Record<string, unknown> | null;
+      const msg =
+        (b &&
+          (typeof b.message === 'string'
+            ? b.message
+            : typeof b.error === 'string'
+              ? b.error
+              : typeof (b.data as Record<string, unknown> | undefined)?.message === 'string'
+                ? String((b.data as Record<string, unknown>).message)
+                : null)) ||
+        `Error ${response.status}: ${response.statusText}`;
+      throw new Error(msg);
+    }
+
+    return body as StripePaymentLinkResponse;
   }
 
   // Actualizar pedido

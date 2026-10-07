@@ -1,49 +1,131 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Textarea } from "@/components/ui/textarea";
-import { conversationsService } from "@/services/conversationsService";
-import { hasPermission } from "@/utils/permissions";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { conversationsService, resolveChatImageUrl } from "@/services/conversationsService";
+import { conversationLogsService, type ConversacionLogEntry } from "@/services/conversationLogsService";
+import { canChangeConversationStatus, hasPermission } from "@/utils/permissions";
+import {
+	getLogDetailRows,
+	getLogTimestamp,
+	getLogTypeLabel,
+	isLogError,
+	sortLogsDesc,
+} from "@/utils/formatConversationLog";
+import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import WhatsAppMessageStatus from "@/components/WhatsAppMessageStatus";
+import { ImagePlus } from "lucide-react";
+
+const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 const ConversationDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [loading, setLoading] = useState<boolean>(false);
+  const [updatingStatus, setUpdatingStatus] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [conversation, setConversation] = useState<any>(null);
   const [chats, setChats] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState<string>('');
   const [sending, setSending] = useState<boolean>(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const skipNextScrollRef = useRef<boolean>(false);
   const [chatPage, setChatPage] = useState<number>(1);
   const [chatTotalPages, setChatTotalPages] = useState<number>(1);
   const [loadingChats, setLoadingChats] = useState<boolean>(false);
   const [loadingOlder, setLoadingOlder] = useState<boolean>(false);
+  const [logs, setLogs] = useState<ConversacionLogEntry[]>([]);
+  const [loadingLogs, setLoadingLogs] = useState<boolean>(false);
+  const [logsError, setLogsError] = useState<string | null>(null);
+  const [logsLoaded, setLogsLoaded] = useState<boolean>(false);
+  const [accordionValue, setAccordionValue] = useState<string[]>([]);
+  const initialPedidoOpenRef = useRef<boolean>(false);
   const chatLimit = 10;
+  const canViewLogs = hasPermission("ver_conversaciones_logs");
 
-  useEffect(() => {
-    const fetchDetail = async () => {
-      if (!id) return;
+  const fetchDetail = useCallback(async (options: { silent?: boolean } = {}) => {
+    if (!id) return;
+    if (!options.silent) {
       setLoading(true);
       setError(null);
-      try {
-        const res = await conversationsService.getConversationById(id);
-        setConversation(res?.data?.conversacion || null);
-      } catch (e: any) {
+    }
+    try {
+      const res = await conversationsService.getConversationById(id);
+      setConversation(res?.data?.conversacion || null);
+    } catch (e: any) {
+      if (!options.silent) {
         setError(e?.message || 'Error al cargar la conversación');
-      } finally {
+      }
+    } finally {
+      if (!options.silent) {
         setLoading(false);
       }
-    };
-
-    fetchDetail();
+    }
   }, [id]);
+
+  useEffect(() => {
+    fetchDetail();
+  }, [fetchDetail]);
+
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        fetchDetail({ silent: true });
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [fetchDetail]);
+
+  const isPaused = conversation?.status === "pausada";
+  const canTogglePause =
+    conversation?.status === "activa" || conversation?.status === "pausada";
+  const conversationId = Number(id);
+
+  const handleToggleConversationStatus = async (shouldBeActive: boolean) => {
+    if (!id || Number.isNaN(conversationId) || !conversation) return;
+
+    const previousStatus = conversation.status;
+    const nextStatus = shouldBeActive ? "activa" : "pausada";
+    setConversation((prev) => (prev ? { ...prev, status: nextStatus } : prev));
+    setUpdatingStatus(true);
+    try {
+      await conversationsService.updateConversationStatus(conversationId, nextStatus);
+      const res = await conversationsService.getConversationById(id);
+      setConversation(res?.data?.conversacion || null);
+      toast({
+        title: "Éxito",
+        description: shouldBeActive
+          ? `Conversación con id ${conversationId} se ha activado`
+          : `Conversación con id ${conversationId} se ha pausado`,
+      });
+    } catch (e: any) {
+      setConversation((prev) => (prev ? { ...prev, status: previousStatus } : prev));
+      toast({
+        title: "Error",
+        description:
+          e?.message ||
+          (shouldBeActive
+            ? `La conversación con id ${conversationId} no se ha podido activar`
+            : `La conversación con id ${conversationId} no se ha podido pausar`),
+        variant: "destructive",
+      });
+    } finally {
+      setUpdatingStatus(false);
+    }
+  };
 
   const loadChats = async (pageToLoad: number, options: { prepend?: boolean } = {}) => {
     if (!id) return;
@@ -69,10 +151,48 @@ const ConversationDetail = () => {
     }
   };
 
-  const logs = Array.isArray(conversation?.logs) ? conversation.logs : [];
+  const loadLogs = useCallback(async () => {
+    if (!id || !canViewLogs) return;
+    setLoadingLogs(true);
+    setLogsError(null);
+    try {
+      const res = await conversationLogsService.getLogsByConversacion(id);
+      const items = Array.isArray(res?.data?.logs) ? res.data.logs : [];
+      setLogs(sortLogsDesc(items));
+      setLogsLoaded(true);
+    } catch (e: any) {
+      setLogsError(e?.message || "Error al cargar logs");
+    } finally {
+      setLoadingLogs(false);
+    }
+  }, [id, canViewLogs]);
+
+  const handleAccordionChange = (values: string[]) => {
+    setAccordionValue(values);
+    if (values.includes("logs") && !logsLoaded && !loadingLogs) {
+      loadLogs();
+    }
+  };
+
   const pedido = conversation?.pedido || null;
   const productos = Array.isArray(pedido?.productos) ? pedido.productos : [];
   const lastChatId = chats.length > 0 ? chats[chats.length - 1]?.id : null;
+
+  useEffect(() => {
+    setLogs([]);
+    setLogsLoaded(false);
+    setLogsError(null);
+    setAccordionValue([]);
+    initialPedidoOpenRef.current = false;
+  }, [id]);
+
+  useEffect(() => {
+    const hasPedido = Boolean(conversation?.id_pedido || conversation?.pedido);
+    if (!initialPedidoOpenRef.current && hasPedido) {
+      setAccordionValue((prev) => (prev.includes("pedido") ? prev : [...prev, "pedido"]));
+      initialPedidoOpenRef.current = true;
+    }
+  }, [conversation?.id_pedido, conversation?.pedido]);
 
   useEffect(() => {
     if (!loadingChats && !loadingOlder) {
@@ -117,8 +237,76 @@ const ConversationDetail = () => {
         setChats((prev) => [...prev, chat]);
       }
       setNewMessage('');
+
+      if (res?.data?.template_used && res?.data?.operator_whatsapp_text_sent === false) {
+        toast({
+          title: 'Plantilla de apertura enviada',
+          description:
+            'Tu mensaje quedó en el historial del panel. El cliente debe contestar primero en WhatsApp para poder recibir ese texto por el chat.',
+        });
+      } else {
+        toast({
+          title: 'Enviado',
+          description: 'Tu mensaje se envió por WhatsApp.',
+        });
+      }
     } catch (e: any) {
       setSendError(e?.message || 'Error al enviar el mensaje');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const clearImageSelection = () => {
+    setImageFile(null);
+    setImagePreview(null);
+    if (imageInputRef.current) {
+      imageInputRef.current.value = '';
+    }
+  };
+
+  const handleImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    setSendError(null);
+
+    if (!file) {
+      clearImageSelection();
+      return;
+    }
+
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      setSendError('Solo se permiten imágenes JPG, PNG o WEBP.');
+      clearImageSelection();
+      return;
+    }
+
+    if (file.size > MAX_IMAGE_SIZE_BYTES) {
+      setSendError('La imagen no debe superar 5 MB.');
+      clearImageSelection();
+      return;
+    }
+
+    setImageFile(file);
+    const reader = new FileReader();
+    reader.onload = () => setImagePreview(typeof reader.result === 'string' ? reader.result : null);
+    reader.readAsDataURL(file);
+  };
+
+  const handleSendImage = async () => {
+    if (!id || !imageFile) return;
+
+    setSending(true);
+    setSendError(null);
+    try {
+      const res = await conversationsService.sendWhatsAppImage(id, imageFile, newMessage.trim() || undefined);
+      const chat = res?.data?.chat;
+      if (chat) {
+        setChats((prev) => [...prev, chat]);
+      }
+      setNewMessage('');
+      clearImageSelection();
+    } catch (e: any) {
+      setSendError(e?.message || 'Error al enviar la imagen');
     } finally {
       setSending(false);
     }
@@ -140,12 +328,14 @@ const ConversationDetail = () => {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Detalle de Conversación</h1>
           <p className="text-muted-foreground">ID: {id}</p>
         </div>
-        <Button variant="outline" onClick={() => navigate(-1)}>Volver</Button>
+        <div className="flex flex-wrap items-center gap-4">
+          <Button variant="outline" onClick={() => navigate(-1)}>Volver</Button>
+        </div>
       </div>
 
       {error && (
@@ -175,23 +365,20 @@ const ConversationDetail = () => {
               <div className="font-medium break-all">{conversation?.cliente?.email || '—'}</div>
             </div>
             <div>
-              <div className="text-muted-foreground">Origen</div>
-              <div className="font-medium">{conversation?.from || '—'}</div>
-            </div>
-            <div>
               <div className="text-muted-foreground">Estado</div>
               <div className="font-medium capitalize">{conversation?.status || '—'}</div>
-            </div>
-            <div>
-              <div className="text-muted-foreground">Actualizado</div>
-              <div className="font-medium">{conversation?.updatedAt ? new Date(conversation.updatedAt).toLocaleString() : '—'}</div>
             </div>
           </div>
         </CardContent>
       </Card>
 
       {/* Acordeones superiores: Pedido y Logs */}
-      <Accordion type="multiple" className="space-y-2">
+      <Accordion
+        type="multiple"
+        className="space-y-2"
+        value={accordionValue}
+        onValueChange={handleAccordionChange}
+      >
         <AccordionItem value="pedido">
           <AccordionTrigger>Detalles del pedido</AccordionTrigger>
           <AccordionContent>
@@ -264,26 +451,57 @@ const ConversationDetail = () => {
           </AccordionContent>
         </AccordionItem>
 
-        {hasPermission("ver_conversaciones_logs") && (
+        {canViewLogs && (
           <AccordionItem value="logs">
             <AccordionTrigger>Ver logs</AccordionTrigger>
             <AccordionContent>
               <div className="space-y-2 max-h-80 overflow-auto pr-1">
-                {loading && <div className="text-xs text-muted-foreground">Cargando logs...</div>}
-                {!loading && logs.length === 0 && (
+                {loadingLogs && <div className="text-xs text-muted-foreground">Cargando logs...</div>}
+                {logsError && <div className="text-xs text-destructive">{logsError}</div>}
+                {!loadingLogs && !logsError && logs.length === 0 && (
                   <div className="text-xs text-muted-foreground">Sin logs</div>
                 )}
-                {logs.map((log: any) => (
-                  <div key={log.id} className="p-2 border rounded">
-                    <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-                      <span className={(log.nivel === 'error' || log.tipo_log === 'error') ? 'text-destructive' : ''}>
-                        {log.tipo_log} ({log.nivel})
-                      </span>
-                      <span>{log.created_at ? new Date(log.created_at).toLocaleString() : `${log.fecha} ${log.hora}`}</span>
+                {logs.map((log) => {
+                  const timestamp = getLogTimestamp(log);
+                  const details = getLogDetailRows(log);
+                  const hasError = isLogError(log);
+
+                  return (
+                    <div
+                      key={log.id}
+                      className={`rounded-lg border p-3 ${hasError ? "border-destructive/40 bg-destructive/5" : "bg-muted/30"}`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <Badge variant={hasError ? "destructive" : "secondary"} className="text-[10px]">
+                            {getLogTypeLabel(log.tipo_log)}
+                          </Badge>
+                          <Badge variant="outline" className="text-[10px] capitalize">
+                            {log.nivel}
+                          </Badge>
+                        </div>
+                        <span className="shrink-0 text-[10px] text-muted-foreground">
+                          {timestamp ? timestamp.toLocaleString("es-MX") : "—"}
+                        </span>
+                      </div>
+                      {log.descripcion && (
+                        <p className={`mt-2 text-sm ${hasError ? "text-destructive" : ""}`}>
+                          {log.descripcion}
+                        </p>
+                      )}
+                      {details.length > 0 && (
+                        <dl className="mt-2 grid gap-1 border-t border-border/60 pt-2">
+                          {details.map((row) => (
+                            <div key={`${log.id}-${row.label}`} className="grid grid-cols-[minmax(0,38%)_1fr] gap-2 text-xs">
+                              <dt className="text-muted-foreground">{row.label}</dt>
+                              <dd className="break-words font-medium">{row.value}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                      )}
                     </div>
-                    <div className="mt-1 text-xs">{log.descripcion}</div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </AccordionContent>
           </AccordionItem>
@@ -318,10 +536,12 @@ const ConversationDetail = () => {
               {chats.map((chat: any) => {
                 const isUser = (chat?.from || '').toLowerCase() === 'usuario';
                 const timestamp = chat.created_at ? new Date(chat.created_at).toLocaleString() : `${chat.fecha} ${chat.hora}`;
-                // Extraer estado de WhatsApp del metadata
                 const whatsappStatus = chat?.metadata?.whatsapp_status || null;
-                // Solo mostrar estado para mensajes enviados por agente/bot (no para mensajes del usuario)
+                const isPendingWhatsAppDelivery = chat?.metadata?.whatsapp_pending_delivery === true;
                 const shouldShowStatus = !isUser && whatsappStatus;
+                const isImageMessage = chat?.tipo_mensaje === 'imagen';
+                const imageUrl = isImageMessage ? resolveChatImageUrl(chat?.metadata?.image_url) : '';
+                const showCaption = chat?.mensaje && chat.mensaje !== '[imagen]';
                 
                 return (
                   <div key={chat.id} className={`flex ${isUser ? 'justify-start' : 'justify-end'} px-1`}>
@@ -349,9 +569,27 @@ const ConversationDetail = () => {
                           }}
                         />
                       )}
-                      <div className="text-base whitespace-pre-wrap break-words">{chat.mensaje}</div>
+                      {isImageMessage && imageUrl ? (
+                        <div className="space-y-2">
+                          <a href={imageUrl} target="_blank" rel="noopener noreferrer">
+                            <img
+                              src={imageUrl}
+                              alt={showCaption ? chat.mensaje : 'Imagen'}
+                              className="max-w-full max-h-64 rounded-lg object-contain"
+                            />
+                          </a>
+                          {showCaption && (
+                            <div className="text-base whitespace-pre-wrap break-words">{chat.mensaje}</div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="text-base whitespace-pre-wrap break-words">{chat.mensaje}</div>
+                      )}
                       <div className={`mt-1 flex items-center justify-end gap-1 text-xs ${isUser ? 'text-muted-foreground' : 'text-blue-100'}`}>
                         <span>{timestamp}</span>
+                        {!isUser && isPendingWhatsAppDelivery && (
+                          <span className="italic opacity-90">Pendiente de envío por WhatsApp</span>
+                        )}
                         {shouldShowStatus && (
                           <WhatsAppMessageStatus 
                             status={whatsappStatus} 
@@ -366,24 +604,89 @@ const ConversationDetail = () => {
               <div ref={chatEndRef} />
             </div>
 
-            {hasPermission("enviar_conversaciones_chat") && (
+            {(hasPermission("enviar_conversaciones_chat") ||
+              (canChangeConversationStatus() && conversation && canTogglePause)) && (
               <div className="mt-4 space-y-2">
-                {sendError && (
-                  <Alert>
-                    <AlertDescription className="text-destructive">{sendError}</AlertDescription>
-                  </Alert>
+                {hasPermission("enviar_conversaciones_chat") && (
+                  <>
+                    {sendError && (
+                      <Alert>
+                        <AlertDescription className="text-destructive">{sendError}</AlertDescription>
+                      </Alert>
+                    )}
+                    <Textarea
+                      placeholder="Escribe tu mensaje..."
+                      value={newMessage}
+                      onChange={(event) => setNewMessage(event.target.value)}
+                      rows={3}
+                      disabled={sending}
+                    />
+                    <input
+                      ref={imageInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="hidden"
+                      onChange={handleImageSelect}
+                      disabled={sending}
+                    />
+                    {imagePreview && (
+                      <div className="flex items-start gap-3 rounded-md border p-2">
+                        <img src={imagePreview} alt="Vista previa" className="h-20 w-20 rounded object-cover border" />
+                        <div className="flex-1 text-sm text-muted-foreground">
+                          <p className="font-medium text-foreground">{imageFile?.name}</p>
+                          <p>{imageFile ? `${(imageFile.size / 1024).toFixed(0)} KB` : ''}</p>
+                        </div>
+                        <Button type="button" variant="ghost" size="sm" onClick={clearImageSelection} disabled={sending}>
+                          Quitar
+                        </Button>
+                      </div>
+                    )}
+                  </>
                 )}
-                <Textarea
-                  placeholder="Escribe tu mensaje..."
-                  value={newMessage}
-                  onChange={(event) => setNewMessage(event.target.value)}
-                  rows={3}
-                  disabled={sending}
-                />
-                <div className="flex justify-end">
-                  <Button onClick={handleSendMessage} disabled={sending || !newMessage.trim()}>
-                    {sending ? 'Enviando...' : 'Enviar mensaje'}
-                  </Button>
+                <div className="flex items-center gap-3 flex-wrap">
+                  {canChangeConversationStatus() && conversation && canTogglePause && (
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        id="conversation-status"
+                        checked={!isPaused}
+                        disabled={updatingStatus || loading || sending}
+                        onCheckedChange={handleToggleConversationStatus}
+                      />
+                      <Label
+                        htmlFor="conversation-status"
+                        className="cursor-pointer text-sm font-medium whitespace-nowrap"
+                      >
+                        {isPaused ? "Conversación pausada" : " Conversación activa"}
+                      </Label>
+                    </div>
+                  )}
+                  {hasPermission("enviar_conversaciones_chat") && (
+                    <div className="ml-auto flex items-center gap-3 flex-wrap">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => imageInputRef.current?.click()}
+                        disabled={sending}
+                      >
+                        <ImagePlus className="mr-2 h-4 w-4" />
+                        Adjuntar imagen
+                      </Button>
+                      {imageFile && (
+                        <Button
+                          onClick={handleSendImage}
+                          disabled={sending}
+                        >
+                          {sending ? 'Enviando...' : 'Enviar imagen'}
+                        </Button>
+                      )}
+                      <Button
+                        onClick={handleSendMessage}
+                        disabled={sending || !newMessage.trim()}
+                      >
+                        {sending ? 'Enviando...' : 'Enviar mensaje'}
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

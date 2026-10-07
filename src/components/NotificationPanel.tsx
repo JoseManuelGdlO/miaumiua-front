@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { notificationsService, Notification } from "@/services/notificationsService";
+import { notificationsService, Notification, handleNotificationNavigation } from "@/services/notificationsService";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -18,19 +18,19 @@ import {
   Tag, 
   Route, 
   X, 
-  Clock,
-  MapPin,
-  TrendingDown,
   MessageCircle,
   XCircle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
 
 const NotificationPanel = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Cargar notificaciones recientes del backend
   useEffect(() => {
@@ -134,11 +134,34 @@ const NotificationPanel = () => {
   };
 
   const removeNotification = async (id: string) => {
+    setDeletingId(id);
     try {
       await notificationsService.deleteNotification(parseInt(id));
       setNotifications(prev => prev.filter(n => n.id !== id));
+      toast({
+        title: "Notificación eliminada",
+        description: "La notificación se eliminó correctamente.",
+      });
     } catch (error) {
       console.error('Error al eliminar notificación:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo eliminar la notificación.",
+        variant: "destructive",
+      });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleNotificacionClick = (notification: Notification) => {
+    const navigated = handleNotificationNavigation(notification, navigate, {
+      onClose: () => setOpen(false),
+      markAsRead,
+    });
+
+    if (!navigated && !notification.read) {
+      markAsRead(notification.id);
     }
   };
 
@@ -166,7 +189,7 @@ const NotificationPanel = () => {
         </Button>
       </PopoverTrigger>
       <PopoverContent 
-        className="w-96 p-0" 
+        className="flex w-[420px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden p-0 max-h-[min(560px,85vh)]" 
         align="end"
         sideOffset={5}
       >
@@ -208,15 +231,17 @@ const NotificationPanel = () => {
               {notifications.map((notification, index) => (
                 <div key={notification.id}>
                   <Card 
+                    role="button"
+                    tabIndex={0}
                     className={cn(
-                      "mb-2 cursor-pointer transition-colors hover:bg-accent/50",
+                      "group mb-2 cursor-pointer transition-colors hover:bg-muted/50",
                       !notification.read && "bg-primary/5 border-primary/20"
                     )}
-                    onClick={() => {
-                      markAsRead(notification.id);
-                      setOpen(false);
-                      if (notification.actionUrl) {
-                        navigate(notification.actionUrl);
+                    onClick={() => handleNotificacionClick(notification)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handleNotificacionClick(notification);
                       }
                     }}
                   >
@@ -239,15 +264,18 @@ const NotificationPanel = () => {
                                 {getRelativeTime(notification.timestamp)}
                               </span>
                               <Button
+                                type="button"
                                 variant="ghost"
-                                size="sm"
-                                className="h-4 w-4 p-0 opacity-0 group-hover:opacity-100"
+                                size="icon"
+                                aria-label="Eliminar notificación"
+                                className="h-6 w-6 shrink-0 text-muted-foreground opacity-70 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
+                                disabled={deletingId === notification.id}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   removeNotification(notification.id);
                                 }}
                               >
-                                <X className="h-3 w-3" />
+                                <X className="h-3.5 w-3.5" />
                               </Button>
                             </div>
                           </div>

@@ -1,3 +1,4 @@
+import type { NavigateFunction } from 'react-router-dom';
 import { config } from '../config/environment';
 import { authService } from './authService';
 
@@ -12,9 +13,12 @@ export interface BackendNotification {
   hora_creacion: string; // HH:mm:ss
   datos: {
     type?: 'stock' | 'order' | 'promotion' | 'route' | 'error' | 'conversation';
+    tipo?: string;
     actionUrl?: string;
     errorDetails?: string;
     conversationId?: string | number;
+    conversacionId?: string | number;
+    accion?: NotificationAction;
     [key: string]: any;
   } | null;
   created_at: string;
@@ -116,6 +120,12 @@ export interface UpdateNotificationData {
   datos?: any;
 }
 
+export interface NotificationAction {
+  tipo: string;
+  conversacionId?: string | number;
+  ruta?: string;
+}
+
 // Interfaz para el frontend (mapeada desde el backend)
 export interface Notification {
   id: string;
@@ -126,9 +136,53 @@ export interface Notification {
   priority: 'high' | 'medium' | 'low' | 'urgent';
   read: boolean;
   actionUrl?: string;
+  action?: NotificationAction;
   errorDetails?: string;
   conversationId?: string;
 }
+
+const CONVERSATION_DETAIL_PATH = '/dashboard/conversations';
+
+export const getConversationNavigationPath = (conversacionId: string | number): string =>
+  `${CONVERSATION_DETAIL_PATH}/${conversacionId}`;
+
+export const resolveNotificationNavigationPath = (notification: Notification): string | undefined => {
+  const accion = notification.action;
+  if (accion?.tipo === 'ir_conversacion') {
+    const conversacionId = accion.conversacionId ?? notification.conversationId;
+    if (conversacionId != null) {
+      return getConversationNavigationPath(conversacionId);
+    }
+
+    const rutaMatch = accion.ruta?.match(/\/conversaciones\/(\d+)/);
+    if (rutaMatch) {
+      return getConversationNavigationPath(rutaMatch[1]);
+    }
+  }
+
+  return notification.actionUrl;
+};
+
+export const handleNotificationNavigation = (
+  notification: Notification,
+  navigate: NavigateFunction,
+  options?: {
+    onClose?: () => void;
+    markAsRead?: (id: string) => void;
+  }
+): boolean => {
+  const path = resolveNotificationNavigationPath(notification);
+  if (!path) {
+    return false;
+  }
+
+  options?.onClose?.();
+  if (!notification.read) {
+    options?.markAsRead?.(notification.id);
+  }
+  navigate(path);
+  return true;
+};
 
 // Interfaz para actividades recientes (formato diferente del endpoint /actividad-reciente)
 export interface RecentActivity {
@@ -199,10 +253,40 @@ class NotificationsService {
       });
   }
 
+  private resolveNotificationType(
+    datos: NonNullable<BackendNotification['datos']>
+  ): Notification['type'] {
+    if (datos.type) {
+      return datos.type;
+    }
+
+    if (
+      datos.tipo === 'modificacion_pedido_activo' ||
+      datos.accion?.tipo === 'ir_conversacion' ||
+      datos.conversacionId != null
+    ) {
+      return 'conversation';
+    }
+
+    return 'order';
+  }
+
+  private resolveConversationId(
+    datos: NonNullable<BackendNotification['datos']>
+  ): string | undefined {
+    const conversacionId =
+      datos.accion?.conversacionId ??
+      datos.conversacionId ??
+      datos.conversationId;
+
+    return conversacionId != null ? conversacionId.toString() : undefined;
+  }
+
   // Mapear notificación del backend al formato del frontend
   private mapNotification(backendNotif: BackendNotification): Notification {
     const datos = backendNotif.datos || {};
     const fechaHora = `${backendNotif.fecha_creacion}T${backendNotif.hora_creacion}`;
+    const conversationId = this.resolveConversationId(datos);
     
     // Mapear prioridad del backend al frontend
     const priorityMap: Record<string, 'high' | 'medium' | 'low' | 'urgent'> = {
@@ -212,18 +296,25 @@ class NotificationsService {
       'urgente': 'urgent'
     };
 
-    return {
+    const notification: Notification = {
       id: backendNotif.id.toString(),
-      type: datos.type || 'order',
+      type: this.resolveNotificationType(datos),
       title: backendNotif.nombre,
       message: backendNotif.descripcion || '',
       timestamp: fechaHora,
       priority: priorityMap[backendNotif.prioridad] || 'medium',
       read: backendNotif.leida,
       actionUrl: datos.actionUrl,
+      action: datos.accion,
       errorDetails: datos.errorDetails,
-      conversationId: datos.conversationId?.toString()
+      conversationId,
     };
+
+    if (!notification.actionUrl) {
+      notification.actionUrl = resolveNotificationNavigationPath(notification);
+    }
+
+    return notification;
   }
 
   // Obtener todas las notificaciones con paginación y filtros

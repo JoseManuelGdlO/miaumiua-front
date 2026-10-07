@@ -32,6 +32,7 @@ export interface City {
   manager: string;
   telefono: string;
   email_contacto: string;
+  numero_soporte_cliente?: string | null;
   notas_adicionales: string;
   max_pedidos_por_horario?: number;
   horario_por_dia?: HorarioPorDia;
@@ -81,6 +82,7 @@ export interface CreateCityData {
   manager: string;
   telefono: string;
   email_contacto: string;
+  numero_soporte_cliente?: string | null;
   notas_adicionales?: string;
   max_pedidos_por_horario?: number;
   dias_trabajo?: number[];
@@ -99,6 +101,7 @@ export interface UpdateCityData {
   manager?: string;
   telefono?: string;
   email_contacto?: string;
+  numero_soporte_cliente?: string | null;
   notas_adicionales?: string;
   max_pedidos_por_horario?: number;
   dias_trabajo?: number[];
@@ -153,6 +156,15 @@ export interface PointOfSaleResponse {
     pointOfSale: PointOfSale;
   };
   message?: string;
+}
+
+export interface NumeroSoporteClienteResponse {
+  success: boolean;
+  data: {
+    ciudad_id: number;
+    nombre: string;
+    numero_soporte_cliente: string | null;
+  };
 }
 
 // Parámetros de consulta
@@ -211,6 +223,19 @@ class CitiesService {
   // Obtener una ciudad por ID
   async getCityById(id: number): Promise<CityResponse> {
     return this.makeRequest<CityResponse>(`${this.baseUrl}/${id}`);
+  }
+
+  // Obtener número de soporte al cliente por cityId o teléfono del cliente
+  async getNumeroSoporteCliente(
+    cityIdOrTelefono: number | string,
+    by: 'city' | 'telefono' = 'city'
+  ): Promise<NumeroSoporteClienteResponse> {
+    const url =
+      by === 'city'
+        ? `${this.baseUrl}/${cityIdOrTelefono}/numero-soporte-cliente`
+        : `${this.baseUrl}/telefono/${encodeURIComponent(String(cityIdOrTelefono))}/numero-soporte-cliente`;
+
+    return this.makeRequest<NumeroSoporteClienteResponse>(url);
   }
 
   // Crear una nueva ciudad

@@ -21,6 +21,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 import { ordersService, CreateOrderData } from "@/services/ordersService";
 import { clientesService, Cliente } from "@/services/clientesService";
 import { citiesService } from "@/services/citiesService";
@@ -61,6 +62,9 @@ interface PackageFormData {
 const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderModalProps) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  /** Pedido creado con tarjeta pero falló la generación del link Stripe: permite reintentar sin recrear el pedido */
+  const [pendingStripeOrderId, setPendingStripeOrderId] = useState<number | null>(null);
+  const [stripeRetryLoading, setStripeRetryLoading] = useState(false);
   const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
   const [cities, setCities] = useState<Array<{ id: number; nombre: string; departamento: string }>>([]);
   const [products, setProducts] = useState<ProductFormData[]>([]);
@@ -103,6 +107,8 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
       setProducts([]);
       setPackages([]);
       setSelectedPromotion(null);
+      setPendingStripeOrderId(null);
+      setStripeRetryLoading(false);
     }
   }, [open]);
 
@@ -242,6 +248,46 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
     }
   };
 
+  const handleRetryStripeLink = async () => {
+    if (pendingStripeOrderId == null) return;
+    try {
+      setStripeRetryLoading(true);
+      const stripeRes = await ordersService.createStripePaymentLink(pendingStripeOrderId);
+      const checkoutUrl = stripeRes.data?.url ?? stripeRes.data?.stripe_link_url;
+      if (checkoutUrl) {
+        toast({
+          title: "Enlace generado",
+          description: "Ya puedes abrir el checkout de Stripe o compartirlo con el cliente.",
+          action: (
+            <ToastAction
+              altText="Abrir checkout de Stripe"
+              onClick={() => window.open(checkoutUrl, "_blank", "noopener,noreferrer")}
+            >
+              Pagar con tarjeta
+            </ToastAction>
+          ),
+        });
+      } else {
+        toast({
+          title: "Enlace generado",
+          description: "El link de pago se guardó correctamente.",
+        });
+      }
+      setPendingStripeOrderId(null);
+      onOrderCreated();
+      onOpenChange(false);
+    } catch (err) {
+      console.error("Error al reintentar link Stripe:", err);
+      toast({
+        title: "No se pudo generar el link",
+        description: err instanceof Error ? err.message : "Error desconocido",
+        variant: "destructive",
+      });
+    } finally {
+      setStripeRetryLoading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -343,6 +389,7 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
 
     try {
       setLoading(true);
+      setPendingStripeOrderId(null);
 
        const orderData: CreateOrderData = {
          fkid_cliente: parseInt(formData.fkid_cliente),
@@ -372,10 +419,61 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
 
       const response = await ordersService.createOrder(orderData);
 
-      if (response.success) {
+      if (!response.success) {
+        toast({
+          title: "Error",
+          description: "No se pudo crear el pedido",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const pedido = response.data.pedido;
+      const numeroPedido = pedido.numero_pedido;
+      const pedidoId = pedido.id;
+
+      if (orderData.metodo_pago === "tarjeta") {
+        try {
+          const stripeRes = await ordersService.createStripePaymentLink(pedidoId);
+          const checkoutUrl = stripeRes.data?.url ?? stripeRes.data?.stripe_link_url;
+          if (checkoutUrl) {
+            toast({
+              title: "Pedido creado",
+              description: `Pedido #${numeroPedido} creado. Abre el checkout para el cobro con tarjeta.`,
+              action: (
+                <ToastAction
+                  altText="Abrir checkout de Stripe"
+                  onClick={() => window.open(checkoutUrl, "_blank", "noopener,noreferrer")}
+                >
+                  Pagar con tarjeta
+                </ToastAction>
+              ),
+            });
+          } else {
+            toast({
+              title: "Pedido creado",
+              description: `Pedido #${numeroPedido} creado exitosamente`,
+            });
+          }
+          onOrderCreated();
+          onOpenChange(false);
+        } catch (stripeError) {
+          console.error("Error al generar link Stripe:", stripeError);
+          toast({
+            title: "Pedido creado, sin link de pago",
+            description:
+              stripeError instanceof Error
+                ? stripeError.message
+                : "No se pudo generar el enlace de Stripe. Puedes reintentar desde abajo.",
+            variant: "destructive",
+          });
+          setPendingStripeOrderId(pedidoId);
+          onOrderCreated();
+        }
+      } else {
         toast({
           title: "Pedido creado",
-          description: `Pedido #${response.data.pedido.numero_pedido} creado exitosamente`,
+          description: `Pedido #${numeroPedido} creado exitosamente`,
         });
         onOrderCreated();
         onOpenChange(false);
@@ -920,16 +1018,33 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
             </CardContent>
           </Card>
 
+          {pendingStripeOrderId != null && (
+            <div className="rounded-md border border-destructive/40 bg-destructive/5 p-4 space-y-3">
+              <p className="text-sm text-destructive">
+                El pedido quedó guardado, pero no se generó el enlace de pago con Stripe.
+              </p>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={handleRetryStripeLink}
+                disabled={stripeRetryLoading || loading}
+              >
+                {stripeRetryLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Reintentar generar link
+              </Button>
+            </div>
+          )}
+
           <DialogFooter>
             <Button
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
-              disabled={loading}
+              disabled={loading || stripeRetryLoading}
             >
               Cancelar
             </Button>
-            <Button type="submit" disabled={loading}>
+            <Button type="submit" disabled={loading || stripeRetryLoading}>
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Crear Pedido
             </Button>
