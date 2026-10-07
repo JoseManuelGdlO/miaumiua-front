@@ -18,6 +18,7 @@ import {
   Truck,
   Flag,
   Globe,
+  Headphones,
 } from "lucide-react";
 import { canConfigureSystem, hasSectionAccess } from "@/utils/permissions";
 import {
@@ -53,6 +54,7 @@ const menuItems = [
   { title: "Conversaciones", url: "/dashboard/conversations", icon: MessageCircle, permission: "conversations" },
   { title: "Contexto de Agentes", url: "/dashboard/agents", icon: Bot, permission: "agents" },
   { title: "Pedidos", url: "/dashboard/orders", icon: Package2, permission: "orders" },
+  { title: "Call Center", url: "/dashboard/call-center", icon: Headphones, permission: "callCenter" },
   { title: "Repartidores", url: "/dashboard/drivers", icon: Truck, permission: "drivers" },
   { title: "Planeación de Rutas", url: "/dashboard/routes", icon: Route, permission: "routes" },
   { title: "Promociones", url: "/dashboard/promotions", icon: Tag, permission: "promotions" },
