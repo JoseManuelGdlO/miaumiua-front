@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -44,23 +44,44 @@ const CallCenter = () => {
   const [reassignFor, setReassignFor] = useState<PedidoDia | null>(null);
   const [drivers, setDrivers] = useState<RepartidorOpcion[]>([]);
   const [targetDriver, setTargetDriver] = useState<string>("");
+  const [estadoBusyIds, setEstadoBusyIds] = useState<number[]>([]);
+  const listGeneration = useRef(0);
+  const latestFilters = useRef({ ciudadId, repartidorId });
+  const detailRequest = useRef(0);
+  const reassignRequest = useRef(0);
+  const reassignPedidoId = useRef<number | null>(null);
+  const estadoPending = useRef(new Set<number>());
+  latestFilters.current = { ciudadId, repartidorId };
 
   const notify = (error: unknown) => {
     toast({ title: "Call Center", description: errorText(error), variant: "destructive" });
   };
 
   const loadLists = useCallback(async () => {
+    const requestedCiudad = ciudadId;
+    const requestedRepartidor = repartidorId;
+    const filtersStillMatch = () =>
+      latestFilters.current.ciudadId === requestedCiudad && latestFilters.current.repartidorId === requestedRepartidor;
+    if (!filtersStillMatch()) return;
+    const generation = ++listGeneration.current;
     const filters = {
       ciudadId: ciudadId === "all" ? undefined : Number(ciudadId),
       repartidorId: repartidorId === "all" ? undefined : Number(repartidorId),
     };
-    const [nextSolicitudes, nextPedidos] = await Promise.all([
-      callCenterService.listSolicitudes(),
-      callCenterService.listPedidos(filters),
-    ]);
-    setSolicitudes(nextSolicitudes);
-    setPedidos(nextPedidos);
-    setSelectedId((current) => keepSelection(current));
+    const stillCurrent = () => generation === listGeneration.current && filtersStillMatch();
+    try {
+      const [nextSolicitudes, nextPedidos] = await Promise.all([
+        callCenterService.listSolicitudes(),
+        callCenterService.listPedidos(filters),
+      ]);
+      if (!stillCurrent()) return;
+      setSolicitudes(nextSolicitudes);
+      setPedidos(nextPedidos);
+      setSelectedId((current) => keepSelection(current));
+    } catch (error) {
+      if (!stillCurrent()) return;
+      throw error;
+    }
   }, [ciudadId, repartidorId]);
 
   useEffect(() => {
@@ -71,7 +92,7 @@ const CallCenter = () => {
     let stop = false;
     const run = async () => {
       try {
-        if (!stop) await loadLists();
+        await loadLists();
       } catch (error) {
         if (!stop) notify(error);
       }
@@ -80,16 +101,27 @@ const CallCenter = () => {
     const timer = setInterval(run, 5000);
     return () => {
       stop = true;
+      listGeneration.current += 1;
       clearInterval(timer);
     };
   }, [loadLists]);
 
+  const dismissDetail = () => {
+    detailRequest.current += 1;
+    setDetail(null);
+    setSelectedId(null);
+  };
+
   const openSolicitud = async (id: number) => {
-    setSelectedId(id);
-    setNota("");
+    const requestId = ++detailRequest.current;
     try {
-      setDetail(await callCenterService.getSolicitud(id));
+      const next = await callCenterService.getSolicitud(id);
+      if (requestId !== detailRequest.current) return;
+      setSelectedId(id);
+      setDetail(next);
+      setNota("");
     } catch (error) {
+      if (requestId !== detailRequest.current) return;
       notify(error);
     }
   };
@@ -111,8 +143,7 @@ const CallCenter = () => {
     try {
       await callCenterService.aprobar(detail.id);
       toast({ title: "Check-in aprobado" });
-      setDetail(null);
-      setSelectedId(null);
+      dismissDetail();
       await afterAction();
     } catch (error) {
       await afterAction(error);
@@ -127,8 +158,7 @@ const CallCenter = () => {
     try {
       await callCenterService.atender(detail.id, nota.trim() || undefined);
       toast({ title: "Solicitud atendida" });
-      setDetail(null);
-      setSelectedId(null);
+      dismissDetail();
       await afterAction();
     } catch (error) {
       await afterAction(error);
@@ -138,12 +168,24 @@ const CallCenter = () => {
   };
 
   const cambiarEstado = async (pedido: PedidoDia, estado: string) => {
+    if (estadoPending.current.has(pedido.id)) return;
+    estadoPending.current.add(pedido.id);
+    setEstadoBusyIds([...estadoPending.current]);
     try {
       await callCenterService.cambiarEstado(pedido.id, estado);
       await loadLists();
     } catch (error) {
       await afterAction(error);
+    } finally {
+      estadoPending.current.delete(pedido.id);
+      setEstadoBusyIds([...estadoPending.current]);
     }
+  };
+
+  const closeReassign = () => {
+    reassignRequest.current += 1;
+    reassignPedidoId.current = null;
+    setReassignFor(null);
   };
 
   const openReassign = async (pedido: PedidoDia) => {
@@ -151,11 +193,18 @@ const CallCenter = () => {
       toast({ title: "Ese pedido no tiene ciudad", variant: "destructive" });
       return;
     }
+    const requestId = ++reassignRequest.current;
+    reassignPedidoId.current = pedido.id;
     setReassignFor(pedido);
+    setDrivers([]);
     setTargetDriver("");
     try {
-      setDrivers(await callCenterService.listRepartidores(pedido.ciudad_id));
+      const next = await callCenterService.listRepartidores(pedido.ciudad_id);
+      if (requestId !== reassignRequest.current || reassignPedidoId.current !== pedido.id) return;
+      setDrivers(next);
     } catch (error) {
+      if (requestId !== reassignRequest.current || reassignPedidoId.current !== pedido.id) return;
+      setDrivers([]);
       notify(error);
     }
   };
@@ -166,7 +215,7 @@ const CallCenter = () => {
     try {
       await callCenterService.reasignar(reassignFor.id, Number(targetDriver));
       toast({ title: "Pedido reasignado" });
-      setReassignFor(null);
+      closeReassign();
       await loadLists();
     } catch (error) {
       await afterAction(error);
@@ -249,7 +298,7 @@ const CallCenter = () => {
                   <TableCell>{row.repartidor?.nombre_completo || "—"}</TableCell>
                   <TableCell className="space-x-2">
                     {statusOptions(row.estado).map((estado) => (
-                      <Button key={estado} variant="outline" size="sm" onClick={() => void cambiarEstado(row, estado)}>{estado}</Button>
+                      <Button key={estado} variant="outline" size="sm" disabled={estadoBusyIds.includes(row.id)} onClick={() => void cambiarEstado(row, estado)}>{estado}</Button>
                     ))}
                     <Button variant="outline" size="sm" onClick={() => void openReassign(row)}>Reasignar</Button>
                   </TableCell>
@@ -260,7 +309,7 @@ const CallCenter = () => {
         </CardContent>
       </Card>
 
-      <Dialog open={detail != null} onOpenChange={(open) => { if (!open) { setDetail(null); setSelectedId(null); } }}>
+      <Dialog open={detail != null} onOpenChange={(open) => { if (!open) dismissDetail(); }}>
         <DialogContent>
           <DialogHeader><DialogTitle>{detail ? TIPO[detail.tipo] : ""}</DialogTitle></DialogHeader>
           {detail?.tipo === "check_in" && (
@@ -277,6 +326,7 @@ const CallCenter = () => {
           {detail && detail.tipo !== "check_in" && (
             <div className="space-y-3">
               <p>{detail.repartidor?.nombre_completo}</p>
+              <p>Pedido {detail.numero_pedido || "—"}</p>
               <p>{detail.cliente}</p>
               {detail.telefono && <a href={`tel:${detail.telefono}`}>{detail.telefono}</a>}
               <p>{detail.direccion}</p>
@@ -288,7 +338,7 @@ const CallCenter = () => {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={reassignFor != null} onOpenChange={(open) => { if (!open) setReassignFor(null); }}>
+      <Dialog open={reassignFor != null} onOpenChange={(open) => { if (!open) closeReassign(); }}>
         <DialogContent>
           <DialogHeader><DialogTitle>Reasignar pedido</DialogTitle></DialogHeader>
           <Select value={targetDriver} onValueChange={setTargetDriver}>
