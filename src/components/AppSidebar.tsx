@@ -41,7 +41,6 @@ import miauMiauLogo from "/lovable-uploads/9f868334-2970-46f8-a783-9ab32ecc297b.
 
 const menuItems = [
   { title: "Dashboard", url: "/dashboard", icon: Home, permission: null },
-  { title: "Configuración QR", url: "/dashboard/configuracion-qr", icon: QrCode, permission: null },
   {
     title: "Gestión de Usuarios",
     icon: Users,
@@ -69,6 +68,7 @@ const menuItems = [
     permission: null,
     requireConfigureSystem: true,
   },
+  { title: "Configuración QR", url: "/dashboard/configuracion-qr", icon: QrCode, permission: "qr" },
   {
     title: "Configuraciones",
     icon: Settings,

@@ -152,6 +152,12 @@ export const SECTION_PERMISSIONS = {
     create: 'crear_paquetes',
     edit: 'editar_paquetes',
     delete: 'eliminar_paquetes'
+  },
+  qr: {
+    base: 'configurar_qr',
+    create: 'configurar_qr',
+    edit: 'configurar_qr',
+    delete: 'configurar_qr'
   }
 } as const;
 

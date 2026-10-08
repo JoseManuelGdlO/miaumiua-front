@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Navigate } from "react-router-dom";
 import { QRCodeSVG } from "qrcode.react";
 import { Link2, Loader2, Plus, QrCode, Trash2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { canConfigureSystem } from "@/utils/permissions";
+import { hasSectionAccess } from "@/utils/permissions";
 import {
   DEFAULT_QR_ACTIONS,
   QrActions,
@@ -70,7 +71,7 @@ const QR_ACTION_OPTIONS: { id: QrToggleId; title: string; description: string }[
 
 const ConfiguracionQr = () => {
   const { toast } = useToast();
-  const canSave = canConfigureSystem();
+  const canSave = hasSectionAccess("qr");
   const [actions, setActions] = useState<QrActions>(DEFAULT_QR_ACTIONS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -170,6 +171,10 @@ const ConfiguracionQr = () => {
       setSaving(false);
     }
   };
+
+  if (!canSave) {
+    return <Navigate to="/dashboard" replace />;
+  }
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
@@ -342,7 +347,7 @@ const ConfiguracionQr = () => {
                   </Button>
                 ) : (
                   <p className="text-sm text-muted-foreground">
-                    Solo un administrador con permiso de configurar el sistema puede guardar estos cambios.
+                    Solo un usuario con el permiso de configuración QR puede guardar estos cambios.
                   </p>
                 )}
               </>
