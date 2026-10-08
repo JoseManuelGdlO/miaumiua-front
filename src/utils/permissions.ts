@@ -46,6 +46,12 @@ export const SECTION_PERMISSIONS = {
     cancel: 'cancelar_pedidos',
     stats: 'ver_stats_pedidos'
   },
+  callCenter: {
+    base: 'operar_call_center',
+    create: 'operar_call_center',
+    edit: 'operar_call_center',
+    delete: 'operar_call_center'
+  },
   orderProducts: {
     base: 'ver_productos_pedido',
     create: 'crear_productos_pedido',
