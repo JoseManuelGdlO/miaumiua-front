@@ -18,6 +18,7 @@ import {
   Truck,
   Flag,
   Globe,
+  QrCode,
   Headphones,
 } from "lucide-react";
 import { canConfigureSystem, hasSectionAccess } from "@/utils/permissions";
@@ -69,6 +70,7 @@ const menuItems = [
     permission: null,
     requireConfigureSystem: true,
   },
+  { title: "Configuración QR", url: "/dashboard/configuracion-qr", icon: QrCode, permission: "qr" },
   {
     title: "Configuraciones",
     icon: Settings,

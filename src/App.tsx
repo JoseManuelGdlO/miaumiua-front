@@ -29,6 +29,7 @@ import Packages from "./pages/Packages";
 import Notifications from "./pages/Notifications";
 import SiteSettings from "./pages/SiteSettings";
 import Flags from "./pages/Flags";
+import ConfiguracionQr from "./pages/ConfiguracionQr";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
 import DataDeletion from "./pages/DataDeletion";
@@ -59,6 +60,7 @@ const App = () => (
             </ProtectedRoute>
           }>
             <Route index element={<Dashboard />} />
+            <Route path="configuracion-qr" element={<ConfiguracionQr />} />
             <Route path="users" element={<Users />} />
             <Route path="drivers" element={<Drivers />} />
             <Route path="roles" element={<Roles />} />
