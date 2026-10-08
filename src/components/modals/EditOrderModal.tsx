@@ -141,18 +141,21 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
   const loadOrderData = async () => {
     if (!order) return;
 
+    // La ciudad puede venir como FK o solo dentro de la relación incluida.
+    const ciudadId = order.fkid_ciudad ?? order.ciudad?.id;
+
     // Cargar datos del formulario
     setFormData({
-      fkid_cliente: order.fkid_cliente.toString(),
+      fkid_cliente: order.fkid_cliente != null ? String(order.fkid_cliente) : "",
       telefono_referencia: order.telefono_referencia || "",
       email_referencia: order.email_referencia || "",
-      fkid_ciudad: order.fkid_ciudad.toString(),
+      fkid_ciudad: ciudadId != null ? String(ciudadId) : "",
       direccion_entrega: order.direccion_entrega,
       fecha_entrega_estimada: order.fecha_entrega_estimada ? 
         new Date(order.fecha_entrega_estimada).toISOString().slice(0, 16) : "",
       metodo_pago: order.metodo_pago,
       notas: order.notas || "",
-      codigo_promocion: ""
+      codigo_promocion: order.codigo_promocion || ""
     });
 
     // Cargar cliente seleccionado
@@ -180,16 +183,12 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
           id: product.producto.id,
           nombre: product.producto.nombre,
           descripcion: product.producto.descripcion || "",
-          precio_venta: product.precio_unidad.toString(),
+          precio_venta: Number(product.precio_unidad) || 0,
           stock_inicial: 0,
-          categoria: { id: 0, nombre: "", descripcion: "" },
-          ciudad: { id: 0, nombre: "", departamento: "" },
-          peso: { id: 0, cantidad: "0", unidad_medida: "kg" },
-          proveedor: { id: 0, nombre: "", correo: "", telefono: "" },
-          sku: "",
-          costo_unitario: "0",
           stock_maximo: 0,
           stock_minimo: 0,
+          sku: "",
+          costo_unitario: 0,
           fkid_categoria: 0,
           fkid_ciudad: 0,
           fkid_peso: 0,
@@ -351,7 +350,9 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
         fkid_cliente: cliente.id.toString(),
         telefono_referencia: cliente.telefono,
         email_referencia: cliente.email || "",
-        fkid_ciudad: cliente.fkid_ciudad.toString(),
+        fkid_ciudad: cliente.fkid_ciudad != null
+          ? String(cliente.fkid_ciudad)
+          : (cliente.ciudad?.id != null ? String(cliente.ciudad.id) : prev.fkid_ciudad),
         direccion_entrega: cliente.direccion_entrega || ""
       }));
     } else {
@@ -535,6 +536,25 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
     onOpenChange(false);
   };
 
+  const cityOptions = cities.map((city) => ({
+    id: city.id,
+    nombre: city.nombre,
+    departamento: city.departamento,
+  }));
+  const savedCity = order?.ciudad;
+  if (
+    savedCity &&
+    formData.fkid_ciudad &&
+    String(savedCity.id) === formData.fkid_ciudad &&
+    !cityOptions.some((city) => String(city.id) === formData.fkid_ciudad)
+  ) {
+    cityOptions.unshift({
+      id: savedCity.id,
+      nombre: savedCity.nombre,
+      departamento: savedCity.departamento || "",
+    });
+  }
+
   if (!order) return null;
 
   return (
@@ -618,14 +638,22 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
 
                 <div className="space-y-2">
                   <Label htmlFor="fkid_ciudad">Ciudad *</Label>
-                  <Select value={formData.fkid_ciudad} onValueChange={(value) => setFormData(prev => ({ ...prev, fkid_ciudad: value }))}>
+                  <Select
+                    value={formData.fkid_ciudad || undefined}
+                    onValueChange={(value) => {
+                      // El select nativo del formulario emite "" mientras las opciones
+                      // aún no existen y eso borraba la ciudad ya guardada en el pedido.
+                      if (!value) return;
+                      setFormData(prev => ({ ...prev, fkid_ciudad: value }));
+                    }}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Selecciona una ciudad" />
                     </SelectTrigger>
                     <SelectContent>
-                      {cities.map((city) => (
+                      {cityOptions.map((city) => (
                         <SelectItem key={city.id} value={city.id.toString()}>
-                          {city.nombre} - {city.departamento}
+                          {city.departamento ? `${city.nombre} - ${city.departamento}` : city.nombre}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -719,8 +747,10 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
             </CardHeader>
             <CardContent>
               <PromotionSelector
-                selectedPromotion={selectedPromotion}
+                value={formData.codigo_promocion || undefined}
                 onValueChange={handlePromotionSelect}
+                placeholder="Buscar y seleccionar promoción..."
+                disabled={loading}
               />
               {selectedPromotion && (
                 <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
@@ -730,7 +760,9 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
                       <p className="text-sm text-green-600">Código: {selectedPromotion.codigo}</p>
                     </div>
                     <Badge variant="secondary" className="bg-green-100 text-green-800">
-                      {selectedPromotion.tipo === 'porcentaje' ? `${selectedPromotion.valor}%` : `$${selectedPromotion.valor}`}
+                      {selectedPromotion.tipo_promocion === 'porcentaje'
+                        ? `${selectedPromotion.valor_descuento}%`
+                        : `$${selectedPromotion.valor_descuento}`}
                     </Badge>
                   </div>
                 </div>
@@ -1021,7 +1053,7 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
                 {selectedPromotion && (
                   <div className="flex justify-between text-green-600">
                     <span>Descuento ({selectedPromotion.nombre}):</span>
-                    <span>-${(calculateSubtotal() * (selectedPromotion.tipo === 'porcentaje' ? selectedPromotion.valor / 100 : selectedPromotion.valor / calculateSubtotal())).toFixed(2)}</span>
+                    <span>-${(calculateSubtotal() * (selectedPromotion.tipo_promocion === 'porcentaje' ? selectedPromotion.valor_descuento / 100 : (calculateSubtotal() > 0 ? selectedPromotion.valor_descuento / calculateSubtotal() : 0))).toFixed(2)}</span>
                   </div>
                 )}
                 <div className="flex justify-between font-bold text-lg border-t pt-2">

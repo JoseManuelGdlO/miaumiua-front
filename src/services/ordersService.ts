@@ -13,6 +13,7 @@ export interface Order {
   fecha_entrega_estimada?: string;
   metodo_pago: 'efectivo' | 'tarjeta' | 'transferencia' | 'pago_movil';
   notas?: string;
+  codigo_promocion?: string | null;
   estado: 'pendiente' | 'confirmado' | 'en_preparacion' | 'en_camino' | 'entregado' | 'no_entregado' | 'cancelado';
   subtotal: number;
   descuento_total: number;
@@ -105,6 +106,7 @@ export interface UpdateOrderData {
   fecha_entrega_estimada?: string;
   metodo_pago?: 'efectivo' | 'tarjeta' | 'transferencia' | 'pago_movil';
   notas?: string;
+  codigo_promocion?: string;
   productos?: Array<{
     id?: number;
     fkid_producto: number;
