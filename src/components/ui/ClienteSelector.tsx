@@ -60,6 +60,7 @@ const ClienteSelector = ({
   const [cities, setCities] = useState<Array<{ id: number; nombre: string; departamento: string }>>([]);
   const [creating, setCreating] = useState(false);
   const searchTimeoutRef = useRef<NodeJS.Timeout>();
+  const loadRequestRef = useRef(0);
 
   const [newClienteData, setNewClienteData] = useState({
     nombre_completo: "",
@@ -91,23 +92,50 @@ const ClienteSelector = ({
     };
   }, [searchTerm]);
 
-  // Cargar cliente seleccionado cuando cambie el value
+  // Cargar cliente seleccionado cuando cambie el value.
+  // Si el value se limpia mientras la petición sigue en vuelo, se ignora la respuesta.
   useEffect(() => {
-    if (value) {
-      const clienteId = typeof value === 'string' ? parseInt(value) : value;
-      if (clienteId && (!selectedCliente || selectedCliente.id !== clienteId)) {
-        // Si el cliente ya está en la lista de resultados, usarlo
-        const clienteEnLista = clientes.find(c => c.id === clienteId);
-        if (clienteEnLista) {
-          setSelectedCliente(clienteEnLista);
-        } else {
-          // Si no está en la lista actual, cargarlo por separado
-          loadClienteById(clienteId);
+    const requestId = ++loadRequestRef.current;
+
+    if (!value) {
+      setSelectedCliente(null);
+      return;
+    }
+
+    const clienteId = typeof value === "string" ? parseInt(value, 10) : value;
+    if (!clienteId || Number.isNaN(clienteId)) {
+      setSelectedCliente(null);
+      return;
+    }
+
+    if (selectedCliente?.id === clienteId) {
+      return;
+    }
+
+    const clienteEnLista = clientes.find((c) => c.id === clienteId);
+    if (clienteEnLista) {
+      setSelectedCliente(clienteEnLista);
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await clientesService.getClienteById(clienteId);
+        if (cancelled || requestId !== loadRequestRef.current) return;
+        if (response.success) {
+          setSelectedCliente(response.data.cliente);
+        }
+      } catch (error) {
+        if (!cancelled && requestId === loadRequestRef.current) {
+          console.error("Error al cargar cliente:", error);
         }
       }
-    } else if (!value) {
-      setSelectedCliente(null);
-    }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
@@ -133,17 +161,6 @@ const ClienteSelector = ({
       setClientes([]);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const loadClienteById = async (id: number) => {
-    try {
-      const response = await clientesService.getClienteById(id);
-      if (response.success) {
-        setSelectedCliente(response.data.cliente);
-      }
-    } catch (error) {
-      console.error('Error al cargar cliente:', error);
     }
   };
 

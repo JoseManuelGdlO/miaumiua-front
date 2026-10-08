@@ -59,6 +59,18 @@ interface PackageFormData {
   paquete?: Package; // Para almacenar la información del paquete seleccionado
 }
 
+const EMPTY_ORDER_FORM = {
+  fkid_cliente: "",
+  telefono_referencia: "",
+  email_referencia: "",
+  direccion_entrega: "",
+  fkid_ciudad: "",
+  fecha_entrega_estimada: "",
+  metodo_pago: "",
+  notas: "",
+  codigo_promocion: ""
+};
+
 const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderModalProps) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
@@ -71,44 +83,29 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
   const [packages, setPackages] = useState<PackageFormData[]>([]);
   const [selectedPromotion, setSelectedPromotion] = useState<Promotion | null>(null);
   
-  const [formData, setFormData] = useState({
-    fkid_cliente: "",
-    telefono_referencia: "",
-    email_referencia: "",
-    direccion_entrega: "",
-    fkid_ciudad: "",
-    fecha_entrega_estimada: "",
-    metodo_pago: "",
-    notas: "",
-    codigo_promocion: ""
-  });
+  const [formData, setFormData] = useState(EMPTY_ORDER_FORM);
+  const [wasOpen, setWasOpen] = useState(open);
 
-  // Cargar datos al abrir el modal
-  useEffect(() => {
+  // Al pasar de cerrado a abierto, limpiar antes de pintar el contenido.
+  // Un useEffect llega tarde: el selector ya montó con el cliente anterior
+  // y su petición asíncrona lo vuelve a dejar seleccionado.
+  if (open !== wasOpen) {
+    setWasOpen(open);
     if (open) {
-      loadCities();
-    }
-  }, [open]);
-
-  // Reset form cuando se abre el modal
-  useEffect(() => {
-    if (open) {
-      setFormData({
-        fkid_cliente: "",
-        telefono_referencia: "",
-        email_referencia: "",
-        direccion_entrega: "",
-        fkid_ciudad: "",
-        fecha_entrega_estimada: "",
-        metodo_pago: "",
-        notas: "",
-        codigo_promocion: ""
-      });
+      setFormData(EMPTY_ORDER_FORM);
+      setSelectedCliente(null);
       setProducts([]);
       setPackages([]);
       setSelectedPromotion(null);
       setPendingStripeOrderId(null);
       setStripeRetryLoading(false);
+    }
+  }
+
+  // Cargar datos al abrir el modal
+  useEffect(() => {
+    if (open) {
+      loadCities();
     }
   }, [open]);
 
