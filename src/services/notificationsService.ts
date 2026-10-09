@@ -130,16 +130,21 @@ export interface NotificationAction {
 export interface Notification {
   id: string;
   type: 'stock' | 'order' | 'promotion' | 'route' | 'error' | 'conversation';
+  tipo?: string;
   title: string;
   message: string;
   timestamp: string;
   priority: 'high' | 'medium' | 'low' | 'urgent';
   read: boolean;
+  preserveUnread?: boolean;
   actionUrl?: string;
   action?: NotificationAction;
   errorDetails?: string;
   conversationId?: string;
 }
+
+export const checkInValidationPath = (id: string | number): string =>
+  `/dashboard/call-center?tab=validacion&solicitud=${id}`;
 
 const CONVERSATION_DETAIL_PATH = '/dashboard/conversations';
 
@@ -147,6 +152,10 @@ export const getConversationNavigationPath = (conversacionId: string | number): 
   `${CONVERSATION_DETAIL_PATH}/${conversacionId}`;
 
 export const resolveNotificationNavigationPath = (notification: Notification): string | undefined => {
+  if (notification.tipo === 'check_in') {
+    return checkInValidationPath(notification.id);
+  }
+
   const accion = notification.action;
   if (accion?.tipo === 'ir_conversacion') {
     const conversacionId = accion.conversacionId ?? notification.conversationId;
@@ -177,7 +186,7 @@ export const handleNotificationNavigation = (
   }
 
   options?.onClose?.();
-  if (!notification.read) {
+  if (!notification.read && !notification.preserveUnread) {
     options?.markAsRead?.(notification.id);
   }
   navigate(path);
@@ -287,6 +296,8 @@ class NotificationsService {
     const datos = backendNotif.datos || {};
     const fechaHora = `${backendNotif.fecha_creacion}T${backendNotif.hora_creacion}`;
     const conversationId = this.resolveConversationId(datos);
+    const repartidorNombre = typeof datos.repartidor_nombre === 'string' ? datos.repartidor_nombre.trim() : '';
+    const isCheckIn = datos.tipo === 'check_in';
     
     // Mapear prioridad del backend al frontend
     const priorityMap: Record<string, 'high' | 'medium' | 'low' | 'urgent'> = {
@@ -299,12 +310,16 @@ class NotificationsService {
     const notification: Notification = {
       id: backendNotif.id.toString(),
       type: this.resolveNotificationType(datos),
-      title: backendNotif.nombre,
-      message: backendNotif.descripcion || '',
+      tipo: datos.tipo,
+      title: isCheckIn && repartidorNombre && !backendNotif.nombre.includes(repartidorNombre)
+        ? `Validar carga de ${repartidorNombre}`
+        : backendNotif.nombre,
+      message: backendNotif.descripcion || repartidorNombre,
       timestamp: fechaHora,
       priority: priorityMap[backendNotif.prioridad] || 'medium',
       read: backendNotif.leida,
-      actionUrl: datos.actionUrl,
+      preserveUnread: isCheckIn,
+      actionUrl: isCheckIn ? checkInValidationPath(backendNotif.id) : datos.actionUrl,
       action: datos.accion,
       errorDetails: datos.errorDetails,
       conversationId,

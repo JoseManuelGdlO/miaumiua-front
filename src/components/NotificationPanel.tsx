@@ -126,7 +126,7 @@ const NotificationPanel = () => {
     try {
       await notificationsService.markAllAsRead();
       setNotifications(prev =>
-        prev.map(n => ({ ...n, read: true }))
+        prev.map(n => n.preserveUnread ? n : { ...n, read: true })
       );
     } catch (error) {
       console.error('Error al marcar todas como leídas:', error);

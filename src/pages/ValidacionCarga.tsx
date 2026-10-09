@@ -1,12 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Check, ChevronsUpDown, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -72,13 +70,11 @@ const ValidacionCarga = ({ solicitudId: solicitudIdProp, embedded = false, onBac
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
-  const [comboOpen, setComboOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<InventarioHit[]>([]);
   const [searching, setSearching] = useState(false);
   const [picked, setPicked] = useState<InventarioHit | null>(null);
   const [cantidad, setCantidad] = useState("1");
-  const [precio, setPrecio] = useState("0");
 
   useEffect(() => {
     if (!Number.isFinite(solicitudId)) {
@@ -108,11 +104,6 @@ const ValidacionCarga = ({ solicitudId: solicitudIdProp, embedded = false, onBac
   useEffect(() => {
     if (!modalOpen) return;
     const term = query.trim();
-    if (term.length < 2) {
-      setHits([]);
-      setSearching(false);
-      return;
-    }
     const requestId = ++searchRequest.current;
     setSearching(true);
     const timer = setTimeout(() => {
@@ -125,7 +116,7 @@ const ValidacionCarga = ({ solicitudId: solicitudIdProp, embedded = false, onBac
         setHits([]);
         setSearching(false);
       });
-    }, 300);
+    }, term ? 300 : 0);
     return () => clearTimeout(timer);
   }, [query, modalOpen]);
 
@@ -138,8 +129,11 @@ const ValidacionCarga = ({ solicitudId: solicitudIdProp, embedded = false, onBac
 
   const payloadExtras = () => extras.map((linea) => {
     const amount = Number(linea.precio);
-    if (!Number.isInteger(linea.cantidad) || linea.cantidad < 1 || !Number.isFinite(amount) || amount < 0) {
-      throw new Error("Revisa la cantidad y el precio de la carga extra");
+    if (!Number.isInteger(linea.cantidad) || linea.cantidad < 1) {
+      throw new Error("Revisa la cantidad de la carga extra");
+    }
+    if (!Number.isFinite(amount) || amount < 0) {
+      throw new Error("El producto no tiene precio de venta");
     }
     return {
       fkid_producto: linea.fkid_producto,
@@ -181,25 +175,17 @@ const ValidacionCarga = ({ solicitudId: solicitudIdProp, embedded = false, onBac
     setQuery("");
     setHits([]);
     setSearching(false);
-    setComboOpen(false);
     setPicked(null);
     setCantidad("1");
-    setPrecio("0");
     setModalOpen(true);
-  };
-
-  const chooseHit = (hit: InventarioHit) => {
-    setPicked(hit);
-    setPrecio(String(hit.precio_venta ?? 0));
-    setComboOpen(false);
   };
 
   const addExtra = () => {
     if (!picked) return;
     const qty = Number(cantidad);
-    const amount = Number(precio);
+    const amount = Number(picked.precio_venta);
     if (!Number.isInteger(qty) || qty < 1 || !Number.isFinite(amount) || amount < 0) {
-      notify(new Error("Revisa la cantidad y el precio de la carga extra"));
+      notify(new Error("Revisa la cantidad de la carga extra"));
       return;
     }
     setExtras((list) => {
@@ -308,19 +294,7 @@ const ValidacionCarga = ({ solicitudId: solicitudIdProp, embedded = false, onBac
                       }}
                     />
                   </TableCell>
-                  <TableCell>
-                    <Input
-                      aria-label={`Precio de ${linea.nombre}`}
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      value={linea.precio}
-                      onChange={(event) => {
-                        const next = event.target.value;
-                        setExtras((list) => list.map((row) => row.key === linea.key ? { ...row, precio: next } : row));
-                      }}
-                    />
-                  </TableCell>
+                  <TableCell>${formatMoney(Number(linea.precio) || 0)}</TableCell>
                   <TableCell>${formatMoney(lineTotal(linea.cantidad, Number(linea.precio) || 0))}</TableCell>
                   <TableCell>
                     <Button variant="outline" onClick={() => setExtras((list) => list.filter((row) => row.key !== linea.key))}>Quitar</Button>
@@ -340,82 +314,56 @@ const ValidacionCarga = ({ solicitudId: solicitudIdProp, embedded = false, onBac
         <DialogContent>
           <DialogHeader><DialogTitle>Agregar producto extra</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <Popover modal open={comboOpen} onOpenChange={setComboOpen}>
-              <PopoverTrigger asChild>
-                <Button
+            <Input
+              aria-label="Filtrar inventario"
+              placeholder="Filtrar inventario"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+            <div className="max-h-64 space-y-1 overflow-y-auto rounded-md border p-1" role="listbox" aria-label="Productos del inventario">
+              {searching && hits.length === 0 ? (
+                <div className="flex items-center justify-center py-6 text-sm text-muted-foreground">
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Cargando inventario…
+                </div>
+              ) : hits.length === 0 ? (
+                <p className="py-6 text-center text-sm text-muted-foreground">No hay productos</p>
+              ) : hits.map((hit) => (
+                <button
+                  key={hit.id}
                   type="button"
-                  variant="outline"
-                  role="combobox"
-                  aria-expanded={comboOpen}
-                  aria-label="Buscar producto"
-                  className="w-full justify-between"
-                >
-                  {picked ? (
-                    <span className="truncate">
-                      {picked.nombre} · ${formatMoney(Number(picked.precio_venta) || 0)}
-                    </span>
-                  ) : (
-                    <span className="font-normal text-muted-foreground">Buscar en inventario</span>
+                  role="option"
+                  aria-selected={picked?.id === hit.id}
+                  onClick={() => setPicked(hit)}
+                  className={cn(
+                    "flex w-full items-center justify-between rounded-sm px-2 py-2 text-left text-sm hover:bg-accent",
+                    picked?.id === hit.id && "bg-accent"
                   )}
-                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="z-[60] w-[var(--radix-popover-trigger-width)] p-0" align="start">
-                <Command shouldFilter={false}>
-                  <CommandInput
-                    placeholder="Buscar en inventario"
-                    value={query}
-                    onValueChange={setQuery}
-                  />
-                  <CommandList>
-                    {searching ? (
-                      <div className="flex items-center justify-center py-6 text-sm text-muted-foreground">
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Buscando…
-                      </div>
-                    ) : query.trim().length < 2 ? (
-                      <CommandEmpty>Escribe al menos 2 letras</CommandEmpty>
-                    ) : hits.length === 0 ? (
-                      <CommandEmpty>No se encontraron productos</CommandEmpty>
-                    ) : (
-                      <CommandGroup>
-                        {hits.map((hit) => (
-                          <CommandItem
-                            key={hit.id}
-                            value={String(hit.id)}
-                            onSelect={() => chooseHit(hit)}
-                          >
-                            <Check className={cn("mr-2 h-4 w-4", picked?.id === hit.id ? "opacity-100" : "opacity-0")} />
-                            <span className="truncate">{hit.nombre}</span>
-                            <span className="ml-auto text-xs text-muted-foreground">
-                              ${formatMoney(Number(hit.precio_venta) || 0)}
-                            </span>
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    )}
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
-            <div className="flex gap-2">
+                >
+                  <span className="truncate">{hit.nombre}</span>
+                  <span className="ml-3 shrink-0 text-xs text-muted-foreground">
+                    ${formatMoney(Number(hit.precio_venta) || 0)}
+                  </span>
+                </button>
+              ))}
+            </div>
+            <div className="space-y-1">
+              <label htmlFor="cantidad-extra" className="text-sm font-medium">Cantidad</label>
               <Input
+                id="cantidad-extra"
                 aria-label="Cantidad extra"
                 type="number"
                 min={1}
                 value={cantidad}
                 onChange={(event) => setCantidad(event.target.value)}
               />
-              <Input
-                aria-label="Precio extra"
-                type="number"
-                min={0}
-                step="0.01"
-                value={precio}
-                onChange={(event) => setPrecio(event.target.value)}
-              />
             </div>
-            <Button disabled={!picked} onClick={addExtra}>Agregar</Button>
+            {picked && (
+              <p className="text-sm text-muted-foreground">
+                {picked.nombre} se carga a ${formatMoney(Number(picked.precio_venta) || 0)}
+              </p>
+            )}
+            <Button disabled={!picked} onClick={addExtra}>Aceptar</Button>
           </div>
         </DialogContent>
       </Dialog>

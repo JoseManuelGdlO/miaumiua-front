@@ -233,7 +233,7 @@ const Notifications = () => {
     try {
       await notificationsService.markAllAsRead();
       setNotifications(prev =>
-        prev.map(n => ({ ...n, read: true }))
+        prev.map(n => n.preserveUnread ? n : { ...n, read: true })
       );
       toast({
         title: 'Todas las notificaciones marcadas como leídas',
