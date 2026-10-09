@@ -11,6 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { canConfigureSystem } from "@/utils/permissions";
 import { siteSettingsService } from "@/services/siteSettingsService";
@@ -22,9 +23,11 @@ const SiteSettings = () => {
   const [facebookUrl, setFacebookUrl] = useState("");
   const [tiktokUrl, setTiktokUrl] = useState("");
   const [mercadolibreUrl, setMercadolibreUrl] = useState("");
+  const [maintenancePlaceholder, setMaintenancePlaceholder] = useState(true);
   const [loading, setLoading] = useState(true);
   const [savingVideo, setSavingVideo] = useState(false);
   const [savingLinks, setSavingLinks] = useState(false);
+  const [savingMaintenance, setSavingMaintenance] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -38,6 +41,7 @@ const SiteSettings = () => {
           setFacebookUrl(d.socialFacebookUrl ?? "");
           setTiktokUrl(d.socialTiktokUrl ?? "");
           setMercadolibreUrl(d.mercadolibreUrl ?? "");
+          setMaintenancePlaceholder(d.maintenancePlaceholder !== false);
         }
       } catch (e) {
         if (!cancelled) {
@@ -57,6 +61,33 @@ const SiteSettings = () => {
       cancelled = true;
     };
   }, []);
+
+  const handleMaintenanceChange = async (enabled: boolean) => {
+    const previous = maintenancePlaceholder;
+    setMaintenancePlaceholder(enabled);
+    try {
+      setSavingMaintenance(true);
+      const res = await siteSettingsService.updateMaintenancePlaceholder(enabled);
+      if (res.success && res.data) {
+        setMaintenancePlaceholder(res.data.maintenancePlaceholder !== false);
+      }
+      toast({
+        title: "Guardado",
+        description: res.message ?? (enabled
+          ? "La página principal muestra el aviso"
+          : "La página principal muestra el sitio normal"),
+      });
+    } catch (err) {
+      setMaintenancePlaceholder(previous);
+      toast({
+        title: "Error al guardar",
+        description: err instanceof Error ? err.message : "No se pudo actualizar",
+        variant: "destructive",
+      });
+    } finally {
+      setSavingMaintenance(false);
+    }
+  };
 
   const handleSubmitVideo = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -136,6 +167,33 @@ const SiteSettings = () => {
           </p>
         </div>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Estamos trabajando en la aplicación</CardTitle>
+          <CardDescription>
+            Actívalo para mostrar el aviso en la página principal. Apágalo para mostrar el sitio normal.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="flex items-center gap-2 text-muted-foreground py-4">
+              <Loader2 className="h-5 w-5 animate-spin" />
+              Cargando…
+            </div>
+          ) : (
+            <div className="flex items-center justify-between gap-4">
+              <Label htmlFor="maintenance-placeholder">Mostrar el aviso</Label>
+              <Switch
+                id="maintenance-placeholder"
+                checked={maintenancePlaceholder}
+                disabled={savingMaintenance}
+                onCheckedChange={handleMaintenanceChange}
+              />
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

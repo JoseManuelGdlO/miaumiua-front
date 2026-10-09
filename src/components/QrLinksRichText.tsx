@@ -1,6 +1,23 @@
-import { useEffect, useRef } from "react";
-import { Bold, Italic, Link2, List, Underline } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import {
+  AlignCenter,
+  AlignLeft,
+  AlignRight,
+  Bold,
+  Heading2,
+  Heading3,
+  Image as ImageIcon,
+  Italic,
+  Link2,
+  List,
+  ListOrdered,
+  RemoveFormatting,
+  Strikethrough,
+  Underline,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import { siteSettingsService } from "@/services/siteSettingsService";
 
 interface QrLinksRichTextProps {
   value: string;
@@ -27,8 +44,11 @@ const SIZE_OPTIONS = [
 ];
 
 const QrLinksRichText = ({ value, disabled, onChange }: QrLinksRichTextProps) => {
+  const { toast } = useToast();
   const editorRef = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const selectionRef = useRef<Range | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   useEffect(() => {
     const id = "qr-editor-fonts";
@@ -73,6 +93,23 @@ const QrLinksRichText = ({ value, disabled, onChange }: QrLinksRichTextProps) =>
     document.execCommand(command, false, argument);
     onChange(editorRef.current?.innerHTML ?? "");
     saveSelection();
+  };
+
+  const insertImage = async (file: File) => {
+    if (disabled || uploadingImage) return;
+    setUploadingImage(true);
+    try {
+      const url = await siteSettingsService.uploadQrImage(file);
+      apply("insertImage", url);
+    } catch (error) {
+      toast({
+        title: "No se pudo subir la foto",
+        description: error instanceof Error ? error.message : "Intenta con otra imagen",
+        variant: "destructive",
+      });
+    } finally {
+      setUploadingImage(false);
+    }
   };
 
   const addLink = () => {
@@ -124,6 +161,18 @@ const QrLinksRichText = ({ value, disabled, onChange }: QrLinksRichTextProps) =>
             </option>
           ))}
         </select>
+        <label className="inline-flex h-8 items-center gap-1 rounded-md border bg-background px-2 text-xs">
+          Color
+          <input
+            type="color"
+            aria-label="Color del texto"
+            disabled={disabled}
+            defaultValue="#1c1917"
+            className="h-6 w-8 cursor-pointer border-0 bg-transparent p-0"
+            onMouseDown={saveSelection}
+            onChange={(event) => apply("foreColor", event.target.value)}
+          />
+        </label>
         <Button type="button" size="sm" variant="outline" disabled={disabled} onMouseDown={(event) => event.preventDefault()} onClick={() => apply("bold")} aria-label="Negrita">
           <Bold className="h-4 w-4" />
         </Button>
@@ -133,11 +182,60 @@ const QrLinksRichText = ({ value, disabled, onChange }: QrLinksRichTextProps) =>
         <Button type="button" size="sm" variant="outline" disabled={disabled} onMouseDown={(event) => event.preventDefault()} onClick={() => apply("underline")} aria-label="Subrayado">
           <Underline className="h-4 w-4" />
         </Button>
+        <Button type="button" size="sm" variant="outline" disabled={disabled} onMouseDown={(event) => event.preventDefault()} onClick={() => apply("strikeThrough")} aria-label="Tachado">
+          <Strikethrough className="h-4 w-4" />
+        </Button>
         <Button type="button" size="sm" variant="outline" disabled={disabled} onMouseDown={(event) => event.preventDefault()} onClick={() => apply("insertUnorderedList")} aria-label="Lista">
           <List className="h-4 w-4" />
         </Button>
+        <Button type="button" size="sm" variant="outline" disabled={disabled} onMouseDown={(event) => event.preventDefault()} onClick={() => apply("insertOrderedList")} aria-label="Lista numerada">
+          <ListOrdered className="h-4 w-4" />
+        </Button>
+        <Button type="button" size="sm" variant="outline" disabled={disabled} onMouseDown={(event) => event.preventDefault()} onClick={() => apply("justifyLeft")} aria-label="Alinear a la izquierda">
+          <AlignLeft className="h-4 w-4" />
+        </Button>
+        <Button type="button" size="sm" variant="outline" disabled={disabled} onMouseDown={(event) => event.preventDefault()} onClick={() => apply("justifyCenter")} aria-label="Centrar">
+          <AlignCenter className="h-4 w-4" />
+        </Button>
+        <Button type="button" size="sm" variant="outline" disabled={disabled} onMouseDown={(event) => event.preventDefault()} onClick={() => apply("justifyRight")} aria-label="Alinear a la derecha">
+          <AlignRight className="h-4 w-4" />
+        </Button>
+        <Button type="button" size="sm" variant="outline" disabled={disabled} onMouseDown={(event) => event.preventDefault()} onClick={() => apply("formatBlock", "h2")} aria-label="Título">
+          <Heading2 className="h-4 w-4" />
+        </Button>
+        <Button type="button" size="sm" variant="outline" disabled={disabled} onMouseDown={(event) => event.preventDefault()} onClick={() => apply("formatBlock", "h3")} aria-label="Subtítulo">
+          <Heading3 className="h-4 w-4" />
+        </Button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/jpeg,image/png,image/gif,image/webp"
+          className="hidden"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            event.target.value = "";
+            if (file) void insertImage(file);
+          }}
+        />
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={disabled || uploadingImage}
+          onMouseDown={(event) => {
+            event.preventDefault();
+            saveSelection();
+          }}
+          onClick={() => fileRef.current?.click()}
+          aria-label="Insertar foto"
+        >
+          <ImageIcon className="h-4 w-4" />
+        </Button>
         <Button type="button" size="sm" variant="outline" disabled={disabled} onMouseDown={(event) => event.preventDefault()} onClick={addLink} aria-label="Insertar enlace">
           <Link2 className="h-4 w-4" />
+        </Button>
+        <Button type="button" size="sm" variant="outline" disabled={disabled} onMouseDown={(event) => event.preventDefault()} onClick={() => apply("removeFormat")} aria-label="Quitar formato">
+          <RemoveFormatting className="h-4 w-4" />
         </Button>
       </div>
       <div
@@ -147,7 +245,7 @@ const QrLinksRichText = ({ value, disabled, onChange }: QrLinksRichTextProps) =>
         aria-multiline="true"
         aria-label="Texto de la sección de enlaces"
         data-placeholder="Miau Miau. Elige lo que quieres ver"
-        className="min-h-28 rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring empty:before:text-muted-foreground empty:before:content-[attr(data-placeholder)] [&_a]:text-primary [&_a]:underline [&_ul]:list-disc [&_ul]:pl-5"
+        className="min-h-[40vh] w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring empty:before:text-muted-foreground empty:before:content-[attr(data-placeholder)] [&_a]:text-primary [&_a]:underline [&_h2]:text-3xl [&_h2]:font-black [&_h3]:text-xl [&_h3]:font-bold [&_img]:mx-auto [&_img]:my-3 [&_img]:max-h-80 [&_img]:max-w-full [&_img]:rounded-lg [&_ol]:list-decimal [&_ol]:pl-5 [&_s]:line-through [&_strike]:line-through [&_ul]:list-disc [&_ul]:pl-5"
         onMouseUp={saveSelection}
         onKeyUp={saveSelection}
         onInput={() => onChange(editorRef.current?.innerHTML ?? "")}
