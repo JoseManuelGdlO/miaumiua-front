@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Navigate, Routes, Route, useParams } from "react-router-dom";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import Login from "./pages/Login";
@@ -18,7 +18,11 @@ import Cities from "./pages/Cities";
 import Customers from "./pages/Customers";
 import Orders from "./pages/Orders";
 import CallCenter from "./pages/CallCenter";
-import ValidacionCarga from "./pages/ValidacionCarga";
+
+function ValidacionRedirect() {
+  const { id } = useParams();
+  return <Navigate to={`/dashboard/call-center?tab=validacion&solicitud=${id ?? ""}`} replace />;
+}
 import RouteManagement from "./pages/RouteManagement";
 import Agents from "./pages/Agents";
 import Conversations from "./pages/Conversations";
@@ -69,7 +73,7 @@ const App = () => (
             <Route path="conversations" element={<Conversations />} />
             <Route path="conversations/:id" element={<ConversationDetail />} />
             <Route path="orders" element={<Orders />} />
-            <Route path="call-center/validacion/:id" element={<ValidacionCarga />} />
+            <Route path="call-center/validacion/:id" element={<ValidacionRedirect />} />
             <Route path="call-center" element={<CallCenter />} />
             <Route path="routes" element={<RouteManagement />} />
             <Route path="promotions" element={<Promotions />} />

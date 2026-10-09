@@ -1,16 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { citiesService, type City } from "@/services/citiesService";
+import ValidacionCarga from "@/pages/ValidacionCarga";
 import {
   callCenterService,
+  type CargaValidada,
   type PedidoDia,
   type RepartidorOpcion,
   type Solicitud,
@@ -31,9 +34,16 @@ function errorText(error: unknown) {
   return error instanceof Error ? error.message : "No se pudo completar la solicitud";
 }
 
+function formatMoney(value: number) {
+  return value.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 const CallCenter = () => {
   const { toast } = useToast();
-  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab = searchParams.get("tab") === "validacion" ? "validacion" : "operacion";
+  const solicitudParam = Number(searchParams.get("solicitud"));
+  const cargaId = Number.isFinite(solicitudParam) && solicitudParam > 0 ? solicitudParam : null;
   const [solicitudes, setSolicitudes] = useState<Solicitud[]>([]);
   const [pedidos, setPedidos] = useState<PedidoDia[]>([]);
   const [cities, setCities] = useState<City[]>([]);
@@ -47,6 +57,9 @@ const CallCenter = () => {
   const [drivers, setDrivers] = useState<RepartidorOpcion[]>([]);
   const [targetDriver, setTargetDriver] = useState<string>("");
   const [estadoBusyIds, setEstadoBusyIds] = useState<number[]>([]);
+  const [historial, setHistorial] = useState<CargaValidada[]>([]);
+  const [historialId, setHistorialId] = useState<number | null>(null);
+  const [historialTick, setHistorialTick] = useState(0);
   const listGeneration = useRef(0);
   const latestFilters = useRef({ ciudadId, repartidorId });
   const detailRequest = useRef(0);
@@ -86,9 +99,35 @@ const CallCenter = () => {
     }
   }, [ciudadId, repartidorId]);
 
+  const openValidacion = (id: number) => {
+    setSearchParams({ tab: "validacion", solicitud: String(id) });
+  };
+
+  const closeValidacion = () => {
+    setSearchParams({ tab: "validacion" });
+  };
+
+  const onTab = (value: string) => {
+    if (value === "validacion") setSearchParams({ tab: "validacion" });
+    else setSearchParams({});
+  };
+
   useEffect(() => {
     void citiesService.getActiveCities().then((response) => setCities(response.data.cities)).catch(notify);
   }, []);
+
+  useEffect(() => {
+    if (tab !== "validacion") return;
+    let stop = false;
+    void callCenterService.listCargasValidadas().then((rows) => {
+      if (!stop) setHistorial(rows);
+    }).catch((error) => {
+      if (!stop) toast({ title: "Call Center", description: errorText(error), variant: "destructive" });
+    });
+    return () => {
+      stop = true;
+    };
+  }, [tab, historialTick, toast]);
 
   useEffect(() => {
     let stop = false;
@@ -215,8 +254,17 @@ const CallCenter = () => {
     new Map(pedidos.filter((row) => row.repartidor).map((row) => [row.repartidor!.id, row.repartidor!])).values()
   );
 
+  const pendientes = solicitudes.filter((row) => row.tipo === "check_in");
+  const historialAbierto = historial.find((row) => row.id === historialId) || null;
+
   return (
     <div className="space-y-6 p-6">
+      <Tabs value={tab} onValueChange={onTab}>
+        <TabsList>
+          <TabsTrigger value="operacion">Operación</TabsTrigger>
+          <TabsTrigger value="validacion">Validación de carga</TabsTrigger>
+        </TabsList>
+        <TabsContent value="operacion" className="space-y-6">
       <Card>
         <CardHeader><CardTitle>Cola</CardTitle></CardHeader>
         <CardContent>
@@ -235,7 +283,7 @@ const CallCenter = () => {
                   key={row.id}
                   onClick={() => {
                     if (row.tipo === "check_in") {
-                      navigate(`/dashboard/call-center/validacion/${row.id}`);
+                      openValidacion(row.id);
                       return;
                     }
                     void openSolicitud(row.id);
@@ -338,6 +386,104 @@ const CallCenter = () => {
           <Button disabled={busy || !targetDriver} onClick={() => void confirmReassign()}>Mover</Button>
         </DialogContent>
       </Dialog>
+        </TabsContent>
+        <TabsContent value="validacion" className="space-y-6">
+          {cargaId ? (
+            <ValidacionCarga
+              key={cargaId}
+              solicitudId={cargaId}
+              embedded
+              onBack={closeValidacion}
+              onApproved={() => {
+                closeValidacion();
+                setHistorialTick((current) => current + 1);
+                void loadLists().catch(notify);
+              }}
+            />
+          ) : (
+            <Card>
+              <CardHeader><CardTitle>Por validar</CardTitle></CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Repartidor</TableHead>
+                      <TableHead>Fecha</TableHead>
+                      <TableHead>Hora</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {pendientes.length === 0 ? (
+                      <TableRow><TableCell colSpan={3}>No hay cargas esperando validación</TableCell></TableRow>
+                    ) : pendientes.map((row) => (
+                      <TableRow key={row.id} onClick={() => openValidacion(row.id)} className="cursor-pointer">
+                        <TableCell>{row.repartidor?.nombre_completo || "—"}</TableCell>
+                        <TableCell>{row.fecha}</TableCell>
+                        <TableCell>{row.hora}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
+          <Card>
+            <CardHeader><CardTitle>Histórico</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Repartidor</TableHead>
+                    <TableHead>Fecha</TableHead>
+                    <TableHead>Hora</TableHead>
+                    <TableHead>Dinero esperado</TableHead>
+                    <TableHead>Validó</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {historial.length === 0 ? (
+                    <TableRow><TableCell colSpan={5}>Aún no hay cargas validadas</TableCell></TableRow>
+                  ) : historial.map((row) => (
+                    <TableRow
+                      key={row.id}
+                      onClick={() => setHistorialId((current) => current === row.id ? null : row.id)}
+                      className="cursor-pointer"
+                    >
+                      <TableCell>{row.repartidor?.nombre_completo || "—"}</TableCell>
+                      <TableCell>{row.fecha}</TableCell>
+                      <TableCell>{row.hora}</TableCell>
+                      <TableCell>${formatMoney(Number(row.dinero_esperado) || 0)}</TableCell>
+                      <TableCell>{row.validado_por_nombre || "—"}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              {historialAbierto && (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Producto</TableHead>
+                      <TableHead>Cantidad</TableHead>
+                      <TableHead>Precio</TableHead>
+                      <TableHead></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(historialAbierto.cargas || []).map((linea) => (
+                      <TableRow key={`${linea.fkid_producto ?? linea.nombre}-${linea.es_extra}`}>
+                        <TableCell>{linea.nombre}</TableCell>
+                        <TableCell>{linea.cantidad}</TableCell>
+                        <TableCell>${formatMoney(Number(linea.precio_unitario) || 0)}</TableCell>
+                        <TableCell>{linea.es_extra ? "extra" : ""}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };

@@ -57,6 +57,10 @@ export type PedidoDia = {
 
 export type RepartidorOpcion = { id: number; nombre_completo: string; estado: string };
 
+export type CargaValidada = Solicitud & {
+  validado_por_nombre: string | null;
+};
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = authService.getToken();
   if (!token) {
@@ -85,6 +89,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
 export const callCenterService = {
   listSolicitudes: () => request<Solicitud[]>('/call-center/solicitudes'),
+  listCargasValidadas: () => request<CargaValidada[]>('/call-center/cargas-validadas'),
   getSolicitud: (id: number) => request<Solicitud>(`/call-center/solicitudes/${id}`),
   aprobar: (id: number) => request<{ atendida: boolean }>(`/call-center/solicitudes/${id}/aprobar`, { method: 'POST' }),
   guardarExtras: (id: number, lineas: ExtraLinea[]) => request<{ cargas: CargaLinea[] }>(`/call-center/solicitudes/${id}/extras`, {

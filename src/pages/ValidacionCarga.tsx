@@ -1,11 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { Check, ChevronsUpDown, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 import {
   callCenterService,
   type CargaLinea,
@@ -45,11 +49,22 @@ function draftsFrom(cargas: CargaLinea[] | undefined): ExtraDraft[] {
     }));
 }
 
-const ValidacionCarga = () => {
+type ValidacionCargaProps = {
+  solicitudId?: number;
+  embedded?: boolean;
+  onBack?: () => void;
+  onApproved?: () => void;
+};
+
+const ValidacionCarga = ({ solicitudId: solicitudIdProp, embedded = false, onBack, onApproved }: ValidacionCargaProps) => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const solicitudId = Number(id);
+  const solicitudId = solicitudIdProp ?? Number(id);
+  const leave = () => {
+    if (onBack) onBack();
+    else navigate("/dashboard/call-center");
+  };
   const keyRef = useRef(0);
   const searchRequest = useRef(0);
   const [solicitud, setSolicitud] = useState<Solicitud | null>(null);
@@ -57,8 +72,10 @@ const ValidacionCarga = () => {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
+  const [comboOpen, setComboOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<InventarioHit[]>([]);
+  const [searching, setSearching] = useState(false);
   const [picked, setPicked] = useState<InventarioHit | null>(null);
   const [cantidad, setCantidad] = useState("1");
   const [precio, setPrecio] = useState("0");
@@ -93,14 +110,20 @@ const ValidacionCarga = () => {
     const term = query.trim();
     if (term.length < 2) {
       setHits([]);
+      setSearching(false);
       return;
     }
     const requestId = ++searchRequest.current;
+    setSearching(true);
     const timer = setTimeout(() => {
       void callCenterService.buscarInventario(term).then((rows) => {
-        if (requestId === searchRequest.current) setHits(rows);
+        if (requestId !== searchRequest.current) return;
+        setHits(rows);
+        setSearching(false);
       }).catch(() => {
-        if (requestId === searchRequest.current) setHits([]);
+        if (requestId !== searchRequest.current) return;
+        setHits([]);
+        setSearching(false);
       });
     }, 300);
     return () => clearTimeout(timer);
@@ -145,7 +168,8 @@ const ValidacionCarga = () => {
       await callCenterService.guardarExtras(solicitudId, payloadExtras());
       await callCenterService.aprobar(solicitudId);
       toast({ title: "Check-in aprobado" });
-      navigate("/dashboard/call-center");
+      if (onApproved) onApproved();
+      else navigate("/dashboard/call-center?tab=validacion");
     } catch (err) {
       notify(err);
     } finally {
@@ -156,6 +180,8 @@ const ValidacionCarga = () => {
   const openModal = () => {
     setQuery("");
     setHits([]);
+    setSearching(false);
+    setComboOpen(false);
     setPicked(null);
     setCantidad("1");
     setPrecio("0");
@@ -165,6 +191,7 @@ const ValidacionCarga = () => {
   const chooseHit = (hit: InventarioHit) => {
     setPicked(hit);
     setPrecio(String(hit.precio_venta ?? 0));
+    setComboOpen(false);
   };
 
   const addExtra = () => {
@@ -198,17 +225,17 @@ const ValidacionCarga = () => {
     return (
       <div className="space-y-4 p-6">
         <p>{error}</p>
-        <Button variant="outline" onClick={() => navigate("/dashboard/call-center")}>Volver a Call Center</Button>
+        <Button variant="outline" onClick={leave}>Volver</Button>
       </div>
     );
   }
 
   if (!solicitud) {
-    return <div className="p-6">Cargando validación…</div>;
+    return <div className={embedded ? "" : "p-6"}>Cargando validación…</div>;
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className={embedded ? "space-y-6" : "space-y-6 p-6"}>
       <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">Validación de carga</h1>
@@ -216,7 +243,7 @@ const ValidacionCarga = () => {
             {solicitud.repartidor?.nombre_completo || "Repartidor"} · Dinero esperado ${formatMoney(dinero)} · En espera de aprobación
           </p>
         </div>
-        <Button variant="outline" onClick={() => navigate("/dashboard/call-center")}>Volver</Button>
+        <Button variant="outline" onClick={leave}>Volver</Button>
       </div>
 
       <Card>
@@ -313,26 +340,64 @@ const ValidacionCarga = () => {
         <DialogContent>
           <DialogHeader><DialogTitle>Agregar producto extra</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <Input
-              aria-label="Buscar producto"
-              placeholder="Buscar en inventario"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-            />
-            <ul className="max-h-40 space-y-1 overflow-auto">
-              {hits.map((hit) => (
-                <li key={hit.id}>
-                  <Button
-                    type="button"
-                    variant={picked?.id === hit.id ? "default" : "outline"}
-                    className="w-full justify-start"
-                    onClick={() => chooseHit(hit)}
-                  >
-                    {hit.nombre} · ${formatMoney(Number(hit.precio_venta) || 0)}
-                  </Button>
-                </li>
-              ))}
-            </ul>
+            <Popover modal open={comboOpen} onOpenChange={setComboOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={comboOpen}
+                  aria-label="Buscar producto"
+                  className="w-full justify-between"
+                >
+                  {picked ? (
+                    <span className="truncate">
+                      {picked.nombre} · ${formatMoney(Number(picked.precio_venta) || 0)}
+                    </span>
+                  ) : (
+                    <span className="font-normal text-muted-foreground">Buscar en inventario</span>
+                  )}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="z-[60] w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                <Command shouldFilter={false}>
+                  <CommandInput
+                    placeholder="Buscar en inventario"
+                    value={query}
+                    onValueChange={setQuery}
+                  />
+                  <CommandList>
+                    {searching ? (
+                      <div className="flex items-center justify-center py-6 text-sm text-muted-foreground">
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Buscando…
+                      </div>
+                    ) : query.trim().length < 2 ? (
+                      <CommandEmpty>Escribe al menos 2 letras</CommandEmpty>
+                    ) : hits.length === 0 ? (
+                      <CommandEmpty>No se encontraron productos</CommandEmpty>
+                    ) : (
+                      <CommandGroup>
+                        {hits.map((hit) => (
+                          <CommandItem
+                            key={hit.id}
+                            value={String(hit.id)}
+                            onSelect={() => chooseHit(hit)}
+                          >
+                            <Check className={cn("mr-2 h-4 w-4", picked?.id === hit.id ? "opacity-100" : "opacity-0")} />
+                            <span className="truncate">{hit.nombre}</span>
+                            <span className="ml-auto text-xs text-muted-foreground">
+                              ${formatMoney(Number(hit.precio_venta) || 0)}
+                            </span>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    )}
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
             <div className="flex gap-2">
               <Input
                 aria-label="Cantidad extra"
