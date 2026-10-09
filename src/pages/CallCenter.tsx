@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,6 +33,7 @@ function errorText(error: unknown) {
 
 const CallCenter = () => {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [solicitudes, setSolicitudes] = useState<Solicitud[]>([]);
   const [pedidos, setPedidos] = useState<PedidoDia[]>([]);
   const [cities, setCities] = useState<City[]>([]);
@@ -137,21 +139,6 @@ const CallCenter = () => {
     try { await loadLists(); } catch (refreshError) { notify(refreshError); }
   };
 
-  const aprobar = async () => {
-    if (!detail || busy) return;
-    setBusy(true);
-    try {
-      await callCenterService.aprobar(detail.id);
-      toast({ title: "Check-in aprobado" });
-      dismissDetail();
-      await afterAction();
-    } catch (error) {
-      await afterAction(error);
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const atender = async () => {
     if (!detail || busy) return;
     setBusy(true);
@@ -244,7 +231,17 @@ const CallCenter = () => {
             </TableHeader>
             <TableBody>
               {solicitudes.map((row) => (
-                <TableRow key={row.id} onClick={() => void openSolicitud(row.id)} className="cursor-pointer">
+                <TableRow
+                  key={row.id}
+                  onClick={() => {
+                    if (row.tipo === "check_in") {
+                      navigate(`/dashboard/call-center/validacion/${row.id}`);
+                      return;
+                    }
+                    void openSolicitud(row.id);
+                  }}
+                  className="cursor-pointer"
+                >
                   <TableCell>{TIPO[row.tipo] || row.tipo}</TableCell>
                   <TableCell>{row.repartidor?.nombre_completo || "—"}</TableCell>
                   <TableCell>{row.hora}</TableCell>
@@ -312,17 +309,6 @@ const CallCenter = () => {
       <Dialog open={detail != null} onOpenChange={(open) => { if (!open) dismissDetail(); }}>
         <DialogContent>
           <DialogHeader><DialogTitle>{detail ? TIPO[detail.tipo] : ""}</DialogTitle></DialogHeader>
-          {detail?.tipo === "check_in" && (
-            <div className="space-y-3">
-              <p>{detail.repartidor?.nombre_completo}</p>
-              <ul>
-                {detail.cargas?.map((linea) => (
-                  <li key={`${linea.nombre}-${linea.es_extra}`}>{linea.nombre} × {linea.cantidad} · {linea.precio_unitario}{linea.es_extra ? " · extra" : ""}</li>
-                ))}
-              </ul>
-              <Button disabled={busy} onClick={() => void aprobar()}>Aprobar</Button>
-            </div>
-          )}
           {detail && detail.tipo !== "check_in" && (
             <div className="space-y-3">
               <p>{detail.repartidor?.nombre_completo}</p>

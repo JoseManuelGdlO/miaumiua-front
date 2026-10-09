@@ -5,10 +5,24 @@ import { pedidosPath, repartidoresPath } from '@/lib/call-center-rules.mjs';
 export type RepartidorRef = { id: number; nombre_completo: string } | null;
 
 export type CargaLinea = {
+  id?: number | null;
+  fkid_producto?: number | null;
   nombre: string;
   cantidad: number;
   precio_unitario: number;
   es_extra: boolean;
+};
+
+export type ExtraLinea = {
+  fkid_producto: number;
+  cantidad: number;
+  precio_unitario: number;
+};
+
+export type InventarioHit = {
+  id: number;
+  nombre: string;
+  precio_venta: number;
 };
 
 export type Solicitud = {
@@ -21,6 +35,7 @@ export type Solicitud = {
   fecha: string;
   hora: string;
   prioridad: string;
+  dinero_esperado?: number;
   cargas?: CargaLinea[];
   cliente?: string | null;
   telefono?: string | null;
@@ -72,6 +87,11 @@ export const callCenterService = {
   listSolicitudes: () => request<Solicitud[]>('/call-center/solicitudes'),
   getSolicitud: (id: number) => request<Solicitud>(`/call-center/solicitudes/${id}`),
   aprobar: (id: number) => request<{ atendida: boolean }>(`/call-center/solicitudes/${id}/aprobar`, { method: 'POST' }),
+  guardarExtras: (id: number, lineas: ExtraLinea[]) => request<{ cargas: CargaLinea[] }>(`/call-center/solicitudes/${id}/extras`, {
+    method: 'PUT',
+    body: JSON.stringify({ lineas }),
+  }),
+  buscarInventario: (q: string) => request<InventarioHit[]>(`/call-center/inventario?q=${encodeURIComponent(q)}`),
   atender: (id: number, nota?: string) => request<{ atendida: boolean }>(`/call-center/solicitudes/${id}/atender`, {
     method: 'POST',
     body: JSON.stringify(nota ? { nota } : {}),

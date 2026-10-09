@@ -18,6 +18,7 @@ import Cities from "./pages/Cities";
 import Customers from "./pages/Customers";
 import Orders from "./pages/Orders";
 import CallCenter from "./pages/CallCenter";
+import ValidacionCarga from "./pages/ValidacionCarga";
 import RouteManagement from "./pages/RouteManagement";
 import Agents from "./pages/Agents";
 import Conversations from "./pages/Conversations";
@@ -68,6 +69,7 @@ const App = () => (
             <Route path="conversations" element={<Conversations />} />
             <Route path="conversations/:id" element={<ConversationDetail />} />
             <Route path="orders" element={<Orders />} />
+            <Route path="call-center/validacion/:id" element={<ValidacionCarga />} />
             <Route path="call-center" element={<CallCenter />} />
             <Route path="routes" element={<RouteManagement />} />
             <Route path="promotions" element={<Promotions />} />
