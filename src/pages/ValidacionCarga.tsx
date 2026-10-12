@@ -35,6 +35,13 @@ function lineTotal(cantidad: number, precio: number) {
   return cantidad * precio;
 }
 
+function firmaExtras(list: { fkid_producto: number; cantidad: number }[]) {
+  return [...list]
+    .map((linea) => `${Number(linea.fkid_producto)}:${Number(linea.cantidad) || 0}`)
+    .sort()
+    .join("|");
+}
+
 function draftsFrom(cargas: CargaLinea[] | undefined): ExtraDraft[] {
   return (cargas || [])
     .filter((linea) => linea.es_extra && linea.fkid_producto)
@@ -75,6 +82,7 @@ const ValidacionCarga = ({ solicitudId: solicitudIdProp, embedded = false, onBac
   const [searching, setSearching] = useState(false);
   const [picked, setPicked] = useState<InventarioHit | null>(null);
   const [cantidad, setCantidad] = useState("1");
+  const [esperaReenvio, setEsperaReenvio] = useState(false);
 
   useEffect(() => {
     if (!Number.isFinite(solicitudId)) {
@@ -92,12 +100,29 @@ const ValidacionCarga = ({ solicitudId: solicitudIdProp, embedded = false, onBac
         }
         setSolicitud(next);
         setExtras(draftsFrom(next.cargas));
+        setEsperaReenvio(Boolean(next.espera_reenvio));
       } catch (err) {
         if (!cancelled) setError(errorText(err));
       }
     })();
     return () => {
       cancelled = true;
+    };
+  }, [solicitudId]);
+
+  useEffect(() => {
+    if (!Number.isFinite(solicitudId)) return undefined;
+    let cancelled = false;
+    const timer = window.setInterval(() => {
+      void callCenterService.getSolicitud(solicitudId).then((next) => {
+        if (cancelled || next.tipo !== "check_in") return;
+        setSolicitud(next);
+        setEsperaReenvio(Boolean(next.espera_reenvio));
+      }).catch(() => {});
+    }, 5000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
     };
   }, [solicitudId]);
 
@@ -122,6 +147,8 @@ const ValidacionCarga = ({ solicitudId: solicitudIdProp, embedded = false, onBac
 
   const pedidos = (solicitud?.cargas || []).filter((linea) => !linea.es_extra);
   const dinero = Number(solicitud?.dinero_esperado) || 0;
+  const extrasCambiaron = firmaExtras(extras) !== firmaExtras(draftsFrom(solicitud?.cargas));
+  const aprobarBloqueado = busy || extrasCambiaron || esperaReenvio;
 
   const notify = (err: unknown) => {
     toast({ title: "Validación de carga", description: errorText(err), variant: "destructive" });
@@ -146,8 +173,16 @@ const ValidacionCarga = ({ solicitudId: solicitudIdProp, embedded = false, onBac
     if (busy) return;
     setBusy(true);
     try {
-      await callCenterService.guardarExtras(solicitudId, payloadExtras());
-      toast({ title: "Carga extra guardada" });
+      const saved = await callCenterService.guardarExtras(solicitudId, payloadExtras());
+      if (saved.reenvio) {
+        setEsperaReenvio(true);
+        toast({
+          title: "Carga extra guardada",
+          description: "Aprobar carga quedó bloqueado. El repartidor tiene que volver a enviarla.",
+        });
+      } else {
+        toast({ title: "Carga extra guardada" });
+      }
     } catch (err) {
       notify(err);
     } finally {
@@ -226,7 +261,7 @@ const ValidacionCarga = ({ solicitudId: solicitudIdProp, embedded = false, onBac
         <div>
           <h1 className="text-2xl font-semibold">Validación de carga</h1>
           <p className="text-sm text-muted-foreground">
-            {solicitud.repartidor?.nombre_completo || "Repartidor"} · Dinero esperado ${formatMoney(dinero)} · En espera de aprobación
+            {solicitud.repartidor?.nombre_completo || "Repartidor"} · Dinero esperado ${formatMoney(dinero)} · {esperaReenvio ? "Esperando el reenvío del repartidor" : "En espera de aprobación"}
           </p>
         </div>
         <Button variant="outline" onClick={leave}>Volver</Button>
@@ -263,7 +298,7 @@ const ValidacionCarga = ({ solicitudId: solicitudIdProp, embedded = false, onBac
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Carga extra</CardTitle>
-          <Button variant="outline" onClick={openModal}>Agregar extra</Button>
+          <Button variant="outline" disabled={esperaReenvio} onClick={openModal}>Agregar extra</Button>
         </CardHeader>
         <CardContent className="space-y-4">
           <Table>
@@ -287,6 +322,7 @@ const ValidacionCarga = ({ solicitudId: solicitudIdProp, embedded = false, onBac
                       aria-label={`Cantidad de ${linea.nombre}`}
                       type="number"
                       min={1}
+                      disabled={esperaReenvio}
                       value={linea.cantidad}
                       onChange={(event) => {
                         const next = Number(event.target.value);
@@ -297,15 +333,22 @@ const ValidacionCarga = ({ solicitudId: solicitudIdProp, embedded = false, onBac
                   <TableCell>${formatMoney(Number(linea.precio) || 0)}</TableCell>
                   <TableCell>${formatMoney(lineTotal(linea.cantidad, Number(linea.precio) || 0))}</TableCell>
                   <TableCell>
-                    <Button variant="outline" onClick={() => setExtras((list) => list.filter((row) => row.key !== linea.key))}>Quitar</Button>
+                    <Button variant="outline" disabled={esperaReenvio} onClick={() => setExtras((list) => list.filter((row) => row.key !== linea.key))}>Quitar</Button>
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
+          {(extrasCambiaron || esperaReenvio) && (
+            <p className="text-sm text-muted-foreground">
+              {esperaReenvio
+                ? "Aprobar carga está bloqueado hasta que el repartidor vuelva a enviar la carga a call center."
+                : "Guarda el producto extra. Aprobar carga queda bloqueado y el repartidor podrá volver a enviarla."}
+            </p>
+          )}
           <div className="flex gap-3">
-            <Button variant="outline" disabled={busy} onClick={() => void guardar()}>Guardar extra</Button>
-            <Button disabled={busy} onClick={() => void aprobar()}>Aprobar carga</Button>
+            <Button variant="outline" disabled={busy || esperaReenvio} onClick={() => void guardar()}>Guardar extra</Button>
+            <Button disabled={aprobarBloqueado} onClick={() => void aprobar()}>Aprobar carga</Button>
           </div>
         </CardContent>
       </Card>

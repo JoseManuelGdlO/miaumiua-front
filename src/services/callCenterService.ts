@@ -36,6 +36,7 @@ export type Solicitud = {
   hora: string;
   prioridad: string;
   dinero_esperado?: number;
+  espera_reenvio?: boolean;
   cargas?: CargaLinea[];
   cliente?: string | null;
   telefono?: string | null;
@@ -92,7 +93,7 @@ export const callCenterService = {
   listCargasValidadas: () => request<CargaValidada[]>('/call-center/cargas-validadas'),
   getSolicitud: (id: number) => request<Solicitud>(`/call-center/solicitudes/${id}`),
   aprobar: (id: number) => request<{ atendida: boolean }>(`/call-center/solicitudes/${id}/aprobar`, { method: 'POST' }),
-  guardarExtras: (id: number, lineas: ExtraLinea[]) => request<{ cargas: CargaLinea[] }>(`/call-center/solicitudes/${id}/extras`, {
+  guardarExtras: (id: number, lineas: ExtraLinea[]) => request<{ reenvio: boolean; cargas: CargaLinea[] }>(`/call-center/solicitudes/${id}/extras`, {
     method: 'PUT',
     body: JSON.stringify({ lineas }),
   }),
