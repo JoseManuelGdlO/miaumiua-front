@@ -70,6 +70,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { ordersService, Order, OrderStatsResponse } from "@/services/ordersService";
 import { notificationsService } from "@/services/notificationsService";
+import { formatCount, formatMoney } from "@/utils/format";
 import { clientesService } from "@/services/clientesService";
 import { citiesService } from "@/services/citiesService";
 import CreateOrderModal from "@/components/modals/CreateOrderModal";
@@ -231,13 +232,7 @@ const Orders = () => {
     setCurrentPage(1);
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('es-CO', {
-      style: 'currency',
-      currency: 'COP',
-      minimumFractionDigits: 0,
-    }).format(amount);
-  };
+  const formatCurrency = (amount: number) => formatMoney(amount);
 
   const formatDate = (dateString: string | null | undefined) => {
     if (!dateString) return 'N/A';
@@ -315,10 +310,10 @@ const Orders = () => {
   const getStatusBadge = (status: string) => {
     const statusConfig = {
       pendiente: { label: 'Pendiente', variant: 'secondary' as const, icon: Clock },
-      confirmado: { label: 'Confirmado', variant: 'default' as const, icon: CheckCircle },
-      en_preparacion: { label: 'En Preparación', variant: 'default' as const, icon: Package },
-      en_camino: { label: 'En Camino', variant: 'default' as const, icon: Truck },
-      entregado: { label: 'Entregado', variant: 'default' as const, icon: CheckCircle },
+      confirmado: { label: 'Confirmado', variant: 'outline' as const, icon: CheckCircle },
+      en_preparacion: { label: 'En Preparación', variant: 'outline' as const, icon: Package },
+      en_camino: { label: 'En Camino', variant: 'outline' as const, icon: Truck },
+      entregado: { label: 'Entregado', variant: 'outline' as const, icon: CheckCircle },
       no_entregado: { label: 'No Entregado', variant: 'destructive' as const, icon: XCircle },
       cancelado: { label: 'Cancelado', variant: 'destructive' as const, icon: XCircle }
     };
@@ -337,9 +332,9 @@ const Orders = () => {
   const getPaymentMethodBadge = (method: string) => {
     const methodConfig = {
       efectivo: { label: 'Efectivo', variant: 'secondary' as const },
-      tarjeta: { label: 'Tarjeta', variant: 'default' as const },
-      transferencia: { label: 'Transferencia', variant: 'default' as const },
-      pago_movil: { label: 'Pago Móvil', variant: 'default' as const }
+      tarjeta: { label: 'Tarjeta', variant: 'secondary' as const },
+      transferencia: { label: 'Transferencia', variant: 'secondary' as const },
+      pago_movil: { label: 'Pago Móvil', variant: 'secondary' as const }
     };
 
     const config = methodConfig[method as keyof typeof methodConfig] || methodConfig.efectivo;
@@ -437,12 +432,14 @@ const Orders = () => {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Pedidos</CardTitle>
-              <Package className="h-4 w-4 text-muted-foreground" />
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <Package className="h-4 w-4" />
+              </span>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.total_pedidos || 0}</div>
+              <div className="text-2xl font-bold">{formatCount(stats.total_pedidos || 0)}</div>
               <p className="text-xs text-muted-foreground">
-                {stats.pedidos_pendientes || 0} pendientes
+                {formatCount(stats.pedidos_pendientes || 0)} pendientes
               </p>
             </CardContent>
           </Card>
@@ -450,7 +447,9 @@ const Orders = () => {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Ventas Totales</CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <DollarSign className="h-4 w-4" />
+              </span>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{formatCurrency(stats.total_ventas || 0)}</div>
@@ -463,11 +462,13 @@ const Orders = () => {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Ventas del Mes</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <TrendingUp className="h-4 w-4" />
+              </span>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {ventasDelMes ? ventasDelMes.formatoMoneda : formatCurrency(stats.ventas_mes_actual || 0)}
+                {ventasDelMes ? formatMoney(ventasDelMes.valor) : formatCurrency(stats.ventas_mes_actual || 0)}
               </div>
               <p className="text-xs text-muted-foreground">
                 {ventasDelMes ? ventasDelMes.cambioFormato : `${stats.crecimiento_ventas != null && stats.crecimiento_ventas > 0 ? '+' : ''}${(stats.crecimiento_ventas ?? 0).toFixed(1)}% vs mes anterior`}
@@ -478,12 +479,14 @@ const Orders = () => {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Entregados</CardTitle>
-              <CheckCircle className="h-4 w-4 text-muted-foreground" />
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <CheckCircle className="h-4 w-4" />
+              </span>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.pedidos_entregados || 0}</div>
+              <div className="text-2xl font-bold">{formatCount(stats.pedidos_entregados || 0)}</div>
               <p className="text-xs text-muted-foreground">
-                {stats.pedidos_en_camino || 0} en camino
+                {formatCount(stats.pedidos_en_camino || 0)} en camino
               </p>
             </CardContent>
           </Card>

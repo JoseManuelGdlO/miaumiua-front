@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ComponentType } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
   Users,
@@ -40,46 +40,73 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import miauMiauLogo from "/lovable-uploads/9f868334-2970-46f8-a783-9ab32ecc297b.png";
 
-const menuItems = [
-  { title: "Dashboard", url: "/dashboard", icon: Home, permission: null },
+type MenuItem = {
+  title: string;
+  url?: string;
+  icon: ComponentType<{ className?: string }>;
+  permission: string | null;
+  requireConfigureSystem?: boolean;
+  submenu?: { title: string; url: string; permission: string | null }[];
+};
+
+const menuSections: { label: string | null; items: MenuItem[] }[] = [
   {
-    title: "Gestión de Usuarios",
-    icon: Users,
-    permission: "users",
-    submenu: [
-      { title: "Usuarios", url: "/dashboard/users", permission: "users" },
-      { title: "Roles", url: "/dashboard/roles", permission: "roles" },
-      { title: "Permisos", url: "/dashboard/permissions", permission: "permissions" },
+    label: null,
+    items: [{ title: "Dashboard", url: "/dashboard", icon: Home, permission: null }],
+  },
+  {
+    label: "Operaciones",
+    items: [
+      { title: "Conversaciones", url: "/dashboard/conversations", icon: MessageCircle, permission: "conversations" },
+      { title: "Contexto de Agentes", url: "/dashboard/agents", icon: Bot, permission: "agents" },
+      { title: "Pedidos", url: "/dashboard/orders", icon: Package2, permission: "orders" },
+      { title: "Call Center", url: "/dashboard/call-center", icon: Headphones, permission: "callCenter" },
+      { title: "Repartidores", url: "/dashboard/drivers", icon: Truck, permission: "drivers" },
+      { title: "Planeación de Rutas", url: "/dashboard/routes", icon: Route, permission: "routes" },
+      { title: "Promociones", url: "/dashboard/promotions", icon: Tag, permission: "promotions" },
+      { title: "Clientes", url: "/dashboard/customers", icon: UserCheck, permission: "customers" },
     ],
   },
-  { title: "Conversaciones", url: "/dashboard/conversations", icon: MessageCircle, permission: "conversations" },
-  { title: "Contexto de Agentes", url: "/dashboard/agents", icon: Bot, permission: "agents" },
-  { title: "Pedidos", url: "/dashboard/orders", icon: Package2, permission: "orders" },
-  { title: "Call Center", url: "/dashboard/call-center", icon: Headphones, permission: "callCenter" },
-  { title: "Repartidores", url: "/dashboard/drivers", icon: Truck, permission: "drivers" },
-  { title: "Planeación de Rutas", url: "/dashboard/routes", icon: Route, permission: "routes" },
-  { title: "Promociones", url: "/dashboard/promotions", icon: Tag, permission: "promotions" },
-  { title: "Inventario", url: "/dashboard/inventory", icon: Package, permission: "inventory" },
-  { title: "Paquetes", url: "/dashboard/packages", icon: Package2, permission: "packages" },
-  { title: "Ciudades", url: "/dashboard/cities", icon: MapPin, permission: "cities" },
-  { title: "Clientes", url: "/dashboard/customers", icon: UserCheck, permission: "customers" },
   {
-    title: "Sitio web",
-    url: "/dashboard/settings",
-    icon: Globe,
-    permission: null,
-    requireConfigureSystem: true,
+    label: "Administración",
+    items: [
+      {
+        title: "Gestión de Usuarios",
+        icon: Users,
+        permission: "users",
+        submenu: [
+          { title: "Usuarios", url: "/dashboard/users", permission: "users" },
+          { title: "Roles", url: "/dashboard/roles", permission: "roles" },
+          { title: "Permisos", url: "/dashboard/permissions", permission: "permissions" },
+        ],
+      },
+      { title: "Inventario", url: "/dashboard/inventory", icon: Package, permission: "inventory" },
+      { title: "Paquetes", url: "/dashboard/packages", icon: Package2, permission: "packages" },
+      { title: "Ciudades", url: "/dashboard/cities", icon: MapPin, permission: "cities" },
+    ],
   },
-  { title: "Configuración QR", url: "/dashboard/configuracion-qr", icon: QrCode, permission: "qr" },
   {
-    title: "Configuraciones",
-    icon: Settings,
-    permission: "categories",
-    submenu: [
-      { title: "Categorías Producto", url: "/dashboard/categorias-producto", permission: "categories" },
-      { title: "Pesos", url: "/dashboard/pesos", permission: "weights" },
-      { title: "Proveedores", url: "/dashboard/proveedores", permission: "suppliers" },
-      { title: "Flags", url: "/dashboard/flags", permission: "conversations" },
+    label: "Sistema",
+    items: [
+      {
+        title: "Sitio web",
+        url: "/dashboard/settings",
+        icon: Globe,
+        permission: null,
+        requireConfigureSystem: true,
+      },
+      { title: "Configuración QR", url: "/dashboard/configuracion-qr", icon: QrCode, permission: "qr" },
+      {
+        title: "Configuraciones",
+        icon: Settings,
+        permission: "categories",
+        submenu: [
+          { title: "Categorías Producto", url: "/dashboard/categorias-producto", permission: "categories" },
+          { title: "Pesos", url: "/dashboard/pesos", permission: "weights" },
+          { title: "Proveedores", url: "/dashboard/proveedores", permission: "suppliers" },
+          { title: "Flags", url: "/dashboard/flags", permission: "conversations" },
+        ],
+      },
     ],
   },
 ];
@@ -106,7 +133,7 @@ export function AppSidebar() {
   const getNavClasses = (isActive: boolean) =>
     `flex items-center w-full text-left transition-colors ${
       isActive 
-        ? "bg-primary text-primary-foreground font-medium" 
+        ? "bg-primary/10 text-primary font-medium" 
         : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
     }`;
 
@@ -137,25 +164,24 @@ export function AppSidebar() {
       )}
 
       <SidebarContent className="p-2 flex-1 overflow-y-auto min-h-0">
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-sidebar-foreground/70 text-xs font-medium mb-2">
-            {!isCollapsed && "NAVEGACIÓN PRINCIPAL"}
-          </SidebarGroupLabel>
+        {menuSections.map((section) => {
+          const visibleItems = section.items.filter((item) => {
+            if (item.requireConfigureSystem && !canConfigureSystem()) return false;
+            if (item.permission && !hasSectionAccess(item.permission as never)) return false;
+            return true;
+          });
+          if (visibleItems.length === 0) return null;
+
+          return (
+        <SidebarGroup key={section.label ?? "inicio"}>
+          {section.label && !isCollapsed && (
+            <SidebarGroupLabel className="mb-1 h-auto px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              {section.label}
+            </SidebarGroupLabel>
+          )}
           <SidebarGroupContent>
             <SidebarMenu className="space-y-1">
-              {menuItems.map((item) => {
-                if (
-                  "requireConfigureSystem" in item &&
-                  item.requireConfigureSystem &&
-                  !canConfigureSystem()
-                ) {
-                  return null;
-                }
-                // Check if user has access to this section
-                if (item.permission && !hasSectionAccess(item.permission as any)) {
-                  return null;
-                }
-
+              {visibleItems.map((item) => {
                 return (
                   <SidebarMenuItem key={item.title}>
                     {item.submenu ? (
@@ -206,8 +232,8 @@ export function AppSidebar() {
                     ) : (
                       <SidebarMenuButton asChild tooltip={item.title}>
                         <NavLink
-                          to={item.url}
-                          className={getNavClasses(isActive(item.url))}
+                          to={item.url ?? "/dashboard"}
+                          className={getNavClasses(isActive(item.url ?? ""))}
                         >
                           <item.icon className="h-4 w-4 flex-shrink-0" />
                           {!isCollapsed && <span>{item.title}</span>}
@@ -220,6 +246,8 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+          );
+        })}
       </SidebarContent>
     </Sidebar>
   );

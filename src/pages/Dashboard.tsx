@@ -41,6 +41,7 @@ import { notificationsService } from "@/services/notificationsService";
 import { inventariosService, InventarioStatsResponse } from "@/services/inventariosService";
 import { useToast } from "@/hooks/use-toast";
 import { hasPermission } from "@/utils/permissions";
+import { formatCount, formatMoney } from "@/utils/format";
 
 interface RecentActivity {
   id: string;
@@ -110,28 +111,28 @@ const Dashboard = () => {
         const kpis: KPIStat[] = [
           {
             title: "Conversaciones Activas",
-            value: response.data.conversacionesActivas.valor.toLocaleString(),
+            value: formatCount(response.data.conversacionesActivas.valor),
             change: response.data.conversacionesActivas.cambioFormato,
             icon: MessageSquare,
             color: "text-primary",
           },
           {
             title: "Clientes Registrados",
-            value: response.data.clientesRegistrados.valor.toLocaleString(),
+            value: formatCount(response.data.clientesRegistrados.valor),
             change: response.data.clientesRegistrados.cambioFormato,
             icon: Users,
             color: "text-success",
           },
           {
             title: "Ciudades Activas",
-            value: response.data.ciudadesActivas.valor.toLocaleString(),
+            value: formatCount(response.data.ciudadesActivas.valor),
             change: response.data.ciudadesActivas.cambioFormato,
             icon: MapPin,
             color: "text-warning",
           },
           {
             title: "Ventas del Mes",
-            value: response.data.ventasDelMes.formatoMoneda,
+            value: formatMoney(response.data.ventasDelMes.valor),
             change: response.data.ventasDelMes.cambioFormato,
             icon: ShoppingCart,
             color: "text-primary",
@@ -172,28 +173,28 @@ const Dashboard = () => {
       setStats([
         {
           title: "Conversaciones Activas",
-          value: "0",
+          value: formatCount(0),
           change: "N/A",
           icon: MessageSquare,
           color: "text-primary",
         },
         {
           title: "Clientes Registrados",
-          value: "0",
+          value: formatCount(0),
           change: "N/A",
           icon: Users,
           color: "text-success",
         },
         {
           title: "Ciudades Activas",
-          value: "0",
+          value: formatCount(0),
           change: "N/A",
           icon: MapPin,
           color: "text-warning",
         },
         {
           title: "Ventas del Mes",
-          value: "$0.00",
+          value: formatMoney(0),
           change: "N/A",
           icon: ShoppingCart,
           color: "text-primary",
@@ -555,7 +556,9 @@ const Dashboard = () => {
                   <CardTitle className="text-sm font-medium text-card-foreground">
                     {stat.title}
                   </CardTitle>
-                  <stat.icon className={`h-5 w-5 ${stat.color}`} />
+                  <span className={`flex h-8 w-8 items-center justify-center rounded-full ${stat.color.includes("success") ? "bg-success/10" : stat.color.includes("warning") ? "bg-warning/10" : "bg-primary/10"}`}>
+                    <stat.icon className={`h-4 w-4 ${stat.color}`} />
+                  </span>
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-card-foreground">{stat.value}</div>
@@ -717,28 +720,22 @@ const Dashboard = () => {
                   <div className="p-4 rounded-lg bg-muted/30 border border-border/50">
                     <p className="text-xs font-medium text-muted-foreground">Productos en inventario</p>
                     <p className="text-2xl font-semibold text-foreground mt-1">
-                      {inventoryStats.totalInventarios.toLocaleString()}
+                      {formatCount(inventoryStats.totalInventarios)}
                     </p>
                   </div>
                   <div className="p-4 rounded-lg bg-muted/30 border border-border/50">
                     <p className="text-xs font-medium text-muted-foreground">Productos con stock bajo</p>
                     <p className="text-2xl font-semibold text-warning mt-1">
-                      {inventoryStats.inventariosStockBajo.toLocaleString()}
+                      {formatCount(inventoryStats.inventariosStockBajo)}
                     </p>
                   </div>
                   <div className="p-4 rounded-lg bg-muted/30 border border-border/50">
                     <p className="text-xs font-medium text-muted-foreground">Valor total del inventario</p>
                     <p className="text-2xl font-semibold text-foreground mt-1">
-                      {`$${inventoryStats.valorTotalInventario.toLocaleString('es-MX', {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}`}
+                      {formatMoney(inventoryStats.valorTotalInventario)}
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      Precio promedio: {`$${inventoryStats.precioPromedio.toLocaleString('es-MX', {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}`}
+                      Precio promedio: {formatMoney(inventoryStats.precioPromedio)}
                     </p>
                   </div>
                 </div>
@@ -771,7 +768,7 @@ const Dashboard = () => {
                     <div className="flex items-center justify-center h-full">
                       <div className="text-center">
                         <p className="text-3xl font-semibold text-foreground">
-                          {inventoryStats.totalStock.toLocaleString()}
+                          {formatCount(inventoryStats.totalStock)}
                         </p>
                         <p className="text-sm text-muted-foreground mt-1">
                           Unidades en inventario considerando tu ciudad y permisos
