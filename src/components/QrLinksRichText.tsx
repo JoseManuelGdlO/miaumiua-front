@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import {
   AlignCenter,
   AlignLeft,
@@ -6,7 +6,6 @@ import {
   Bold,
   Heading2,
   Heading3,
-  Image as ImageIcon,
   Italic,
   Link2,
   List,
@@ -17,11 +16,14 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { siteSettingsService } from "@/services/siteSettingsService";
 
 interface QrLinksRichTextProps {
   value: string;
   disabled?: boolean;
+  panelColor: string;
+  textColor: string;
+  backgroundImage: string;
+  preview?: ReactNode;
   onChange: (html: string) => void;
 }
 
@@ -43,12 +45,18 @@ const SIZE_OPTIONS = [
   { label: "Título", value: "7" },
 ];
 
-const QrLinksRichText = ({ value, disabled, onChange }: QrLinksRichTextProps) => {
+const QrLinksRichText = ({
+  value,
+  disabled,
+  panelColor,
+  textColor,
+  backgroundImage,
+  preview,
+  onChange,
+}: QrLinksRichTextProps) => {
   const { toast } = useToast();
   const editorRef = useRef<HTMLDivElement>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
   const selectionRef = useRef<Range | null>(null);
-  const [uploadingImage, setUploadingImage] = useState(false);
 
   useEffect(() => {
     const id = "qr-editor-fonts";
@@ -95,34 +103,26 @@ const QrLinksRichText = ({ value, disabled, onChange }: QrLinksRichTextProps) =>
     saveSelection();
   };
 
-  const insertImage = async (file: File) => {
-    if (disabled || uploadingImage) return;
-    setUploadingImage(true);
-    try {
-      const url = await siteSettingsService.uploadQrImage(file);
-      apply("insertImage", url);
-    } catch (error) {
-      toast({
-        title: "No se pudo subir la foto",
-        description: error instanceof Error ? error.message : "Intenta con otra imagen",
-        variant: "destructive",
-      });
-    } finally {
-      setUploadingImage(false);
-    }
-  };
-
   const addLink = () => {
     const url = window.prompt("Escribe el link (https://)");
     if (!url) return;
     const trimmed = url.trim();
-    if (!/^https?:\/\//i.test(trimmed)) return;
+    if (!/^https:\/\//i.test(trimmed)) {
+      toast({
+        title: "Enlace no válido",
+        description: "El enlace debe empezar por https://",
+        variant: "destructive",
+      });
+      return;
+    }
     apply("createLink", trimmed);
   };
 
+  const hasBackgroundImage = backgroundImage.trim().length > 0;
+
   return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap items-center gap-1">
+    <div className="space-y-4">
+      <div className="flex w-full flex-wrap items-center gap-1">
         <select
           aria-label="Fuente"
           disabled={disabled}
@@ -206,50 +206,47 @@ const QrLinksRichText = ({ value, disabled, onChange }: QrLinksRichTextProps) =>
         <Button type="button" size="sm" variant="outline" disabled={disabled} onMouseDown={(event) => event.preventDefault()} onClick={() => apply("formatBlock", "h3")} aria-label="Subtítulo">
           <Heading3 className="h-4 w-4" />
         </Button>
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/jpeg,image/png,image/gif,image/webp"
-          className="hidden"
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            event.target.value = "";
-            if (file) void insertImage(file);
-          }}
-        />
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          disabled={disabled || uploadingImage}
-          onMouseDown={(event) => {
-            event.preventDefault();
-            saveSelection();
-          }}
-          onClick={() => fileRef.current?.click()}
-          aria-label="Insertar foto"
-        >
-          <ImageIcon className="h-4 w-4" />
+        <Button type="button" size="sm" variant="outline" disabled={disabled} onMouseDown={(event) => event.preventDefault()} onClick={() => apply("removeFormat")} aria-label="Quitar formato">
+          <RemoveFormatting className="h-4 w-4" />
         </Button>
         <Button type="button" size="sm" variant="outline" disabled={disabled} onMouseDown={(event) => event.preventDefault()} onClick={addLink} aria-label="Insertar enlace">
           <Link2 className="h-4 w-4" />
         </Button>
-        <Button type="button" size="sm" variant="outline" disabled={disabled} onMouseDown={(event) => event.preventDefault()} onClick={() => apply("removeFormat")} aria-label="Quitar formato">
-          <RemoveFormatting className="h-4 w-4" />
-        </Button>
       </div>
+      <div className="grid items-stretch gap-6 xl:grid-cols-2">
+      <div className="flex h-full min-h-72 flex-col gap-2">
+      <p className="text-sm font-medium">Edición</p>
       <div
-        ref={editorRef}
-        contentEditable={!disabled}
-        role="textbox"
-        aria-multiline="true"
-        aria-label="Texto de la sección de enlaces"
-        data-placeholder="Miau Miau. Elige lo que quieres ver"
-        className="min-h-[40vh] w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring empty:before:text-muted-foreground empty:before:content-[attr(data-placeholder)] [&_a]:text-primary [&_a]:underline [&_h2]:text-3xl [&_h2]:font-black [&_h3]:text-xl [&_h3]:font-bold [&_img]:mx-auto [&_img]:my-3 [&_img]:max-h-80 [&_img]:max-w-full [&_img]:rounded-lg [&_ol]:list-decimal [&_ol]:pl-5 [&_s]:line-through [&_strike]:line-through [&_ul]:list-disc [&_ul]:pl-5"
-        onMouseUp={saveSelection}
-        onKeyUp={saveSelection}
-        onInput={() => onChange(editorRef.current?.innerHTML ?? "")}
-      />
+        className="relative flex min-h-64 flex-1 flex-col overflow-hidden rounded-md border"
+        style={{
+          backgroundColor: panelColor,
+          color: textColor,
+          backgroundImage: hasBackgroundImage ? `url("${backgroundImage.replace(/"/g, "")}")` : undefined,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+        }}
+      >
+        {hasBackgroundImage && (
+          <div
+            className="pointer-events-none absolute inset-0"
+            style={{ backgroundColor: panelColor, opacity: 0.72 }}
+          />
+        )}
+        <div
+          ref={editorRef}
+          contentEditable={!disabled}
+          role="textbox"
+          aria-multiline="true"
+          aria-label="Texto de la sección de enlaces"
+          className="relative z-10 w-full flex-1 bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring [&_a]:text-primary [&_a]:underline [&_h2]:text-3xl [&_h2]:font-black [&_h3]:text-xl [&_h3]:font-bold [&_img]:mx-auto [&_img]:my-3 [&_img]:max-h-80 [&_img]:max-w-full [&_img]:rounded-lg [&_ol]:list-decimal [&_ol]:pl-5 [&_s]:line-through [&_strike]:line-through [&_ul]:list-disc [&_ul]:pl-5"
+          onMouseUp={saveSelection}
+          onKeyUp={saveSelection}
+          onInput={() => onChange(editorRef.current?.innerHTML ?? "")}
+        />
+      </div>
+      </div>
+      {preview}
+      </div>
     </div>
   );
 };

@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Navigate } from "react-router-dom";
-import { Link2, Loader2, Plus, Trash2 } from "lucide-react";
+import { Link2, Loader2, Plus, Trash2, Upload } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -22,6 +22,7 @@ const QR_LINK = "https://miaumiau.com.mx/QR";
 type QrToggleId = "whatsapp" | "catalog" | "packages" | "promotions" | "mercadolibre" | "social";
 
 function hasVisibleRichText(html: string) {
+  if (/<img\b/i.test(html)) return true;
   return html.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim().length > 0;
 }
 
@@ -34,8 +35,9 @@ function isHttpUrl(value: string) {
   }
 }
 
-const LINK_COLOR_FIELDS: { key: "linksPanelColor"; label: string }[] = [
+const LINK_COLOR_FIELDS: { key: "linksPanelColor" | "linksTextColor"; label: string }[] = [
   { key: "linksPanelColor", label: "Fondo del panel" },
+  { key: "linksTextColor", label: "Color del texto" },
 ];
 
 const ENLACE_COLOR_FIELDS: { key: "linksBubbleColor" | "linksBubbleTextColor"; label: string }[] = [
@@ -82,6 +84,9 @@ const ConfiguracionQr = () => {
   const [actions, setActions] = useState<QrActions>(DEFAULT_QR_ACTIONS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingBackground, setUploadingBackground] = useState(false);
+  const [draggingBackground, setDraggingBackground] = useState(false);
+  const backgroundFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -132,6 +137,31 @@ const ConfiguracionQr = () => {
       ...current,
       links: current.links.filter((link) => link.id !== id),
     }));
+  };
+
+  const uploadBackground = async (file: File) => {
+    if (!canSave || uploadingBackground) return;
+    if (!file.type.startsWith("image/")) {
+      toast({
+        title: "Archivo no válido",
+        description: "Sube una imagen JPG, PNG, GIF o WebP",
+        variant: "destructive",
+      });
+      return;
+    }
+    setUploadingBackground(true);
+    try {
+      const url = await siteSettingsService.uploadQrImage(file);
+      setActions((current) => ({ ...current, linksBackgroundImage: url }));
+    } catch (error) {
+      toast({
+        title: "No se pudo subir la foto",
+        description: error instanceof Error ? error.message : "Intenta con otra imagen",
+        variant: "destructive",
+      });
+    } finally {
+      setUploadingBackground(false);
+    }
   };
 
   const handleSave = async () => {
@@ -339,43 +369,137 @@ const ConfiguracionQr = () => {
               Reemplaza el encabezado «Miau Miau» y «Elige lo que quieres ver». La primera línea se ve como título.
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="grid items-center gap-6 xl:grid-cols-2">
-              <QrLinksRichText
-                value={actions.linksHtml}
-                disabled={!canSave || saving || loading}
-                onChange={(linksHtml) => setActions((current) => ({ ...current, linksHtml }))}
-              />
-              <div className="space-y-2">
-                <p className="text-sm font-medium">Vista previa</p>
-                <div
-                  className="min-h-48 rounded-lg border px-4 py-10 text-center"
-                  style={{ backgroundColor: actions.linksPanelColor, color: actions.linksTextColor }}
-                >
-                  {hasVisibleRichText(actions.linksHtml) ? (
-                    <div
-                      className="mx-auto max-w-3xl [&_a]:underline [&_font[size='1']]:text-xs [&_font[size='2']]:text-sm [&_font[size='3']]:text-base [&_font[size='4']]:text-lg [&_font[size='5']]:text-2xl [&_font[size='6']]:text-4xl [&_font[size='7']]:text-5xl [&_font[size='7']]:font-black [&_h2]:text-4xl [&_h2]:font-black [&_h3]:text-2xl [&_h3]:font-bold [&_img]:mx-auto [&_img]:my-4 [&_img]:max-h-80 [&_img]:max-w-full [&_img]:rounded-lg [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:text-left [&_p]:mb-3 [&_s]:line-through [&_strike]:line-through [&_strong]:font-bold [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:text-left"
-                      dangerouslySetInnerHTML={{
-                        __html: actions.linksHtml.replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, ""),
-                      }}
+          <CardContent className="space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="qr-background-image">Imagen de fondo</Label>
+              <div
+                onClick={() => {
+                  if (!canSave || saving || loading || uploadingBackground) return;
+                  backgroundFileRef.current?.click();
+                }}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  if (!canSave || saving || loading || uploadingBackground) return;
+                  setDraggingBackground(true);
+                }}
+                onDragLeave={() => setDraggingBackground(false)}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  setDraggingBackground(false);
+                  if (!canSave || saving || loading || uploadingBackground) return;
+                  const file = event.dataTransfer.files?.[0];
+                  if (file) void uploadBackground(file);
+                }}
+                className={`flex w-full flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed p-6 text-center transition-colors ${
+                  draggingBackground ? "border-primary bg-primary/5" : "border-muted-foreground/25 hover:border-primary/50"
+                } ${!canSave || saving || loading || uploadingBackground ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
+              >
+                <input
+                  ref={backgroundFileRef}
+                  id="qr-background-image"
+                  type="file"
+                  accept="image/jpeg,image/png,image/gif,image/webp"
+                  className="hidden"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = "";
+                    if (file) void uploadBackground(file);
+                  }}
+                />
+                {uploadingBackground ? (
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    Subiendo imagen…
+                  </div>
+                ) : actions.linksBackgroundImage ? (
+                  <>
+                    <img
+                      src={actions.linksBackgroundImage}
+                      alt="Fondo de la sección"
+                      className="max-h-40 w-full rounded-md object-cover"
                     />
-                  ) : (
-                    <>
-                      <h2
-                        className="text-4xl font-black md:text-6xl"
-                        style={{ fontFamily: "'Fredoka', sans-serif", color: actions.linksTextColor }}
+                    <div className="flex flex-wrap items-center justify-center gap-3">
+                      <p className="text-sm text-muted-foreground">Arrastra otra imagen para reemplazarla, o haz clic</p>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        disabled={!canSave || saving || loading}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setActions((current) => ({ ...current, linksBackgroundImage: "" }));
+                        }}
                       >
-                        Miau Miau
-                      </h2>
-                      <p className="mt-3 text-lg" style={{ color: actions.linksTextColor }}>
-                        Elige lo que quieres ver
-                      </p>
-                    </>
-                  )}
-                </div>
+                        Quitar
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-10 w-10 text-muted-foreground" />
+                    <p className="text-sm">
+                      <span className="font-medium text-primary">Haz clic para subir</span>
+                      <span className="text-muted-foreground"> o arrastra la imagen aquí</span>
+                    </p>
+                    <p className="text-xs text-muted-foreground">JPG, PNG, GIF o WebP</p>
+                  </>
+                )}
               </div>
             </div>
-            <div className="mt-6 grid gap-4 md:max-w-md">
+            <QrLinksRichText
+              value={actions.linksHtml}
+              disabled={!canSave || saving || loading}
+              panelColor={actions.linksPanelColor}
+              textColor={actions.linksTextColor}
+              backgroundImage={actions.linksBackgroundImage}
+              onChange={(linksHtml) => setActions((current) => ({ ...current, linksHtml }))}
+              preview={
+                <div className="flex h-full min-h-72 flex-col gap-2">
+                  <p className="text-sm font-medium">Vista previa</p>
+                  <div
+                    className="relative min-h-0 flex-1 overflow-hidden rounded-lg border text-center"
+                    style={{
+                      backgroundColor: actions.linksPanelColor,
+                      color: actions.linksTextColor,
+                      backgroundImage: actions.linksBackgroundImage
+                        ? `url("${actions.linksBackgroundImage.replace(/"/g, "")}")`
+                        : undefined,
+                      backgroundSize: "cover",
+                      backgroundPosition: "center",
+                    }}
+                  >
+                    {actions.linksBackgroundImage ? (
+                      <div
+                        className="pointer-events-none absolute inset-0"
+                        style={{ backgroundColor: actions.linksPanelColor, opacity: 0.72 }}
+                      />
+                    ) : null}
+                    <div className="relative flex h-full min-h-64 items-center justify-center px-4 py-10">
+                      {hasVisibleRichText(actions.linksHtml) ? (
+                        <div
+                          className="mx-auto max-w-3xl [&_a]:underline [&_font[size='1']]:text-xs [&_font[size='2']]:text-sm [&_font[size='3']]:text-base [&_font[size='4']]:text-lg [&_font[size='5']]:text-2xl [&_font[size='6']]:text-4xl [&_font[size='7']]:text-5xl [&_font[size='7']]:font-black [&_h2]:text-4xl [&_h2]:font-black [&_h3]:text-2xl [&_h3]:font-bold [&_img]:mx-auto [&_img]:my-4 [&_img]:max-h-80 [&_img]:max-w-full [&_img]:rounded-lg [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:text-left [&_p]:mb-3 [&_s]:line-through [&_strike]:line-through [&_strong]:font-bold [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:text-left"
+                          dangerouslySetInnerHTML={{
+                            __html: actions.linksHtml.replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, ""),
+                          }}
+                        />
+                      ) : (
+                        <div>
+                          <h2
+                            className="text-4xl font-black md:text-6xl"
+                            style={{ fontFamily: "'Fredoka', sans-serif", color: actions.linksTextColor }}
+                          >
+                            Miau Miau
+                          </h2>
+                          <p className="mt-3 text-lg" style={{ color: actions.linksTextColor }}>
+                            Elige lo que quieres ver
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              }
+            />
+            <div className="grid gap-4 sm:grid-cols-2">
               {LINK_COLOR_FIELDS.map((field) => (
                 <div key={field.key} className="space-y-2">
                   <Label htmlFor={field.key}>{field.label}</Label>

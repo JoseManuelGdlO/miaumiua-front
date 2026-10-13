@@ -157,7 +157,7 @@ const SiteSettings = () => {
   }
 
   return (
-    <div className="p-6 max-w-xl space-y-8">
+    <div className="p-6 max-w-5xl space-y-8">
       <div className="flex items-center gap-3 mb-6">
         <Globe className="h-8 w-8 text-primary" />
         <div>
@@ -195,7 +195,8 @@ const SiteSettings = () => {
         </CardContent>
       </Card>
 
-      <Card>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <Card className="h-full">
         <CardHeader>
           <CardTitle>Video de fondo (YouTube)</CardTitle>
           <CardDescription>
@@ -230,9 +231,9 @@ const SiteSettings = () => {
             </form>
           )}
         </CardContent>
-      </Card>
+        </Card>
 
-      <Card>
+        <Card className="h-full">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Link2 className="h-5 w-5" />
@@ -303,7 +304,8 @@ const SiteSettings = () => {
             </form>
           )}
         </CardContent>
-      </Card>
+        </Card>
+      </div>
     </div>
   );
 };

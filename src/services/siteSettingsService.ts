@@ -19,6 +19,7 @@ export interface QrActions {
   links: QrLink[];
   linksHtml: string;
   linksPanelColor: string;
+  linksBackgroundImage: string;
   linksBubbleColor: string;
   linksBubbleTextColor: string;
   linksTextColor: string;
@@ -37,6 +38,7 @@ export const DEFAULT_QR_ACTIONS: QrActions = {
   links: [],
   linksHtml: '',
   linksPanelColor: '#fff7ed',
+  linksBackgroundImage: '',
   linksBubbleColor: '#16a34a',
   linksBubbleTextColor: '#1c1917',
   linksTextColor: '#1c1917',
@@ -274,10 +276,23 @@ function normalizeQrActions(raw: Partial<QrActions> | undefined): QrActions {
     links: normalizeQrLinks(raw),
     linksHtml: typeof raw?.linksHtml === 'string' ? raw.linksHtml : '',
     linksPanelColor: normalizeHexColor(raw?.linksPanelColor, DEFAULT_QR_ACTIONS.linksPanelColor),
+    linksBackgroundImage: normalizeHttpUrl(raw?.linksBackgroundImage),
     linksBubbleColor: normalizeHexColor(raw?.linksBubbleColor, DEFAULT_QR_ACTIONS.linksBubbleColor),
     linksBubbleTextColor: normalizeHexColor(raw?.linksBubbleTextColor, DEFAULT_QR_ACTIONS.linksBubbleTextColor),
     linksTextColor: normalizeHexColor(raw?.linksTextColor, DEFAULT_QR_ACTIONS.linksTextColor),
   };
+}
+
+function normalizeHttpUrl(value: string | undefined) {
+  if (typeof value !== 'string') return '';
+  const url = value.trim();
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') return url;
+  } catch {
+    /* ignore */
+  }
+  return '';
 }
 
 function normalizeHexColor(value: string | undefined, fallback: string) {
