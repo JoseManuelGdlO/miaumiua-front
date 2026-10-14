@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { TablePagination } from "@/components/TablePagination";
 import {
   Bell,
   Package,
@@ -538,30 +539,14 @@ const Notifications = () => {
               </div>
             </ScrollArea>
           )}
-          {!loading && totalPages > 1 && (
-            <div className="flex items-center justify-between mt-4 pt-4 border-t">
-              <div className="text-sm text-muted-foreground">
-                Página {currentPage} de {totalPages} ({total} notificaciones)
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                  disabled={currentPage === 1}
-                >
-                  Anterior
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                  disabled={currentPage === totalPages}
-                >
-                  Siguiente
-                </Button>
-              </div>
-            </div>
+          {!loading && (
+            <TablePagination
+              page={currentPage}
+              pageSize={20}
+              total={total}
+              label="notificaciones"
+              onPageChange={setCurrentPage}
+            />
           )}
         </CardContent>
       </Card>

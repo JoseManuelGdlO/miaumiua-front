@@ -133,7 +133,7 @@ const Roles = () => {
                   <TableHead>Permisos</TableHead>
                   <TableHead>Usuarios</TableHead>
                   <TableHead>Creado</TableHead>
-                  <TableHead className="text-right">Acciones</TableHead>
+                  <TableHead>Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

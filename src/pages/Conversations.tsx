@@ -26,6 +26,7 @@ import {
   getListFilterLabel,
 } from "@/utils/conversationListFilters";
 import { StatCard } from "@/components/StatCard";
+import { TablePagination } from "@/components/TablePagination";
 
 const normalizePhone = (value: string) => value.replace(/\D/g, "");
 
@@ -677,25 +678,13 @@ const Conversations = () => {
               </div>
             ))}
           </div>
-          <div className="mt-4 flex items-center justify-between">
-            <Button
-              variant="outline"
-              disabled={loading || page <= 1}
-              onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-            >
-              Anterior
-            </Button>
-            <div className="text-xs text-muted-foreground">
-              Página {page} de {totalPages}
-            </div>
-            <Button
-              variant="outline"
-              disabled={loading || page >= totalPages}
-              onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
-            >
-              Siguiente
-            </Button>
-          </div>
+          <TablePagination
+            page={page}
+            pageSize={limit}
+            total={totalCount}
+            label="conversaciones"
+            onPageChange={setPage}
+          />
         </CardContent>
       </Card>
 

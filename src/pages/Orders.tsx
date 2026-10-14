@@ -17,15 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Pagination,
-  PaginationContent,
-  PaginationEllipsis,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from "@/components/ui/pagination";
+import { TablePagination } from "@/components/TablePagination";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -117,27 +109,6 @@ const Orders = () => {
   const [selectedOrderForDelete, setSelectedOrderForDelete] = useState<OrderWithAPI | null>(null);
   const [detailsStripeRetryLoading, setDetailsStripeRetryLoading] = useState(false);
   const itemsPerPage = 10;
-  const maxVisiblePages = 5;
-
-  const getVisiblePageNumbers = (): number[] => {
-    if (totalPages <= maxVisiblePages) {
-      return Array.from({ length: totalPages }, (_, i) => i + 1);
-    }
-
-    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
-    let endPage = startPage + maxVisiblePages - 1;
-
-    if (endPage > totalPages) {
-      endPage = totalPages;
-      startPage = Math.max(1, endPage - maxVisiblePages + 1);
-    }
-
-    return Array.from({ length: endPage - startPage + 1 }, (_, i) => startPage + i);
-  };
-
-  const visiblePages = getVisiblePageNumbers();
-  const showStartEllipsis = visiblePages[0] > 1;
-  const showEndEllipsis = visiblePages[visiblePages.length - 1] < totalPages;
 
   const getStripeCheckoutUrl = (order: OrderWithAPI): string | null =>
     order.stripe_link_url ?? order.url ?? null;
@@ -310,20 +281,20 @@ const Orders = () => {
 
   const getStatusBadge = (status: string) => {
     const statusConfig = {
-      pendiente: { label: 'Pendiente', variant: 'secondary' as const, icon: Clock },
-      confirmado: { label: 'Confirmado', variant: 'outline' as const, icon: CheckCircle },
-      en_preparacion: { label: 'En Preparación', variant: 'outline' as const, icon: Package },
-      en_camino: { label: 'En Camino', variant: 'outline' as const, icon: Truck },
-      entregado: { label: 'Entregado', variant: 'outline' as const, icon: CheckCircle },
-      no_entregado: { label: 'No Entregado', variant: 'destructive' as const, icon: XCircle },
-      cancelado: { label: 'Cancelado', variant: 'destructive' as const, icon: XCircle }
+      pendiente: { label: 'Pendiente', className: 'bg-yellow-100 text-yellow-800 border-yellow-200', icon: Clock },
+      confirmado: { label: 'Confirmado', className: 'bg-blue-100 text-blue-800 border-blue-200', icon: CheckCircle },
+      en_preparacion: { label: 'En Preparación', className: 'bg-orange-100 text-orange-800 border-orange-200', icon: Package },
+      en_camino: { label: 'En Camino', className: 'bg-sky-100 text-sky-800 border-sky-200', icon: Truck },
+      entregado: { label: 'Entregado', className: 'bg-green-100 text-green-800 border-green-200', icon: CheckCircle },
+      no_entregado: { label: 'No Entregado', className: 'bg-red-100 text-red-800 border-red-200', icon: XCircle },
+      cancelado: { label: 'Cancelado', className: 'bg-rose-100 text-rose-800 border-rose-200', icon: XCircle }
     };
 
     const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.pendiente;
     const Icon = config.icon;
 
     return (
-      <Badge variant={config.variant} className="flex items-center gap-1">
+      <Badge variant="outline" className={`flex items-center gap-1 ${config.className}`}>
         <Icon className="h-3 w-3" />
         {config.label}
       </Badge>
@@ -332,14 +303,14 @@ const Orders = () => {
 
   const getPaymentMethodBadge = (method: string) => {
     const methodConfig = {
-      efectivo: { label: 'Efectivo', variant: 'secondary' as const },
-      tarjeta: { label: 'Tarjeta', variant: 'secondary' as const },
-      transferencia: { label: 'Transferencia', variant: 'secondary' as const },
-      pago_movil: { label: 'Pago Móvil', variant: 'secondary' as const }
+      efectivo: { label: 'Efectivo', className: 'bg-green-100 text-green-800 border-green-200' },
+      tarjeta: { label: 'Tarjeta', className: 'bg-blue-100 text-blue-800 border-blue-200' },
+      transferencia: { label: 'Transferencia', className: 'bg-purple-100 text-purple-800 border-purple-200' },
+      pago_movil: { label: 'Pago Móvil', className: 'bg-orange-100 text-orange-800 border-orange-200' }
     };
 
     const config = methodConfig[method as keyof typeof methodConfig] || methodConfig.efectivo;
-    return <Badge variant={config.variant}>{config.label}</Badge>;
+    return <Badge variant="outline" className={config.className}>{config.label}</Badge>;
   };
 
   const handleStatusChange = async (orderId: number, newStatus: string) => {
@@ -560,7 +531,7 @@ const Orders = () => {
                   <TableHead>Método Pago</TableHead>
                   <TableHead>Total</TableHead>
                   <TableHead>Fecha Entrega</TableHead>
-                  <TableHead className="text-right">Acciones</TableHead>
+                  <TableHead>Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -718,75 +689,13 @@ const Orders = () => {
             </Table>
           </div>
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between space-x-2 py-4">
-            <div className="text-sm text-muted-foreground">
-                Mostrando {((currentPage - 1) * itemsPerPage) + 1} a {Math.min(currentPage * itemsPerPage, totalOrders)} de {totalOrders} pedidos
-            </div>
-            <Pagination>
-              <PaginationContent>
-                <PaginationItem>
-                  <PaginationPrevious 
-                      onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                      className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
-                  />
-                </PaginationItem>
-                  
-                  {showStartEllipsis && (
-                    <>
-                      <PaginationItem>
-                        <PaginationLink
-                          onClick={() => setCurrentPage(1)}
-                          className="cursor-pointer"
-                        >
-                          1
-                        </PaginationLink>
-                      </PaginationItem>
-                      <PaginationItem>
-                        <PaginationEllipsis />
-                      </PaginationItem>
-                    </>
-                  )}
-
-                  {visiblePages.map((page) => (
-                    <PaginationItem key={page}>
-                      <PaginationLink
-                        onClick={() => setCurrentPage(page)}
-                        isActive={currentPage === page}
-                        className="cursor-pointer"
-                      >
-                        {page}
-                      </PaginationLink>
-                    </PaginationItem>
-                  ))}
-
-                  {showEndEllipsis && (
-                    <>
-                      <PaginationItem>
-                        <PaginationEllipsis />
-                      </PaginationItem>
-                      <PaginationItem>
-                        <PaginationLink
-                          onClick={() => setCurrentPage(totalPages)}
-                          className="cursor-pointer"
-                        >
-                          {totalPages}
-                        </PaginationLink>
-                      </PaginationItem>
-                    </>
-                  )}
-                
-                <PaginationItem>
-                  <PaginationNext 
-                      onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                      className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
-                  />
-                </PaginationItem>
-              </PaginationContent>
-            </Pagination>
-          </div>
-          )}
+          <TablePagination
+            page={currentPage}
+            pageSize={itemsPerPage}
+            total={totalOrders}
+            label="pedidos"
+            onPageChange={setCurrentPage}
+          />
         </CardContent>
       </Card>
 

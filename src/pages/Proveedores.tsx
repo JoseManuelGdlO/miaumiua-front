@@ -17,6 +17,7 @@ import { EditProveedorModal } from "@/components/modals/EditProveedorModal";
 import ConfirmDeleteModal from "@/components/modals/ConfirmDeleteModal";
 import { Search, Plus, MoreHorizontal, Edit, Trash2, Loader2, Store, UserCheck, UserX } from "lucide-react";
 import { StatCard } from "@/components/StatCard";
+import { TablePagination } from "@/components/TablePagination";
 import { canCreate, canEdit, canDelete } from "@/utils/permissions";
 
 const Proveedores = () => {
@@ -251,35 +252,13 @@ const Proveedores = () => {
             </Table>
           </div>
 
-          {/* Paginación */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between space-x-2 py-4">
-              <div className="text-sm text-muted-foreground">
-                Mostrando {((currentPage - 1) * itemsPerPage) + 1} a {Math.min(currentPage * itemsPerPage, totalItems)} de {totalItems} proveedores
-              </div>
-              <div className="flex items-center space-x-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                  disabled={currentPage === 1}
-                >
-                  Anterior
-                </Button>
-                <span className="text-sm">
-                  Página {currentPage} de {totalPages}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                  disabled={currentPage === totalPages}
-                >
-                  Siguiente
-                </Button>
-              </div>
-            </div>
-          )}
+          <TablePagination
+            page={currentPage}
+            pageSize={itemsPerPage}
+            total={totalItems}
+            label="proveedores"
+            onPageChange={setCurrentPage}
+          />
         </CardContent>
       </Card>
 
