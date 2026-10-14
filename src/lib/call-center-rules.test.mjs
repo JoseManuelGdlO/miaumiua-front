@@ -3,6 +3,8 @@ import test from 'node:test';
 import {
   displayPhone,
   statusOptions,
+  statusLabel,
+  canReassign,
   pedidosPath,
   repartidoresPath,
   shouldRefreshAfter,
@@ -23,6 +25,11 @@ test('las transiciones son las de Pedidos', () => {
   assert.deepEqual(statusOptions('no_entregado'), ['entregado']);
   assert.deepEqual(statusOptions('entregado'), []);
   assert.deepEqual(statusOptions('cancelado'), []);
+  assert.equal(statusLabel('en_preparacion'), 'En preparación');
+  assert.equal(statusLabel('no_entregado'), 'No entregado');
+  assert.equal(canReassign('en_camino'), true);
+  assert.equal(canReassign('entregado'), false);
+  assert.equal(canReassign('cancelado'), false);
 });
 
 test('los query no mandan filtros vacíos', () => {

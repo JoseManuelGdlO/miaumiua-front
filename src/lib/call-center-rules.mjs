@@ -6,6 +6,18 @@ const TRANSITIONS = {
   no_entregado: ['entregado'],
 };
 
+const STATUS_LABELS = {
+  pendiente: 'Pendiente',
+  confirmado: 'Confirmado',
+  en_preparacion: 'En preparación',
+  en_camino: 'En camino',
+  entregado: 'Entregado',
+  no_entregado: 'No entregado',
+  cancelado: 'Cancelado',
+};
+
+const CLOSED = ['entregado', 'no_entregado', 'cancelado'];
+
 export function displayPhone(pedido) {
   const ref = String(pedido?.telefono_referencia || '').trim();
   if (ref) return ref;
@@ -14,6 +26,14 @@ export function displayPhone(pedido) {
 
 export function statusOptions(estado) {
   return TRANSITIONS[estado] || [];
+}
+
+export function statusLabel(estado) {
+  return STATUS_LABELS[estado] || String(estado || '—');
+}
+
+export function canReassign(estado) {
+  return !CLOSED.includes(estado);
 }
 
 export function pedidosPath({ ciudadId, repartidorId } = {}) {

@@ -49,6 +49,7 @@ export type PedidoDia = {
   numero_pedido: string;
   estado: string;
   estado_entrega: string;
+  modificado?: boolean;
   cliente: string | null;
   telefono: string | null;
   direccion: string | null;
