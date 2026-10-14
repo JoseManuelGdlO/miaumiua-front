@@ -18,7 +18,7 @@ import {
   type RepartidorOpcion,
   type Solicitud,
 } from "@/services/callCenterService";
-import { keepSelection, shouldRefreshAfter, statusOptions } from "@/lib/call-center-rules.mjs";
+import { canReassign, keepSelection, shouldRefreshAfter, statusLabel, statusOptions } from "@/lib/call-center-rules.mjs";
 
 const TIPO: Record<string, string> = {
   check_in: "Check-in",
@@ -36,6 +36,31 @@ function errorText(error: unknown) {
 
 function formatMoney(value: number) {
   return value.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+const STATUS_CLASS: Record<string, string> = {
+  pendiente: "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary",
+  confirmado: "border-transparent bg-sky-100 text-sky-900 hover:bg-sky-100",
+  en_preparacion: "border-transparent bg-amber-100 text-amber-900 hover:bg-amber-100",
+  en_camino: "border-transparent bg-blue-100 text-blue-900 hover:bg-blue-100",
+  entregado: "border-transparent bg-emerald-100 text-emerald-900 hover:bg-emerald-100",
+  no_entregado: "border-transparent bg-destructive text-destructive-foreground hover:bg-destructive",
+  cancelado: "border-transparent bg-destructive text-destructive-foreground hover:bg-destructive",
+};
+
+function OrderStatus({ estado, modificado }: { estado: string; modificado?: boolean }) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <Badge variant="outline" className={STATUS_CLASS[estado] || "hover:bg-background"}>
+        {statusLabel(estado)}
+      </Badge>
+      {modificado ? (
+        <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-50">
+          Modificado
+        </Badge>
+      ) : null}
+    </div>
+  );
 }
 
 const CallCenter = () => {
@@ -56,6 +81,7 @@ const CallCenter = () => {
   const [reassignFor, setReassignFor] = useState<PedidoDia | null>(null);
   const [drivers, setDrivers] = useState<RepartidorOpcion[]>([]);
   const [targetDriver, setTargetDriver] = useState<string>("");
+  const [nuevoEstado, setNuevoEstado] = useState<string>("");
   const [estadoBusyIds, setEstadoBusyIds] = useState<number[]>([]);
   const [historial, setHistorial] = useState<CargaValidada[]>([]);
   const [historialId, setHistorialId] = useState<number | null>(null);
@@ -193,37 +219,21 @@ const CallCenter = () => {
     }
   };
 
-  const cambiarEstado = async (pedido: PedidoDia, estado: string) => {
-    if (estadoPending.current.has(pedido.id)) return;
-    estadoPending.current.add(pedido.id);
-    setEstadoBusyIds([...estadoPending.current]);
-    try {
-      await callCenterService.cambiarEstado(pedido.id, estado);
-      await loadLists();
-    } catch (error) {
-      await afterAction(error);
-    } finally {
-      estadoPending.current.delete(pedido.id);
-      setEstadoBusyIds([...estadoPending.current]);
-    }
-  };
-
   const closeReassign = () => {
     reassignRequest.current += 1;
     reassignPedidoId.current = null;
     setReassignFor(null);
+    setNuevoEstado("");
   };
 
-  const openReassign = async (pedido: PedidoDia) => {
-    if (!pedido.ciudad_id) {
-      toast({ title: "Ese pedido no tiene ciudad", variant: "destructive" });
-      return;
-    }
+  const openCambios = async (pedido: PedidoDia) => {
     const requestId = ++reassignRequest.current;
     reassignPedidoId.current = pedido.id;
     setReassignFor(pedido);
     setDrivers([]);
     setTargetDriver("");
+    setNuevoEstado("");
+    if (!pedido.ciudad_id || !canReassign(pedido.estado)) return;
     try {
       const next = await callCenterService.listRepartidores(pedido.ciudad_id);
       if (requestId !== reassignRequest.current || reassignPedidoId.current !== pedido.id) return;
@@ -232,6 +242,25 @@ const CallCenter = () => {
       if (requestId !== reassignRequest.current || reassignPedidoId.current !== pedido.id) return;
       setDrivers([]);
       notify(error);
+    }
+  };
+
+  const aplicarEstado = async () => {
+    if (!reassignFor || !nuevoEstado || estadoPending.current.has(reassignFor.id)) return;
+    const pedido = reassignFor;
+    const estado = nuevoEstado;
+    estadoPending.current.add(pedido.id);
+    setEstadoBusyIds([...estadoPending.current]);
+    try {
+      await callCenterService.cambiarEstado(pedido.id, estado);
+      toast({ title: "Estado actualizado" });
+      closeReassign();
+      await loadLists();
+    } catch (error) {
+      await afterAction(error);
+    } finally {
+      estadoPending.current.delete(pedido.id);
+      setEstadoBusyIds([...estadoPending.current]);
     }
   };
 
@@ -329,7 +358,7 @@ const CallCenter = () => {
                 <TableHead>Dirección</TableHead>
                 <TableHead>Estado</TableHead>
                 <TableHead>Repartidor</TableHead>
-                <TableHead></TableHead>
+                <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -339,13 +368,19 @@ const CallCenter = () => {
                   <TableCell>{row.cliente || "—"}</TableCell>
                   <TableCell>{row.telefono ? <a href={`tel:${row.telefono}`}>{row.telefono}</a> : "—"}</TableCell>
                   <TableCell>{row.direccion || "—"}</TableCell>
-                  <TableCell><Badge>{row.estado}</Badge></TableCell>
+                  <TableCell><OrderStatus estado={row.estado} modificado={row.modificado} /></TableCell>
                   <TableCell>{row.repartidor?.nombre_completo || "—"}</TableCell>
-                  <TableCell className="space-x-2">
-                    {statusOptions(row.estado).map((estado) => (
-                      <Button key={estado} variant="outline" size="sm" disabled={estadoBusyIds.includes(row.id)} onClick={() => void cambiarEstado(row, estado)}>{estado}</Button>
-                    ))}
-                    <Button variant="outline" size="sm" onClick={() => void openReassign(row)}>Reasignar</Button>
+                  <TableCell className="text-right">
+                    {statusOptions(row.estado).length > 0 || canReassign(row.estado) ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={estadoBusyIds.includes(row.id)}
+                        onClick={() => void openCambios(row)}
+                      >
+                        Cambiar
+                      </Button>
+                    ) : null}
                   </TableCell>
                 </TableRow>
               ))}
@@ -374,16 +409,43 @@ const CallCenter = () => {
 
       <Dialog open={reassignFor != null} onOpenChange={(open) => { if (!open) closeReassign(); }}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Reasignar pedido</DialogTitle></DialogHeader>
-          <Select value={targetDriver} onValueChange={setTargetDriver}>
-            <SelectTrigger><SelectValue placeholder="Repartidor" /></SelectTrigger>
-            <SelectContent>
-              {drivers.filter((driver) => driver.id !== reassignFor?.repartidor?.id).map((driver) => (
-                <SelectItem key={driver.id} value={String(driver.id)}>{driver.nombre_completo}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button disabled={busy || !targetDriver} onClick={() => void confirmReassign()}>Mover</Button>
+          <DialogHeader><DialogTitle>Cambiar pedido {reassignFor?.numero_pedido}</DialogTitle></DialogHeader>
+          {reassignFor && (
+            <div className="space-y-4">
+              <OrderStatus estado={reassignFor.estado} modificado={reassignFor.modificado} />
+              {statusOptions(reassignFor.estado).length > 0 && (
+                <div className="space-y-2">
+                  <Select value={nuevoEstado} onValueChange={setNuevoEstado}>
+                    <SelectTrigger><SelectValue placeholder="Nuevo estado" /></SelectTrigger>
+                    <SelectContent>
+                      {statusOptions(reassignFor.estado).map((estado) => (
+                        <SelectItem key={estado} value={estado}>{statusLabel(estado)}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    disabled={!nuevoEstado || estadoBusyIds.includes(reassignFor.id)}
+                    onClick={() => void aplicarEstado()}
+                  >
+                    Actualizar estado
+                  </Button>
+                </div>
+              )}
+              {canReassign(reassignFor.estado) && (
+                <div className="space-y-2">
+                  <Select value={targetDriver} onValueChange={setTargetDriver}>
+                    <SelectTrigger><SelectValue placeholder="Reasignar repartidor" /></SelectTrigger>
+                    <SelectContent>
+                      {drivers.filter((driver) => driver.id !== reassignFor.repartidor?.id).map((driver) => (
+                        <SelectItem key={driver.id} value={String(driver.id)}>{driver.nombre_completo}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button disabled={busy || !targetDriver} onClick={() => void confirmReassign()}>Reasignar</Button>
+                </div>
+              )}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
         </TabsContent>
