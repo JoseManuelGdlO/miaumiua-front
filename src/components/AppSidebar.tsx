@@ -149,12 +149,15 @@ export function AppSidebar() {
     }));
   };
 
-  const getNavClasses = (isActive: boolean) =>
-    `flex items-center w-full text-left transition-colors ${
-      isActive 
-        ? "bg-primary/10 text-primary font-medium" 
-        : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-    }`;
+  const getNavClasses = (active: boolean) => {
+    if (!active) {
+      return "flex w-full items-center text-left text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground";
+    }
+    if (isCollapsed) {
+      return "mx-auto flex items-center justify-center bg-primary/10 font-medium text-primary !rounded-xl";
+    }
+    return "relative flex w-full items-center rounded-lg bg-primary/10 pl-3 text-left font-medium text-primary transition-colors before:absolute before:left-1 before:top-1/2 before:h-5 before:w-1 before:-translate-y-1/2 before:rounded-full before:bg-primary";
+  };
 
   return (
     <Sidebar

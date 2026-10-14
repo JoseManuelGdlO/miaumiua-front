@@ -28,7 +28,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Search, Plus, MoreHorizontal, Edit, Trash2, Package, Package2, Loader2, AlertTriangle, RotateCcw } from "lucide-react";
+import { Search, Plus, MoreHorizontal, Edit, Trash2, Package, Package2, Loader2, AlertTriangle, RotateCcw, DollarSign } from "lucide-react";
+import { StatCard } from "@/components/StatCard";
 import { canCreate, canEdit, canDelete } from "@/utils/permissions";
 import CreateInventarioModal from "@/components/modals/CreateInventarioModal";
 import EditInventarioModal from "@/components/modals/EditInventarioModal";
@@ -183,44 +184,15 @@ const Inventarios = () => {
 
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Productos</CardTitle>
-            <Package className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalItems}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Productos Activos</CardTitle>
-            <Package2 className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{inventarios.length}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Stock Bajo</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-destructive">{lowStockCount}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Valor Total</CardTitle>
-            <Package className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {formatPrice(inventarios.reduce((sum, inv) => sum + (inv.precio_venta * inv.stock_inicial), 0))}
-            </div>
-          </CardContent>
-        </Card>
+        <StatCard title="Total Productos" value={totalItems} icon={Package} tone="primary" />
+        <StatCard title="Productos Activos" value={inventarios.length} icon={Package2} tone="success" />
+        <StatCard title="Stock Bajo" value={lowStockCount} icon={AlertTriangle} tone="destructive" />
+        <StatCard
+          title="Valor Total"
+          value={formatPrice(inventarios.reduce((sum, inv) => sum + (inv.precio_venta * inv.stock_inicial), 0))}
+          icon={DollarSign}
+          tone="primary"
+        />
       </div>
 
       {/* Search and Filters */}

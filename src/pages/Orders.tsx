@@ -71,6 +71,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ordersService, Order, OrderStatsResponse } from "@/services/ordersService";
 import { notificationsService } from "@/services/notificationsService";
 import { formatCount, formatMoney } from "@/utils/format";
+import { StatCard } from "@/components/StatCard";
 import { clientesService } from "@/services/clientesService";
 import { citiesService } from "@/services/citiesService";
 import CreateOrderModal from "@/components/modals/CreateOrderModal";
@@ -429,67 +430,34 @@ const Orders = () => {
       {/* Stats Cards */}
       {stats && (
         <div className="grid gap-4 md:grid-cols-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Pedidos</CardTitle>
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary">
-                <Package className="h-4 w-4" />
-              </span>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{formatCount(stats.total_pedidos || 0)}</div>
-              <p className="text-xs text-muted-foreground">
-                {formatCount(stats.pedidos_pendientes || 0)} pendientes
-              </p>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Ventas Totales</CardTitle>
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary">
-                <DollarSign className="h-4 w-4" />
-              </span>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{formatCurrency(stats.total_ventas || 0)}</div>
-              <p className="text-xs text-muted-foreground">
-                Promedio: {formatCurrency(stats.promedio_pedido || 0)}
-              </p>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Ventas del Mes</CardTitle>
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary">
-                <TrendingUp className="h-4 w-4" />
-              </span>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {ventasDelMes ? formatMoney(ventasDelMes.valor) : formatCurrency(stats.ventas_mes_actual || 0)}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {ventasDelMes ? ventasDelMes.cambioFormato : `${stats.crecimiento_ventas != null && stats.crecimiento_ventas > 0 ? '+' : ''}${(stats.crecimiento_ventas ?? 0).toFixed(1)}% vs mes anterior`}
-              </p>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Entregados</CardTitle>
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary">
-                <CheckCircle className="h-4 w-4" />
-              </span>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{formatCount(stats.pedidos_entregados || 0)}</div>
-              <p className="text-xs text-muted-foreground">
-                {formatCount(stats.pedidos_en_camino || 0)} en camino
-              </p>
-            </CardContent>
-          </Card>
+          <StatCard
+            title="Total Pedidos"
+            value={formatCount(stats.total_pedidos || 0)}
+            hint={`${formatCount(stats.pedidos_pendientes || 0)} pendientes`}
+            icon={Package}
+            tone="primary"
+          />
+          <StatCard
+            title="Ventas Totales"
+            value={formatCurrency(stats.total_ventas || 0)}
+            hint={`Promedio: ${formatCurrency(stats.promedio_pedido || 0)}`}
+            icon={DollarSign}
+            tone="primary"
+          />
+          <StatCard
+            title="Ventas del Mes"
+            value={ventasDelMes ? formatMoney(ventasDelMes.valor) : formatCurrency(stats.ventas_mes_actual || 0)}
+            hint={ventasDelMes ? ventasDelMes.cambioFormato : `${stats.crecimiento_ventas != null && stats.crecimiento_ventas > 0 ? '+' : ''}${(stats.crecimiento_ventas ?? 0).toFixed(1)}% vs mes anterior`}
+            icon={TrendingUp}
+            tone="info"
+          />
+          <StatCard
+            title="Entregados"
+            value={formatCount(stats.pedidos_entregados || 0)}
+            hint={`${formatCount(stats.pedidos_en_camino || 0)} en camino`}
+            icon={CheckCircle}
+            tone="success"
+          />
         </div>
       )}
 

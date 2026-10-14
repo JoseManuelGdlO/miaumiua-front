@@ -25,7 +25,7 @@ import {
   fetchConversationKpiStats,
   getListFilterLabel,
 } from "@/utils/conversationListFilters";
-import { cn } from "@/lib/utils";
+import { StatCard } from "@/components/StatCard";
 
 const normalizePhone = (value: string) => value.replace(/\D/g, "");
 
@@ -303,21 +303,21 @@ const Conversations = () => {
         statsData.conversacionesActivas ??
         0,
       icon: MessageCircle,
-      color: "text-green-600",
+      tone: "success" as const,
     },
     {
       title: "Con Errores",
       filterKey: "error" as ConversationListFilter,
       value: statsData.errores ?? 0,
       icon: XCircle,
-      color: "text-red-600",
+      tone: "destructive" as const,
     },
     {
       title: "Escaladas",
       filterKey: "escalado" as ConversationListFilter,
       value: statsData.escaladas ?? 0,
       icon: AlertTriangle,
-      color: "text-orange-600",
+      tone: "warning" as const,
     },
     {
       title: "Resueltas",
@@ -328,7 +328,7 @@ const Conversations = () => {
         statsData.conversacionesCerradas ??
         0,
       icon: MessageCircle,
-      color: "text-gray-600",
+      tone: "success" as const,
     },
   ];
 
@@ -336,7 +336,7 @@ const Conversations = () => {
   const escaladasCount = statsData.escaladas ?? 0;
 
   return (
-    <div className="p-6 space-y-6 max-w-6xl mx-auto">
+    <div className="p-6 space-y-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -357,32 +357,15 @@ const Conversations = () => {
       {/* Statistics */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat) => (
-          <Card
+          <StatCard
             key={stat.filterKey}
-            role="button"
-            tabIndex={0}
-            className={cn(
-              "cursor-pointer transition-all hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-              listFilter === stat.filterKey && "ring-2 ring-primary"
-            )}
+            title={stat.title}
+            value={stat.value}
+            icon={stat.icon}
+            tone={stat.tone}
+            active={listFilter === stat.filterKey}
             onClick={() => handleKpiClick(stat.filterKey)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                handleKpiClick(stat.filterKey);
-              }
-            }}
-          >
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                {stat.title}
-              </CardTitle>
-              <stat.icon className={`h-4 w-4 ${stat.color}`} />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stat.value}</div>
-            </CardContent>
-          </Card>
+          />
         ))}
       </div>
 

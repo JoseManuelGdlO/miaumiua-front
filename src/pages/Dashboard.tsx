@@ -41,6 +41,7 @@ import { notificationsService } from "@/services/notificationsService";
 import { inventariosService, InventarioStatsResponse } from "@/services/inventariosService";
 import { useToast } from "@/hooks/use-toast";
 import { hasPermission } from "@/utils/permissions";
+import { StatCard, statToneText, type StatTone } from "@/components/StatCard";
 import { formatCount, formatMoney } from "@/utils/format";
 
 interface RecentActivity {
@@ -57,7 +58,7 @@ interface KPIStat {
   value: string;
   change: string;
   icon: any;
-  color: string;
+  tone: StatTone;
 }
 
 interface KPIRawItem {
@@ -114,28 +115,28 @@ const Dashboard = () => {
             value: formatCount(response.data.conversacionesActivas.valor),
             change: response.data.conversacionesActivas.cambioFormato,
             icon: MessageSquare,
-            color: "text-primary",
+            tone: "primary",
           },
           {
             title: "Clientes Registrados",
             value: formatCount(response.data.clientesRegistrados.valor),
             change: response.data.clientesRegistrados.cambioFormato,
             icon: Users,
-            color: "text-success",
+            tone: "success",
           },
           {
             title: "Ciudades Activas",
             value: formatCount(response.data.ciudadesActivas.valor),
             change: response.data.ciudadesActivas.cambioFormato,
             icon: MapPin,
-            color: "text-warning",
+            tone: "info",
           },
           {
             title: "Ventas del Mes",
             value: formatMoney(response.data.ventasDelMes.valor),
             change: response.data.ventasDelMes.cambioFormato,
             icon: ShoppingCart,
-            color: "text-primary",
+            tone: "primary",
           },
         ];
 
@@ -176,28 +177,28 @@ const Dashboard = () => {
           value: formatCount(0),
           change: "N/A",
           icon: MessageSquare,
-          color: "text-primary",
+          tone: "primary",
         },
         {
           title: "Clientes Registrados",
           value: formatCount(0),
           change: "N/A",
           icon: Users,
-          color: "text-success",
+          tone: "success",
         },
         {
           title: "Ciudades Activas",
           value: formatCount(0),
           change: "N/A",
           icon: MapPin,
-          color: "text-warning",
+          tone: "info",
         },
         {
           title: "Ventas del Mes",
           value: formatMoney(0),
           change: "N/A",
           icon: ShoppingCart,
-          color: "text-primary",
+          tone: "primary",
         },
       ]);
       setKpiRawData(null);
@@ -532,41 +533,32 @@ const Dashboard = () => {
             Descargar informe PDF
           </Button>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
           {loadingStats ? (
-            // Mostrar skeletons mientras carga
             Array.from({ length: 4 }).map((_, index) => (
-              <Card key={index} className="relative overflow-hidden bg-gradient-to-br from-card to-card/80 border shadow-sm">
+              <Card key={index} className="bg-card shadow-sm">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-card-foreground">
-                    <div className="h-4 w-32 bg-muted animate-pulse rounded" />
+                  <CardTitle className="text-sm font-medium">
+                    <div className="h-4 w-32 animate-pulse rounded bg-muted" />
                   </CardTitle>
-                  <div className="h-5 w-5 bg-muted animate-pulse rounded" />
+                  <div className="h-8 w-8 animate-pulse rounded-full bg-muted" />
                 </CardHeader>
                 <CardContent>
-                  <div className="h-8 w-24 bg-muted animate-pulse rounded mb-2" />
-                  <div className="h-3 w-40 bg-muted animate-pulse rounded" />
+                  <div className="mb-2 h-8 w-24 animate-pulse rounded bg-muted" />
+                  <div className="h-3 w-40 animate-pulse rounded bg-muted" />
                 </CardContent>
               </Card>
             ))
           ) : (
-            stats.map((stat, index) => (
-              <Card key={index} className="relative overflow-hidden bg-gradient-to-br from-card to-card/80 border shadow-sm hover:shadow-md transition-all duration-300">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-card-foreground">
-                    {stat.title}
-                  </CardTitle>
-                  <span className={`flex h-8 w-8 items-center justify-center rounded-full ${stat.color.includes("success") ? "bg-success/10" : stat.color.includes("warning") ? "bg-warning/10" : "bg-primary/10"}`}>
-                    <stat.icon className={`h-4 w-4 ${stat.color}`} />
-                  </span>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-card-foreground">{stat.value}</div>
-                  <p className="text-xs text-muted-foreground">
-                    <span className="text-success font-medium">{stat.change}</span>
-                  </p>
-                </CardContent>
-              </Card>
+            stats.map((stat) => (
+              <StatCard
+                key={stat.title}
+                title={stat.title}
+                value={stat.value}
+                hint={<span className="font-medium text-success">{stat.change}</span>}
+                icon={stat.icon}
+                tone={stat.tone}
+              />
             ))
           )}
         </div>
@@ -816,7 +808,7 @@ const Dashboard = () => {
                       key={index}
                       className="flex items-center gap-3 p-4 rounded-lg bg-muted/30 border border-border/50"
                     >
-                      <div className={`p-2 rounded-md bg-background ${stat.color}`}>
+                      <div className={`rounded-md bg-background p-2 ${statToneText[stat.tone]}`}>
                         <stat.icon className="h-5 w-5" />
                       </div>
                       <div className="min-w-0 flex-1">

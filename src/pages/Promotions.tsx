@@ -26,7 +26,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Search, Plus, MoreHorizontal, Edit, Trash2, Tag, Calendar, Loader2 } from "lucide-react";
+import { Search, Plus, MoreHorizontal, Edit, Trash2, Tag, Calendar, Loader2, Clock, XCircle } from "lucide-react";
+import { StatCard } from "@/components/StatCard";
 import { canCreate, canEdit, canDelete } from "@/utils/permissions";
 import CreatePromotionModal from "@/components/modals/CreatePromotionModal";
 import EditPromotionModal from "@/components/modals/EditPromotionModal";
@@ -173,48 +174,25 @@ const Promotions = () => {
 
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Promociones</CardTitle>
-            <Tag className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalItems}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Promociones Activas</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {promotions.filter(p => getPromotionStatus(p).status === 'Activa').length}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pendientes</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {promotions.filter(p => getPromotionStatus(p).status === 'Pendiente').length}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Expiradas</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {promotions.filter(p => getPromotionStatus(p).status === 'Expirada').length}
-            </div>
-          </CardContent>
-        </Card>
+        <StatCard title="Total Promociones" value={totalItems} icon={Tag} tone="primary" />
+        <StatCard
+          title="Promociones Activas"
+          value={promotions.filter(p => getPromotionStatus(p).status === 'Activa').length}
+          icon={Calendar}
+          tone="success"
+        />
+        <StatCard
+          title="Pendientes"
+          value={promotions.filter(p => getPromotionStatus(p).status === 'Pendiente').length}
+          icon={Clock}
+          tone="warning"
+        />
+        <StatCard
+          title="Expiradas"
+          value={promotions.filter(p => getPromotionStatus(p).status === 'Expirada').length}
+          icon={XCircle}
+          tone="destructive"
+        />
       </div>
 
       {/* Search and Filters */}

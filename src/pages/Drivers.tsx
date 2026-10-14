@@ -27,6 +27,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Search, Plus, MoreHorizontal, Edit, Trash2, User, Phone, MapPin, Calendar, Truck, Loader2, Star, Activity } from "lucide-react";
+import { StatCard } from "@/components/StatCard";
 import { canCreate, canEdit, canDelete, canActivateDriver, canViewDriverStats } from "@/utils/permissions";
 import { driversService, Driver } from "@/services/driversService";
 import { useToast } from "@/hooks/use-toast";
@@ -159,52 +160,29 @@ const Drivers = () => {
 
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Repartidores</CardTitle>
-            <Truck className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalItems}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Disponibles</CardTitle>
-            <Activity className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {drivers.filter(d => d.estado === 'disponible').length}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">En Ruta</CardTitle>
-            <MapPin className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {drivers.filter(d => d.estado === 'en_ruta').length}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Mejor Calificados</CardTitle>
-            <Star className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {drivers.filter(d => 
-                d.calificacion_promedio && 
-                typeof d.calificacion_promedio === 'number' && 
-                d.calificacion_promedio >= 4.5
-              ).length}
-            </div>
-          </CardContent>
-        </Card>
+        <StatCard title="Total Repartidores" value={totalItems} icon={Truck} tone="primary" />
+        <StatCard
+          title="Disponibles"
+          value={drivers.filter(d => d.estado === 'disponible').length}
+          icon={Activity}
+          tone="success"
+        />
+        <StatCard
+          title="En Ruta"
+          value={drivers.filter(d => d.estado === 'en_ruta').length}
+          icon={MapPin}
+          tone="info"
+        />
+        <StatCard
+          title="Mejor Calificados"
+          value={drivers.filter(d =>
+            d.calificacion_promedio &&
+            typeof d.calificacion_promedio === 'number' &&
+            d.calificacion_promedio >= 4.5
+          ).length}
+          icon={Star}
+          tone="info"
+        />
       </div>
 
       {/* Search and Filters */}

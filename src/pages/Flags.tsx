@@ -26,7 +26,17 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
-import { Search, Plus, MoreHorizontal, Edit, Trash2, Tag, Loader2, Palette } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
+import { Search, Plus, MoreHorizontal, Edit, Trash2, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { flagsService, Flag } from "@/services/flagsService";
 
@@ -196,9 +206,9 @@ const Flags = () => {
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">Flags</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Flags</h1>
           <p className="text-muted-foreground">
             Gestiona los flags personalizables para las conversaciones
           </p>
@@ -209,75 +219,72 @@ const Flags = () => {
         </Button>
       </div>
 
-      {/* Search and Filters */}
       <Card>
         <CardHeader>
-          <CardTitle>Filtros</CardTitle>
+          <CardTitle>Flags</CardTitle>
+          <CardDescription>
+            Lista de flags para marcar conversaciones
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-col sm:flex-row gap-4">
+          <div className="mb-4 flex items-center space-x-2">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Buscar flags..."
                 value={searchTerm}
                 onChange={(e) => handleSearch(e.target.value)}
-                className="pl-10"
+                className="pl-8"
               />
             </div>
-            <select
-              value={statusFilter}
-              onChange={(e) => handleStatusFilter(e.target.value)}
-              className="px-3 py-2 border rounded-md"
-            >
-              <option value="all">Todos</option>
-              <option value="active">Activos</option>
-              <option value="inactive">Inactivos</option>
-            </select>
+            <Select value={statusFilter} onValueChange={handleStatusFilter}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Filtrar por estado" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="active">Activos</SelectItem>
+                <SelectItem value="inactive">Inactivos</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Flags Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Lista de Flags</CardTitle>
-          <CardDescription>
-            {loading ? 'Cargando...' : `${totalFlags} flag${totalFlags !== 1 ? 's' : ''} encontrado${totalFlags !== 1 ? 's' : ''}`}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="flex items-center justify-center p-8">
-              <Loader2 className="h-6 w-6 animate-spin" />
-            </div>
-          ) : flags.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              No se encontraron flags
-            </div>
-          ) : (
-            <>
-              <Table>
-                <TableHeader>
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Nombre</TableHead>
+                  <TableHead>Color</TableHead>
+                  <TableHead>Descripción</TableHead>
+                  <TableHead>Estado</TableHead>
+                  <TableHead className="w-[70px]">Acciones</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
                   <TableRow>
-                    <TableHead>Nombre</TableHead>
-                    <TableHead>Color</TableHead>
-                    <TableHead>Descripción</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead className="text-right">Acciones</TableHead>
+                    <TableCell colSpan={5} className="py-8 text-center">
+                      <Loader2 className="mx-auto mb-2 h-6 w-6 animate-spin" />
+                      Cargando flags...
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {flags.map((flag) => (
+                ) : flags.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                      No se encontraron flags
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  flags.map((flag) => (
                     <TableRow key={flag.id}>
                       <TableCell className="font-medium">{flag.nombre}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <div
-                            className="w-6 h-6 rounded-full border"
+                            className="h-6 w-6 rounded-full border"
                             style={{ backgroundColor: flag.color }}
                           />
-                          <span className="text-sm text-muted-foreground font-mono">
+                          <span className="font-mono text-sm text-muted-foreground">
                             {flag.color}
                           </span>
                         </div>
@@ -286,15 +293,11 @@ const Flags = () => {
                         {flag.descripcion || "-"}
                       </TableCell>
                       <TableCell>
-                        {flag.activo ? (
-                          <Badge className="bg-green-100 text-green-800 border-green-200">
-                            Activo
-                          </Badge>
-                        ) : (
-                          <Badge variant="secondary">Inactivo</Badge>
-                        )}
+                        <Badge variant={flag.activo ? "outline" : "secondary"}>
+                          {flag.activo ? "Activo" : "Inactivo"}
+                        </Badge>
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" className="h-8 w-8 p-0">
@@ -317,31 +320,63 @@ const Flags = () => {
                         </DropdownMenu>
                       </TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between mt-4">
-                  <Button
-                    variant="outline"
-                    disabled={currentPage <= 1}
-                    onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                  >
-                    Anterior
-                  </Button>
-                  <span className="text-sm text-muted-foreground">
-                    Página {currentPage} de {totalPages}
-                  </span>
-                  <Button
-                    variant="outline"
-                    disabled={currentPage >= totalPages}
-                    onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-                  >
-                    Siguiente
-                  </Button>
-                </div>
-              )}
-            </>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between space-x-2 py-4">
+              <div className="text-sm text-muted-foreground">
+                Mostrando {((currentPage - 1) * itemsPerPage) + 1} a {Math.min(currentPage * itemsPerPage, totalFlags)} de {totalFlags} flags
+              </div>
+              <Pagination>
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious
+                      onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                      className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                    />
+                  </PaginationItem>
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    const page = i + 1;
+                    return (
+                      <PaginationItem key={page}>
+                        <PaginationLink
+                          onClick={() => setCurrentPage(page)}
+                          isActive={currentPage === page}
+                          className="cursor-pointer"
+                        >
+                          {page}
+                        </PaginationLink>
+                      </PaginationItem>
+                    );
+                  })}
+                  {totalPages > 5 && (
+                    <>
+                      <PaginationItem>
+                        <PaginationEllipsis />
+                      </PaginationItem>
+                      <PaginationItem>
+                        <PaginationLink
+                          onClick={() => setCurrentPage(totalPages)}
+                          className="cursor-pointer"
+                        >
+                          {totalPages}
+                        </PaginationLink>
+                      </PaginationItem>
+                    </>
+                  )}
+                  <PaginationItem>
+                    <PaginationNext
+                      onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                      className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            </div>
           )}
         </CardContent>
       </Card>

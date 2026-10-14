@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -258,7 +258,13 @@ const CallCenter = () => {
   const historialAbierto = historial.find((row) => row.id === historialId) || null;
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="mx-auto max-w-7xl space-y-6 p-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Call Center</h1>
+        <p className="text-muted-foreground">
+          Solicitudes, pedidos del día y validación de carga
+        </p>
+      </div>
       <Tabs value={tab} onValueChange={onTab}>
         <TabsList>
           <TabsTrigger value="operacion">Operación</TabsTrigger>
@@ -266,8 +272,12 @@ const CallCenter = () => {
         </TabsList>
         <TabsContent value="operacion" className="space-y-6">
       <Card>
-        <CardHeader><CardTitle>Cola</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle>Cola</CardTitle>
+          <CardDescription>Solicitudes que esperan atención</CardDescription>
+        </CardHeader>
         <CardContent>
+          <div className="rounded-md border">
           <Table>
             <TableHeader>
               <TableRow>
@@ -278,7 +288,13 @@ const CallCenter = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {solicitudes.map((row) => (
+              {solicitudes.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
+                    No hay solicitudes en la cola
+                  </TableCell>
+                </TableRow>
+              ) : solicitudes.map((row) => (
                 <TableRow
                   key={row.id}
                   onClick={() => {
@@ -298,13 +314,17 @@ const CallCenter = () => {
               ))}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
 
       <Card>
-        <CardHeader><CardTitle>Pedidos del día</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex gap-3">
+        <CardHeader>
+          <CardTitle>Pedidos del día</CardTitle>
+          <CardDescription>Pedidos asignados para hoy</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="mb-4 flex items-center space-x-2">
             <Select value={ciudadId} onValueChange={(value) => { setCiudadId(value); setRepartidorId("all"); }}>
               <SelectTrigger className="w-56"><SelectValue placeholder="Ciudad" /></SelectTrigger>
               <SelectContent>
@@ -320,6 +340,7 @@ const CallCenter = () => {
               </SelectContent>
             </Select>
           </div>
+          <div className="rounded-md border">
           <Table>
             <TableHeader>
               <TableRow>
@@ -329,17 +350,23 @@ const CallCenter = () => {
                 <TableHead>Dirección</TableHead>
                 <TableHead>Estado</TableHead>
                 <TableHead>Repartidor</TableHead>
-                <TableHead></TableHead>
+                <TableHead>Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {pedidos.map((row) => (
+              {pedidos.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
+                    No hay pedidos para los filtros seleccionados
+                  </TableCell>
+                </TableRow>
+              ) : pedidos.map((row) => (
                 <TableRow key={row.ruta_pedido_id}>
                   <TableCell>{row.numero_pedido}</TableCell>
                   <TableCell>{row.cliente || "—"}</TableCell>
                   <TableCell>{row.telefono ? <a href={`tel:${row.telefono}`}>{row.telefono}</a> : "—"}</TableCell>
                   <TableCell>{row.direccion || "—"}</TableCell>
-                  <TableCell><Badge>{row.estado}</Badge></TableCell>
+                  <TableCell><Badge variant="outline">{row.estado}</Badge></TableCell>
                   <TableCell>{row.repartidor?.nombre_completo || "—"}</TableCell>
                   <TableCell className="space-x-2">
                     {statusOptions(row.estado).map((estado) => (
@@ -351,6 +378,7 @@ const CallCenter = () => {
               ))}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
 
@@ -402,8 +430,12 @@ const CallCenter = () => {
             />
           ) : (
             <Card>
-              <CardHeader><CardTitle>Por validar</CardTitle></CardHeader>
+              <CardHeader>
+                <CardTitle>Por validar</CardTitle>
+                <CardDescription>Cargas de check-in pendientes</CardDescription>
+              </CardHeader>
               <CardContent>
+                <div className="rounded-md border">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -414,7 +446,11 @@ const CallCenter = () => {
                   </TableHeader>
                   <TableBody>
                     {pendientes.length === 0 ? (
-                      <TableRow><TableCell colSpan={3}>No hay cargas esperando validación</TableCell></TableRow>
+                      <TableRow>
+                        <TableCell colSpan={3} className="py-8 text-center text-muted-foreground">
+                          No hay cargas esperando validación
+                        </TableCell>
+                      </TableRow>
                     ) : pendientes.map((row) => (
                       <TableRow key={row.id} onClick={() => openValidacion(row.id)} className="cursor-pointer">
                         <TableCell>{row.repartidor?.nombre_completo || "—"}</TableCell>
@@ -424,12 +460,17 @@ const CallCenter = () => {
                     ))}
                   </TableBody>
                 </Table>
+                </div>
               </CardContent>
             </Card>
           )}
           <Card>
-            <CardHeader><CardTitle>Histórico</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle>Histórico</CardTitle>
+              <CardDescription>Cargas ya validadas</CardDescription>
+            </CardHeader>
             <CardContent className="space-y-4">
+              <div className="rounded-md border">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -442,7 +483,11 @@ const CallCenter = () => {
                 </TableHeader>
                 <TableBody>
                   {historial.length === 0 ? (
-                    <TableRow><TableCell colSpan={5}>Aún no hay cargas validadas</TableCell></TableRow>
+                    <TableRow>
+                      <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                        Aún no hay cargas validadas
+                      </TableCell>
+                    </TableRow>
                   ) : historial.map((row) => (
                     <TableRow
                       key={row.id}
@@ -458,14 +503,16 @@ const CallCenter = () => {
                   ))}
                 </TableBody>
               </Table>
+              </div>
               {historialAbierto && (
+                <div className="rounded-md border">
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Producto</TableHead>
                       <TableHead>Cantidad</TableHead>
                       <TableHead>Precio</TableHead>
-                      <TableHead></TableHead>
+                      <TableHead>Tipo</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -479,6 +526,7 @@ const CallCenter = () => {
                     ))}
                   </TableBody>
                 </Table>
+                </div>
               )}
             </CardContent>
           </Card>

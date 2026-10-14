@@ -15,7 +15,8 @@ import { proveedoresService, Proveedor } from "@/services/proveedoresService";
 import { CreateProveedorModal } from "@/components/modals/CreateProveedorModal";
 import { EditProveedorModal } from "@/components/modals/EditProveedorModal";
 import ConfirmDeleteModal from "@/components/modals/ConfirmDeleteModal";
-import { Search, Plus, MoreHorizontal, Edit, Trash2, Loader2 } from "lucide-react";
+import { Search, Plus, MoreHorizontal, Edit, Trash2, Loader2, Store, UserCheck, UserX } from "lucide-react";
+import { StatCard } from "@/components/StatCard";
 import { canCreate, canEdit, canDelete } from "@/utils/permissions";
 
 const Proveedores = () => {
@@ -144,30 +145,9 @@ const Proveedores = () => {
 
       {/* Estadísticas */}
       <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Proveedores</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalProveedores}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Proveedores Activos</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">{stats.proveedoresActivos}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Proveedores Inactivos</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">{stats.proveedoresInactivos}</div>
-          </CardContent>
-        </Card>
+        <StatCard title="Total Proveedores" value={stats.totalProveedores} icon={Store} tone="primary" />
+        <StatCard title="Proveedores Activos" value={stats.proveedoresActivos} icon={UserCheck} tone="success" />
+        <StatCard title="Proveedores Inactivos" value={stats.proveedoresInactivos} icon={UserX} tone="destructive" />
       </div>
 
       {/* Lista de Proveedores */}
