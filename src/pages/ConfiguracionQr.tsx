@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Navigate } from "react-router-dom";
-import { Link2, Loader2, Plus, Trash2, Upload } from "lucide-react";
+import { ExternalLink, Eye, Link2, Loader2, Pencil, Plus, QrCode, Save, Trash2, Type, Upload } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -21,9 +21,37 @@ const QR_LINK = "https://miaumiau.com.mx/QR";
 
 type QrToggleId = "whatsapp" | "catalog" | "packages" | "promotions" | "mercadolibre" | "social";
 
+function visibleText(html: string) {
+  return html.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim();
+}
+
 function hasVisibleRichText(html: string) {
   if (/<img\b/i.test(html)) return true;
-  return html.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim().length > 0;
+  return visibleText(html).length > 0;
+}
+
+const DEFAULT_EDITOR_HTML = '<div style="text-align:center;color:#000000;font-family:Fredoka,sans-serif"><h2 style="color:#000000;font-family:Fredoka,sans-serif;font-weight:700">Miau Miau</h2><p style="color:#000000;font-family:Fredoka,sans-serif;font-weight:600">Elige lo que quieres ver</p></div>';
+
+function withEditableHeading(html: string) {
+  const textHtml = html.replace(/<img\b[^>]*>/gi, "").replace(/<p[^>]*>\s*<\/p>/gi, "");
+  if (visibleText(textHtml).length > 0) return textHtml;
+  return DEFAULT_EDITOR_HTML;
+}
+
+function withExistingLinks(actions: QrActions, data: { mercadolibreUrl?: string; socialTiktokUrl?: string }) {
+  const restored = [
+    { name: "WHATSAPP POR CIUDAD", url: "https://linktr.ee/miaumiauarena" },
+    { name: "MERCADO LIBRE", url: data.mercadolibreUrl?.trim() ?? "" },
+    { name: "TIKTOK", url: data.socialTiktokUrl?.trim() ?? "" },
+  ].filter((item) => item.url && !actions.links.some((link) => link.name.trim().toUpperCase() === item.name));
+  return {
+    ...actions,
+    linksHtml: withEditableHeading(actions.linksHtml),
+    links: [
+      ...actions.links,
+      ...restored.map((item) => ({ id: `link-${item.name.toLowerCase().replace(/\s+/g, "-")}`, name: item.name, url: item.url })),
+    ],
+  };
 }
 
 function isHttpUrl(value: string) {
@@ -44,6 +72,61 @@ const ENLACE_COLOR_FIELDS: { key: "linksBubbleColor" | "linksBubbleTextColor"; l
   { key: "linksBubbleColor", label: "Color de las burbujas" },
   { key: "linksBubbleTextColor", label: "Color del texto" },
 ];
+
+function ColorSettingCard({
+  id,
+  label,
+  value,
+  disabled,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  disabled?: boolean;
+  onChange: (value: string) => void;
+}) {
+  const pickerRef = useRef<HTMLInputElement>(null);
+  const openPicker = () => {
+    if (disabled) return;
+    pickerRef.current?.click();
+  };
+
+  return (
+    <div className="space-y-2 rounded-xl border bg-card p-4">
+      <Label htmlFor={id}>{label}</Label>
+      <div className="flex items-center gap-2 rounded-lg border bg-background px-2">
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={openPicker}
+          aria-label={`Elegir ${label}`}
+          className="h-7 w-7 shrink-0 rounded-md border"
+          style={{ backgroundColor: /^#[0-9a-fA-F]{6}$/.test(value) ? value : "#000000" }}
+        />
+        <input
+          ref={pickerRef}
+          id={id}
+          type="color"
+          value={/^#[0-9a-fA-F]{6}$/.test(value) ? value : "#000000"}
+          disabled={disabled}
+          className="sr-only"
+          onChange={(event) => onChange(event.target.value)}
+        />
+        <Input
+          value={value}
+          disabled={disabled}
+          maxLength={7}
+          className="h-10 border-0 px-0 font-mono shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+          onChange={(event) => onChange(event.target.value)}
+        />
+        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0" disabled={disabled} onClick={openPicker} aria-label={`Editar ${label}`}>
+          <Pencil className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 const QR_ACTION_OPTIONS: { id: QrToggleId; title: string; description: string }[] = [
   {
@@ -94,7 +177,7 @@ const ConfiguracionQr = () => {
       try {
         const res = await siteSettingsService.getPublic();
         if (!cancelled && res.success) {
-          setActions(normalizePublicSiteSettings(res.data).qrActions);
+          setActions(withExistingLinks(normalizePublicSiteSettings(res.data).qrActions, res.data));
         }
       } catch (error) {
         if (!cancelled) {
@@ -113,6 +196,14 @@ const ConfiguracionQr = () => {
       cancelled = true;
     };
   }, [toast]);
+
+  useEffect(() => {
+    setActions((current) => {
+      const next = withEditableHeading(current.linksHtml);
+      if (next === current.linksHtml) return current;
+      return { ...current, linksHtml: next };
+    });
+  }, [actions.linksHtml]);
 
   const toggleAction = (id: QrToggleId | "customLink", checked: boolean) => {
     setActions((current) => ({ ...current, [id]: checked }));
@@ -192,7 +283,7 @@ const ConfiguracionQr = () => {
         links,
       });
       if (res.success && res.data) {
-        setActions(normalizePublicSiteSettings(res.data).qrActions);
+        setActions(withExistingLinks(normalizePublicSiteSettings(res.data).qrActions, res.data));
       }
       toast({
         title: "Guardado",
@@ -216,7 +307,10 @@ const ConfiguracionQr = () => {
   return (
     <div className="p-6 space-y-6 w-full">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">Configuración QR</h1>
+        <h1 className="flex items-center gap-2 text-3xl font-bold tracking-tight text-foreground">
+          <QrCode className="h-5 w-5 text-primary" />
+          Configuración QR
+        </h1>
         <p className="text-muted-foreground">
           Elige qué se muestra cuando alguien entra a la liga del QR
         </p>
@@ -243,7 +337,10 @@ const ConfiguracionQr = () => {
                   <AccordionItem value="mostrar" className="rounded-lg border px-4">
                     <AccordionTrigger className="hover:no-underline">
                       <span className="text-left">
-                        <span className="block text-base">Qué mostrar al entrar</span>
+                        <span className="flex items-center gap-2 text-base">
+                          <Eye className="h-5 w-5 text-primary" />
+                          Qué mostrar al entrar
+                        </span>
                         <span className="block text-sm font-normal text-muted-foreground">
                           Activa solo las acciones que quieres que vea quien escanee el código
                         </span>
@@ -273,7 +370,10 @@ const ConfiguracionQr = () => {
                   <AccordionItem value="enlaces" className="rounded-lg border px-4">
                     <AccordionTrigger className="hover:no-underline">
                       <span className="text-left">
-                        <span className="block text-base">Enlaces</span>
+                        <span className="flex items-center gap-2 text-base">
+                          <Link2 className="h-5 w-5 text-primary" />
+                          Enlaces
+                        </span>
                         <span className="block text-sm font-normal text-muted-foreground">
                           Todos se muestran juntos, en la misma sección de la página del QR
                         </span>
@@ -283,29 +383,14 @@ const ConfiguracionQr = () => {
                       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                         <div className="grid flex-1 gap-4 sm:grid-cols-2">
                           {ENLACE_COLOR_FIELDS.map((field) => (
-                            <div key={field.key} className="space-y-2">
-                              <Label htmlFor={field.key}>{field.label}</Label>
-                              <div className="flex items-center gap-2">
-                                <Input
-                                  id={field.key}
-                                  type="color"
-                                  value={actions[field.key]}
-                                  disabled={!canSave || saving || loading}
-                                  className="h-10 w-14 cursor-pointer p-1"
-                                  onChange={(event) =>
-                                    setActions((current) => ({ ...current, [field.key]: event.target.value }))
-                                  }
-                                />
-                                <Input
-                                  value={actions[field.key]}
-                                  disabled={!canSave || saving || loading}
-                                  maxLength={7}
-                                  onChange={(event) =>
-                                    setActions((current) => ({ ...current, [field.key]: event.target.value }))
-                                  }
-                                />
-                              </div>
-                            </div>
+                            <ColorSettingCard
+                              key={field.key}
+                              id={field.key}
+                              label={field.label}
+                              value={actions[field.key]}
+                              disabled={!canSave || saving || loading}
+                              onChange={(next) => setActions((current) => ({ ...current, [field.key]: next }))}
+                            />
                           ))}
                         </div>
                         <Button type="button" variant="outline" onClick={addLink} disabled={!canSave || saving}>
@@ -316,40 +401,54 @@ const ConfiguracionQr = () => {
                       {actions.links.length === 0 ? (
                         <p className="text-sm text-muted-foreground">Todavía no hay enlaces extra.</p>
                       ) : (
-                        <div className="divide-y">
+                        <div className="space-y-3">
                           {actions.links.map((link, index) => (
-                            <div key={link.id} className="grid gap-3 py-4 first:pt-0 last:pb-0 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
-                              <div className="space-y-2">
-                                <Label htmlFor={`qr-link-name-${link.id}`}>Nombre del Enlace</Label>
-                                <Input
-                                  id={`qr-link-name-${link.id}`}
-                                  value={link.name}
+                            <div key={link.id} className="rounded-xl border p-4">
+                              <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+                                <div className="space-y-2">
+                                  <Label htmlFor={`qr-link-name-${link.id}`} className="text-xs uppercase tracking-wide text-muted-foreground">Nombre del enlace</Label>
+                                  <Input
+                                    id={`qr-link-name-${link.id}`}
+                                    value={link.name}
+                                    disabled={!canSave || saving}
+                                    placeholder={`Enlace ${index + 1}`}
+                                    maxLength={80}
+                                    onChange={(event) => updateLink(link.id, "name", event.target.value)}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label htmlFor={`qr-link-url-${link.id}`} className="text-xs uppercase tracking-wide text-muted-foreground">Link</Label>
+                                  <div className="flex items-center gap-2">
+                                    <Input
+                                      id={`qr-link-url-${link.id}`}
+                                      value={link.url}
+                                      disabled={!canSave || saving}
+                                      placeholder="https://"
+                                      onChange={(event) => updateLink(link.id, "url", event.target.value)}
+                                    />
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      disabled={!isHttpUrl(link.url)}
+                                      aria-label={`Abrir ${link.name || "enlace"}`}
+                                      onClick={() => window.open(link.url.trim(), "_blank", "noopener,noreferrer")}
+                                    >
+                                      <ExternalLink className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                </div>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
                                   disabled={!canSave || saving}
-                                  placeholder={`Enlace ${index + 1}`}
-                                  maxLength={80}
-                                  onChange={(event) => updateLink(link.id, "name", event.target.value)}
-                                />
+                                  onClick={() => removeLink(link.id)}
+                                  aria-label={`Quitar ${link.name || "enlace"}`}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
                               </div>
-                              <div className="space-y-2">
-                                <Label htmlFor={`qr-link-url-${link.id}`}>Link</Label>
-                                <Input
-                                  id={`qr-link-url-${link.id}`}
-                                  value={link.url}
-                                  disabled={!canSave || saving}
-                                  placeholder="https://"
-                                  onChange={(event) => updateLink(link.id, "url", event.target.value)}
-                                />
-                              </div>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                disabled={!canSave || saving}
-                                onClick={() => removeLink(link.id)}
-                                aria-label={`Quitar ${link.name || "enlace"}`}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
                             </div>
                           ))}
                         </div>
@@ -364,7 +463,10 @@ const ConfiguracionQr = () => {
 
         <Card>
           <CardHeader>
-            <CardTitle>Texto de la sección de enlaces</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <Type className="h-5 w-5 text-primary" />
+              Texto de la sección de enlaces
+            </CardTitle>
             <CardDescription>
               Reemplaza el encabezado «Miau Miau» y «Elige lo que quieres ver». La primera línea se ve como título.
             </CardDescription>
@@ -435,12 +537,12 @@ const ConfiguracionQr = () => {
                   </>
                 ) : (
                   <>
-                    <Upload className="h-10 w-10 text-muted-foreground" />
+                    <Upload className="h-10 w-10 text-primary" />
                     <p className="text-sm">
                       <span className="font-medium text-primary">Haz clic para subir</span>
                       <span className="text-muted-foreground"> o arrastra la imagen aquí</span>
                     </p>
-                    <p className="text-xs text-muted-foreground">JPG, PNG, GIF o WebP</p>
+                    <p className="text-xs text-muted-foreground">JPG, PNG, GIF o WebP (Recomendado 1080 x 1920 px)</p>
                   </>
                 )}
               </div>
@@ -452,6 +554,20 @@ const ConfiguracionQr = () => {
               textColor={actions.linksTextColor}
               backgroundImage={actions.linksBackgroundImage}
               onChange={(linksHtml) => setActions((current) => ({ ...current, linksHtml }))}
+              toolbarExtra={
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {LINK_COLOR_FIELDS.map((field) => (
+                    <ColorSettingCard
+                      key={field.key}
+                      id={field.key}
+                      label={field.label}
+                      value={actions[field.key]}
+                      disabled={!canSave || saving || loading}
+                      onChange={(next) => setActions((current) => ({ ...current, [field.key]: next }))}
+                    />
+                  ))}
+                </div>
+              }
               preview={
                 <div className="flex h-full min-h-72 flex-col gap-2">
                   <p className="text-sm font-medium">Vista previa</p>
@@ -473,6 +589,9 @@ const ConfiguracionQr = () => {
                         style={{ backgroundColor: actions.linksPanelColor, opacity: 0.72 }}
                       />
                     ) : null}
+                    <span className="pointer-events-none absolute bottom-3 right-3 z-20 rounded-full bg-background/80 px-2 py-0.5 text-[11px] text-muted-foreground">
+                      Render
+                    </span>
                     <div className="relative flex h-full min-h-64 items-center justify-center px-4 py-10">
                       {hasVisibleRichText(actions.linksHtml) ? (
                         <div
@@ -485,11 +604,11 @@ const ConfiguracionQr = () => {
                         <div>
                           <h2
                             className="text-4xl font-black md:text-6xl"
-                            style={{ fontFamily: "'Fredoka', sans-serif", color: actions.linksTextColor }}
+                            style={{ fontFamily: "'Fredoka', sans-serif", fontWeight: 700, color: "#000000" }}
                           >
                             Miau Miau
                           </h2>
-                          <p className="mt-3 text-lg" style={{ color: actions.linksTextColor }}>
+                          <p className="mt-3 text-lg" style={{ fontFamily: "'Fredoka', sans-serif", fontWeight: 600, color: "#000000" }}>
                             Elige lo que quieres ver
                           </p>
                         </div>
@@ -499,40 +618,13 @@ const ConfiguracionQr = () => {
                 </div>
               }
             />
-            <div className="grid gap-4 sm:grid-cols-2">
-              {LINK_COLOR_FIELDS.map((field) => (
-                <div key={field.key} className="space-y-2">
-                  <Label htmlFor={field.key}>{field.label}</Label>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      id={field.key}
-                      type="color"
-                      value={actions[field.key]}
-                      disabled={!canSave || saving || loading}
-                      className="h-10 w-14 cursor-pointer p-1"
-                      onChange={(event) =>
-                        setActions((current) => ({ ...current, [field.key]: event.target.value }))
-                      }
-                    />
-                    <Input
-                      value={actions[field.key]}
-                      disabled={!canSave || saving || loading}
-                      maxLength={7}
-                      onChange={(event) =>
-                        setActions((current) => ({ ...current, [field.key]: event.target.value }))
-                      }
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
           </CardContent>
         </Card>
         {!loading && (
           canSave ? (
-            <Button type="button" onClick={handleSave} disabled={saving}>
-              {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Guardar acciones
+            <Button type="button" className="rounded-xl px-5" onClick={handleSave} disabled={saving}>
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Guardar configuración
             </Button>
           ) : (
             <p className="text-sm text-muted-foreground">
