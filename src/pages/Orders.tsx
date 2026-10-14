@@ -17,15 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Pagination,
-  PaginationContent,
-  PaginationEllipsis,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from "@/components/ui/pagination";
+import { TablePagination } from "@/components/TablePagination";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -70,6 +62,8 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { ordersService, Order, OrderStatsResponse } from "@/services/ordersService";
 import { notificationsService } from "@/services/notificationsService";
+import { formatCount, formatMoney } from "@/utils/format";
+import { StatCard } from "@/components/StatCard";
 import { clientesService } from "@/services/clientesService";
 import { citiesService } from "@/services/citiesService";
 import CreateOrderModal from "@/components/modals/CreateOrderModal";
@@ -115,27 +109,6 @@ const Orders = () => {
   const [selectedOrderForDelete, setSelectedOrderForDelete] = useState<OrderWithAPI | null>(null);
   const [detailsStripeRetryLoading, setDetailsStripeRetryLoading] = useState(false);
   const itemsPerPage = 10;
-  const maxVisiblePages = 5;
-
-  const getVisiblePageNumbers = (): number[] => {
-    if (totalPages <= maxVisiblePages) {
-      return Array.from({ length: totalPages }, (_, i) => i + 1);
-    }
-
-    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
-    let endPage = startPage + maxVisiblePages - 1;
-
-    if (endPage > totalPages) {
-      endPage = totalPages;
-      startPage = Math.max(1, endPage - maxVisiblePages + 1);
-    }
-
-    return Array.from({ length: endPage - startPage + 1 }, (_, i) => startPage + i);
-  };
-
-  const visiblePages = getVisiblePageNumbers();
-  const showStartEllipsis = visiblePages[0] > 1;
-  const showEndEllipsis = visiblePages[visiblePages.length - 1] < totalPages;
 
   const getStripeCheckoutUrl = (order: OrderWithAPI): string | null =>
     order.stripe_link_url ?? order.url ?? null;
@@ -231,13 +204,7 @@ const Orders = () => {
     setCurrentPage(1);
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('es-CO', {
-      style: 'currency',
-      currency: 'COP',
-      minimumFractionDigits: 0,
-    }).format(amount);
-  };
+  const formatCurrency = (amount: number) => formatMoney(amount);
 
   const formatDate = (dateString: string | null | undefined) => {
     if (!dateString) return 'N/A';
@@ -314,20 +281,20 @@ const Orders = () => {
 
   const getStatusBadge = (status: string) => {
     const statusConfig = {
-      pendiente: { label: 'Pendiente', variant: 'secondary' as const, icon: Clock },
-      confirmado: { label: 'Confirmado', variant: 'default' as const, icon: CheckCircle },
-      en_preparacion: { label: 'En Preparación', variant: 'default' as const, icon: Package },
-      en_camino: { label: 'En Camino', variant: 'default' as const, icon: Truck },
-      entregado: { label: 'Entregado', variant: 'default' as const, icon: CheckCircle },
-      no_entregado: { label: 'No Entregado', variant: 'destructive' as const, icon: XCircle },
-      cancelado: { label: 'Cancelado', variant: 'destructive' as const, icon: XCircle }
+      pendiente: { label: 'Pendiente', className: 'bg-yellow-100 text-yellow-800 border-yellow-200', icon: Clock },
+      confirmado: { label: 'Confirmado', className: 'bg-blue-100 text-blue-800 border-blue-200', icon: CheckCircle },
+      en_preparacion: { label: 'En Preparación', className: 'bg-orange-100 text-orange-800 border-orange-200', icon: Package },
+      en_camino: { label: 'En Camino', className: 'bg-sky-100 text-sky-800 border-sky-200', icon: Truck },
+      entregado: { label: 'Entregado', className: 'bg-green-100 text-green-800 border-green-200', icon: CheckCircle },
+      no_entregado: { label: 'No Entregado', className: 'bg-red-100 text-red-800 border-red-200', icon: XCircle },
+      cancelado: { label: 'Cancelado', className: 'bg-rose-100 text-rose-800 border-rose-200', icon: XCircle }
     };
 
     const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.pendiente;
     const Icon = config.icon;
 
     return (
-      <Badge variant={config.variant} className="flex items-center gap-1">
+      <Badge variant="outline" className={`flex items-center gap-1 ${config.className}`}>
         <Icon className="h-3 w-3" />
         {config.label}
       </Badge>
@@ -336,14 +303,14 @@ const Orders = () => {
 
   const getPaymentMethodBadge = (method: string) => {
     const methodConfig = {
-      efectivo: { label: 'Efectivo', variant: 'secondary' as const },
-      tarjeta: { label: 'Tarjeta', variant: 'default' as const },
-      transferencia: { label: 'Transferencia', variant: 'default' as const },
-      pago_movil: { label: 'Pago Móvil', variant: 'default' as const }
+      efectivo: { label: 'Efectivo', className: 'bg-green-100 text-green-800 border-green-200' },
+      tarjeta: { label: 'Tarjeta', className: 'bg-blue-100 text-blue-800 border-blue-200' },
+      transferencia: { label: 'Transferencia', className: 'bg-purple-100 text-purple-800 border-purple-200' },
+      pago_movil: { label: 'Pago Móvil', className: 'bg-orange-100 text-orange-800 border-orange-200' }
     };
 
     const config = methodConfig[method as keyof typeof methodConfig] || methodConfig.efectivo;
-    return <Badge variant={config.variant}>{config.label}</Badge>;
+    return <Badge variant="outline" className={config.className}>{config.label}</Badge>;
   };
 
   const handleStatusChange = async (orderId: number, newStatus: string) => {
@@ -434,59 +401,34 @@ const Orders = () => {
       {/* Stats Cards */}
       {stats && (
         <div className="grid gap-4 md:grid-cols-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Pedidos</CardTitle>
-              <Package className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.total_pedidos || 0}</div>
-              <p className="text-xs text-muted-foreground">
-                {stats.pedidos_pendientes || 0} pendientes
-              </p>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Ventas Totales</CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{formatCurrency(stats.total_ventas || 0)}</div>
-              <p className="text-xs text-muted-foreground">
-                Promedio: {formatCurrency(stats.promedio_pedido || 0)}
-              </p>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Ventas del Mes</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {ventasDelMes ? ventasDelMes.formatoMoneda : formatCurrency(stats.ventas_mes_actual || 0)}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {ventasDelMes ? ventasDelMes.cambioFormato : `${stats.crecimiento_ventas != null && stats.crecimiento_ventas > 0 ? '+' : ''}${(stats.crecimiento_ventas ?? 0).toFixed(1)}% vs mes anterior`}
-              </p>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Entregados</CardTitle>
-              <CheckCircle className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.pedidos_entregados || 0}</div>
-              <p className="text-xs text-muted-foreground">
-                {stats.pedidos_en_camino || 0} en camino
-              </p>
-            </CardContent>
-          </Card>
+          <StatCard
+            title="Total Pedidos"
+            value={formatCount(stats.total_pedidos || 0)}
+            hint={`${formatCount(stats.pedidos_pendientes || 0)} pendientes`}
+            icon={Package}
+            tone="primary"
+          />
+          <StatCard
+            title="Ventas Totales"
+            value={formatCurrency(stats.total_ventas || 0)}
+            hint={`Promedio: ${formatCurrency(stats.promedio_pedido || 0)}`}
+            icon={DollarSign}
+            tone="primary"
+          />
+          <StatCard
+            title="Ventas del Mes"
+            value={ventasDelMes ? formatMoney(ventasDelMes.valor) : formatCurrency(stats.ventas_mes_actual || 0)}
+            hint={ventasDelMes ? ventasDelMes.cambioFormato : `${stats.crecimiento_ventas != null && stats.crecimiento_ventas > 0 ? '+' : ''}${(stats.crecimiento_ventas ?? 0).toFixed(1)}% vs mes anterior`}
+            icon={TrendingUp}
+            tone="info"
+          />
+          <StatCard
+            title="Entregados"
+            value={formatCount(stats.pedidos_entregados || 0)}
+            hint={`${formatCount(stats.pedidos_en_camino || 0)} en camino`}
+            icon={CheckCircle}
+            tone="success"
+          />
         </div>
       )}
 
@@ -589,7 +531,7 @@ const Orders = () => {
                   <TableHead>Método Pago</TableHead>
                   <TableHead>Total</TableHead>
                   <TableHead>Fecha Entrega</TableHead>
-                  <TableHead className="text-right">Acciones</TableHead>
+                  <TableHead>Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -747,75 +689,13 @@ const Orders = () => {
             </Table>
           </div>
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between space-x-2 py-4">
-            <div className="text-sm text-muted-foreground">
-                Mostrando {((currentPage - 1) * itemsPerPage) + 1} a {Math.min(currentPage * itemsPerPage, totalOrders)} de {totalOrders} pedidos
-            </div>
-            <Pagination>
-              <PaginationContent>
-                <PaginationItem>
-                  <PaginationPrevious 
-                      onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                      className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
-                  />
-                </PaginationItem>
-                  
-                  {showStartEllipsis && (
-                    <>
-                      <PaginationItem>
-                        <PaginationLink
-                          onClick={() => setCurrentPage(1)}
-                          className="cursor-pointer"
-                        >
-                          1
-                        </PaginationLink>
-                      </PaginationItem>
-                      <PaginationItem>
-                        <PaginationEllipsis />
-                      </PaginationItem>
-                    </>
-                  )}
-
-                  {visiblePages.map((page) => (
-                    <PaginationItem key={page}>
-                      <PaginationLink
-                        onClick={() => setCurrentPage(page)}
-                        isActive={currentPage === page}
-                        className="cursor-pointer"
-                      >
-                        {page}
-                      </PaginationLink>
-                    </PaginationItem>
-                  ))}
-
-                  {showEndEllipsis && (
-                    <>
-                      <PaginationItem>
-                        <PaginationEllipsis />
-                      </PaginationItem>
-                      <PaginationItem>
-                        <PaginationLink
-                          onClick={() => setCurrentPage(totalPages)}
-                          className="cursor-pointer"
-                        >
-                          {totalPages}
-                        </PaginationLink>
-                      </PaginationItem>
-                    </>
-                  )}
-                
-                <PaginationItem>
-                  <PaginationNext 
-                      onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                      className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
-                  />
-                </PaginationItem>
-              </PaginationContent>
-            </Pagination>
-          </div>
-          )}
+          <TablePagination
+            page={currentPage}
+            pageSize={itemsPerPage}
+            total={totalOrders}
+            label="pedidos"
+            onPageChange={setCurrentPage}
+          />
         </CardContent>
       </Card>
 

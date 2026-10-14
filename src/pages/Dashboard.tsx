@@ -15,6 +15,11 @@ import {
   Users,
   MapPin,
   Package,
+  Info,
+  AlertTriangle,
+  DollarSign,
+  CheckCircle2,
+  Shield,
   TrendingUp,
   MessageSquare,
   ShoppingCart,
@@ -26,6 +31,7 @@ import {
 import {
   BarChart,
   Bar,
+  LabelList,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -34,13 +40,14 @@ import {
   PieChart,
   Pie,
   Cell,
-  Legend,
 } from "recharts";
 import jsPDF from "jspdf";
 import { notificationsService } from "@/services/notificationsService";
 import { inventariosService, InventarioStatsResponse } from "@/services/inventariosService";
 import { useToast } from "@/hooks/use-toast";
 import { hasPermission } from "@/utils/permissions";
+import { StatCard, statToneText, type StatTone } from "@/components/StatCard";
+import { formatCount, formatMoney } from "@/utils/format";
 
 interface RecentActivity {
   id: string;
@@ -56,7 +63,7 @@ interface KPIStat {
   value: string;
   change: string;
   icon: any;
-  color: string;
+  tone: StatTone;
 }
 
 interface KPIRawItem {
@@ -79,8 +86,170 @@ const MESES = [
 
 const DASHBOARD_VERSION = "1.0.0";
 
+const INVENTORY_BARS = [
+  { key: "inventariosActivos" as const, name: "Activos", fill: "hsl(var(--primary))" },
+  { key: "inventariosInactivos" as const, name: "Inactivos", fill: "hsl(var(--primary) / 0.55)" },
+  { key: "inventariosStockBajo" as const, name: "Stock bajo", fill: "hsl(var(--primary) / 0.28)" },
+];
+
+function InventorySummary({ stats }: { stats: InventarioStatsResponse["data"] }) {
+  const chartData = INVENTORY_BARS.map((bar) => ({
+    name: bar.name,
+    value: stats[bar.key],
+    fill: bar.fill,
+  }));
+  const totalProductos = stats.totalInventarios;
+  const sinStockBajo = Math.max(totalProductos - stats.inventariosStockBajo, 0);
+  const disponibilidad = totalProductos > 0 ? (sinStockBajo / totalProductos) * 100 : 0;
+  const disponibilidadLabel = disponibilidad.toLocaleString("es-MX", {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  });
+
+  return (
+    <>
+      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+        <div className="rounded-xl border border-border/60 bg-muted/20 p-4">
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-sm text-muted-foreground">Productos en inventario</p>
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <Package className="h-4 w-4" />
+            </span>
+          </div>
+          <p className="mt-3 text-3xl font-bold tracking-tight text-foreground">
+            {formatCount(stats.totalInventarios)}
+          </p>
+          <p className="mt-3 flex items-center gap-1.5 text-xs text-success">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            {formatCount(stats.inventariosActivos)} activos en el catálogo
+          </p>
+        </div>
+        <div className="rounded-xl border border-border/60 bg-muted/20 p-4">
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-sm text-muted-foreground">Productos con stock bajo</p>
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-warning/10 text-warning">
+              <AlertTriangle className="h-4 w-4" />
+            </span>
+          </div>
+          <p className={`mt-3 text-3xl font-bold tracking-tight ${stats.inventariosStockBajo > 0 ? "text-warning" : "text-foreground"}`}>
+            {formatCount(stats.inventariosStockBajo)}
+          </p>
+          <p className={`mt-3 flex items-center gap-1.5 text-xs ${stats.inventariosStockBajo > 0 ? "text-warning" : "text-muted-foreground"}`}>
+            <Shield className="h-3.5 w-3.5" />
+            {stats.inventariosStockBajo > 0
+              ? `${formatCount(stats.inventariosStockBajo)} por reponer`
+              : "Niveles de reserva saludables"}
+          </p>
+        </div>
+        <div className="rounded-xl border border-border/60 bg-muted/20 p-4">
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-sm text-muted-foreground">Valor total del inventario</p>
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <DollarSign className="h-4 w-4" />
+            </span>
+          </div>
+          <p className="mt-3 text-3xl font-bold tracking-tight text-foreground">
+            {formatMoney(stats.valorTotalInventario)}
+          </p>
+          <p className="mt-3 text-xs text-muted-foreground">
+            Precio promedio: {formatMoney(stats.precioPromedio)}
+          </p>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <Card className="border bg-background/60 shadow-none">
+        <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+          <CardTitle className="text-base">Estado de productos</CardTitle>
+          <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-xs text-muted-foreground">
+            <span>Distribución actual</span>
+            {INVENTORY_BARS.map((bar) => (
+              <span key={bar.name} className="inline-flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: bar.fill }} />
+                {bar.name}
+              </span>
+            ))}
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData} margin={{ top: 20, right: 8, left: 0, bottom: 0 }}>
+                <CartesianGrid vertical={false} stroke="hsl(var(--border))" strokeDasharray="3 3" />
+                <XAxis dataKey="name" tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 12 }} allowDecimals={false} axisLine={false} tickLine={false} width={32} />
+                <Tooltip
+                  cursor={{ fill: "hsl(var(--accent))" }}
+                  formatter={(value) => [formatCount(Number(value)), "Productos"]}
+                />
+                <Bar dataKey="value" radius={[8, 8, 0, 0]} maxBarSize={72}>
+                  {chartData.map((entry) => (
+                    <Cell key={entry.name} fill={entry.fill} />
+                  ))}
+                  <LabelList
+                    dataKey="value"
+                    position="top"
+                    className="fill-foreground"
+                    fontSize={12}
+                    formatter={(value) => formatCount(Number(value))}
+                  />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border bg-gradient-to-br from-card to-primary/5 shadow-none">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0">
+          <CardTitle className="text-base">Stock total (unidades)</CardTitle>
+          <span
+            className="text-muted-foreground"
+            title="Unidades en inventario según tu ciudad y permisos operativos"
+          >
+            <Info className="h-4 w-4" />
+          </span>
+        </CardHeader>
+        <CardContent className="flex flex-col items-center px-6 pb-8 pt-2 text-center">
+          <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+            <Package className="h-6 w-6" />
+          </span>
+          <p className="mt-4 text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+            Volumen consolidado
+          </p>
+          <p className="mt-1 text-5xl font-bold tracking-tight text-foreground">
+            {formatCount(stats.totalStock)}
+          </p>
+          <p className="mt-3 max-w-xs text-sm text-muted-foreground">
+            Unidades en inventario considerando tu ciudad y permisos operativos vigentes
+          </p>
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+            <span className="inline-flex items-center gap-2 rounded-full border bg-card px-3 py-1 text-xs text-foreground">
+              <span className="h-2 w-2 rounded-full bg-primary" />
+              {disponibilidadLabel}% disponibilidad
+            </span>
+          </div>
+        </CardContent>
+      </Card>
+      </div>
+    </>
+  );
+}
+
 const getCurrentMonth = () => new Date().getMonth() + 1;
 const getCurrentYear = () => new Date().getFullYear();
+
+const MONTHLY_BAR_COLORS = [
+  "hsl(var(--primary))",
+  "hsl(330 62% 74%)",
+  "hsl(330 42% 84%)",
+  "hsl(330 76% 48%)",
+];
+
+function changeClassName(change: string) {
+  const value = Number(change.replace(/[^\d.-]/g, ""));
+  if (!Number.isFinite(value) || value === 0) return "text-muted-foreground";
+  return value > 0 ? "text-success" : "text-destructive";
+}
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -110,31 +279,31 @@ const Dashboard = () => {
         const kpis: KPIStat[] = [
           {
             title: "Conversaciones Activas",
-            value: response.data.conversacionesActivas.valor.toLocaleString(),
+            value: formatCount(response.data.conversacionesActivas.valor),
             change: response.data.conversacionesActivas.cambioFormato,
             icon: MessageSquare,
-            color: "text-primary",
+            tone: "primary",
           },
           {
             title: "Clientes Registrados",
-            value: response.data.clientesRegistrados.valor.toLocaleString(),
+            value: formatCount(response.data.clientesRegistrados.valor),
             change: response.data.clientesRegistrados.cambioFormato,
             icon: Users,
-            color: "text-success",
+            tone: "success",
           },
           {
             title: "Ciudades Activas",
-            value: response.data.ciudadesActivas.valor.toLocaleString(),
+            value: formatCount(response.data.ciudadesActivas.valor),
             change: response.data.ciudadesActivas.cambioFormato,
             icon: MapPin,
-            color: "text-warning",
+            tone: "info",
           },
           {
             title: "Ventas del Mes",
-            value: response.data.ventasDelMes.formatoMoneda,
+            value: formatMoney(response.data.ventasDelMes.valor),
             change: response.data.ventasDelMes.cambioFormato,
             icon: ShoppingCart,
-            color: "text-primary",
+            tone: "primary",
           },
         ];
 
@@ -172,31 +341,31 @@ const Dashboard = () => {
       setStats([
         {
           title: "Conversaciones Activas",
-          value: "0",
+          value: formatCount(0),
           change: "N/A",
           icon: MessageSquare,
-          color: "text-primary",
+          tone: "primary",
         },
         {
           title: "Clientes Registrados",
-          value: "0",
+          value: formatCount(0),
           change: "N/A",
           icon: Users,
-          color: "text-success",
+          tone: "success",
         },
         {
           title: "Ciudades Activas",
-          value: "0",
+          value: formatCount(0),
           change: "N/A",
           icon: MapPin,
-          color: "text-warning",
+          tone: "info",
         },
         {
           title: "Ventas del Mes",
-          value: "$0.00",
+          value: formatMoney(0),
           change: "N/A",
           icon: ShoppingCart,
-          color: "text-primary",
+          tone: "primary",
         },
       ]);
       setKpiRawData(null);
@@ -444,24 +613,35 @@ const Dashboard = () => {
     }
   };
 
-  const CHART_COLORS = ["#8884d8", "#82ca9d", "#ffc658", "#83a6ed"];
+  const CHART_COLORS = MONTHLY_BAR_COLORS;
 
   const barChartData = kpiRawData
     ? [
-        { name: "Conversaciones", value: kpiRawData.conversacionesActivas.valor },
-        { name: "Clientes", value: kpiRawData.clientesRegistrados.valor },
-        { name: "Ciudades", value: kpiRawData.ciudadesActivas.valor },
-        { name: "Ventas (miles $)", value: kpiRawData.ventasDelMes.valor / 1000 },
+        { name: "Conversaciones", value: kpiRawData.conversacionesActivas.valor, fill: CHART_COLORS[0] },
+        { name: "Clientes", value: kpiRawData.clientesRegistrados.valor, fill: CHART_COLORS[1] },
+        { name: "Ciudades", value: kpiRawData.ciudadesActivas.valor, fill: CHART_COLORS[2] },
+        { name: "Ventas (miles $)", value: kpiRawData.ventasDelMes.valor / 1000, fill: CHART_COLORS[3] },
       ]
     : [];
 
   const pieChartData = kpiRawData
     ? [
-        { name: "Conversaciones", value: kpiRawData.conversacionesActivas.valor },
-        { name: "Clientes", value: kpiRawData.clientesRegistrados.valor },
-        { name: "Ciudades", value: kpiRawData.ciudadesActivas.valor },
+        { name: "Conversaciones", value: kpiRawData.conversacionesActivas.valor, fill: CHART_COLORS[0] },
+        { name: "Clientes", value: kpiRawData.clientesRegistrados.valor, fill: CHART_COLORS[1] },
+        { name: "Ciudades", value: kpiRawData.ciudadesActivas.valor, fill: CHART_COLORS[2] },
       ].filter((d) => d.value > 0)
     : [];
+  const pieTotal = pieChartData.reduce((sum, item) => sum + item.value, 0);
+  const isCurrentPeriod = selectedMonth === getCurrentMonth() && selectedYear === getCurrentYear();
+  const timeZoneLabel = (() => {
+    const shortName = new Intl.DateTimeFormat("es-MX", { timeZoneName: "short" })
+      .formatToParts(new Date())
+      .find((part) => part.type === "timeZoneName")?.value;
+    const offsetMinutes = -new Date().getTimezoneOffset();
+    const sign = offsetMinutes >= 0 ? "+" : "-";
+    const hours = Math.trunc(Math.abs(offsetMinutes) / 60);
+    return `${shortName ?? "Local"} (UTC${sign}${hours})`;
+  })();
 
   return (
     <div className="p-6 space-y-8 max-w-7xl mx-auto">
@@ -531,39 +711,32 @@ const Dashboard = () => {
             Descargar informe PDF
           </Button>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
           {loadingStats ? (
-            // Mostrar skeletons mientras carga
             Array.from({ length: 4 }).map((_, index) => (
-              <Card key={index} className="relative overflow-hidden bg-gradient-to-br from-card to-card/80 border shadow-sm">
+              <Card key={index} className="bg-card shadow-sm">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-card-foreground">
-                    <div className="h-4 w-32 bg-muted animate-pulse rounded" />
+                  <CardTitle className="text-sm font-medium">
+                    <div className="h-4 w-32 animate-pulse rounded bg-muted" />
                   </CardTitle>
-                  <div className="h-5 w-5 bg-muted animate-pulse rounded" />
+                  <div className="h-8 w-8 animate-pulse rounded-full bg-muted" />
                 </CardHeader>
                 <CardContent>
-                  <div className="h-8 w-24 bg-muted animate-pulse rounded mb-2" />
-                  <div className="h-3 w-40 bg-muted animate-pulse rounded" />
+                  <div className="mb-2 h-8 w-24 animate-pulse rounded bg-muted" />
+                  <div className="h-3 w-40 animate-pulse rounded bg-muted" />
                 </CardContent>
               </Card>
             ))
           ) : (
-            stats.map((stat, index) => (
-              <Card key={index} className="relative overflow-hidden bg-gradient-to-br from-card to-card/80 border shadow-sm hover:shadow-md transition-all duration-300">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-card-foreground">
-                    {stat.title}
-                  </CardTitle>
-                  <stat.icon className={`h-5 w-5 ${stat.color}`} />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-card-foreground">{stat.value}</div>
-                  <p className="text-xs text-muted-foreground">
-                    <span className="text-success font-medium">{stat.change}</span>
-                  </p>
-                </CardContent>
-              </Card>
+            stats.map((stat) => (
+              <StatCard
+                key={stat.title}
+                title={stat.title}
+                value={stat.value}
+                hint={<span className="font-medium text-success">{stat.change}</span>}
+                icon={stat.icon}
+                tone={stat.tone}
+              />
             ))
           )}
         </div>
@@ -706,81 +879,13 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent>
             {loadingInventoryStats ? (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                 {Array.from({ length: 3 }).map((_, i) => (
-                  <div key={i} className="h-20 bg-muted/50 rounded-lg animate-pulse" />
+                  <div key={i} className="h-20 animate-pulse rounded-lg bg-muted/50" />
                 ))}
               </div>
             ) : inventoryStats ? (
-              <>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                  <div className="p-4 rounded-lg bg-muted/30 border border-border/50">
-                    <p className="text-xs font-medium text-muted-foreground">Productos en inventario</p>
-                    <p className="text-2xl font-semibold text-foreground mt-1">
-                      {inventoryStats.totalInventarios.toLocaleString()}
-                    </p>
-                  </div>
-                  <div className="p-4 rounded-lg bg-muted/30 border border-border/50">
-                    <p className="text-xs font-medium text-muted-foreground">Productos con stock bajo</p>
-                    <p className="text-2xl font-semibold text-warning mt-1">
-                      {inventoryStats.inventariosStockBajo.toLocaleString()}
-                    </p>
-                  </div>
-                  <div className="p-4 rounded-lg bg-muted/30 border border-border/50">
-                    <p className="text-xs font-medium text-muted-foreground">Valor total del inventario</p>
-                    <p className="text-2xl font-semibold text-foreground mt-1">
-                      {`$${inventoryStats.valorTotalInventario.toLocaleString('es-MX', {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}`}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Precio promedio: {`$${inventoryStats.precioPromedio.toLocaleString('es-MX', {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}`}
-                    </p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <div className="h-64">
-                    <h4 className="text-sm font-medium text-foreground mb-3">Estado de productos</h4>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart
-                        data={[
-                          { name: "Activos", value: inventoryStats.inventariosActivos },
-                          { name: "Inactivos", value: inventoryStats.inventariosInactivos },
-                          { name: "Stock bajo", value: inventoryStats.inventariosStockBajo },
-                        ]}
-                        margin={{ top: 8, right: 8, left: 8, bottom: 8 }}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                        <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                        <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-                        <Tooltip />
-                        <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                          {["#8884d8", "#82ca9d", "#ffc658"].map((color, index) => (
-                            <Cell key={index} fill={color} />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div className="h-64">
-                    <h4 className="text-sm font-medium text-foreground mb-3">Stock total (unidades)</h4>
-                    <div className="flex items-center justify-center h-full">
-                      <div className="text-center">
-                        <p className="text-3xl font-semibold text-foreground">
-                          {inventoryStats.totalStock.toLocaleString()}
-                        </p>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          Unidades en inventario considerando tu ciudad y permisos
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </>
+              <InventorySummary stats={inventoryStats} />
             ) : (
               <p className="text-sm text-muted-foreground">
                 No se pudieron cargar las estadísticas de inventario.
@@ -794,96 +899,160 @@ const Dashboard = () => {
       {hasNotificationPermission && (
         <Card className="shadow-sm">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5 text-primary" />
-              Rendimiento Mensual
-            </CardTitle>
-            <CardDescription>
-              {periodoNombre
-                ? `Métricas de conversaciones, ventas y satisfacción del cliente — ${periodoNombre}`
-                : 'Métricas de conversaciones, ventas y satisfacción del cliente'}
-            </CardDescription>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <CardTitle className="flex flex-wrap items-center gap-2">
+                  <TrendingUp className="h-5 w-5 text-primary" />
+                  Rendimiento Mensual
+                  <Badge variant="outline" className="border-primary/20 bg-primary/10 font-normal text-primary">
+                    {isCurrentPeriod ? "Cierre preliminar" : "Cerrado"}
+                  </Badge>
+                </CardTitle>
+                <CardDescription>
+                  {periodoNombre
+                    ? `Métricas de conversaciones, ventas y satisfacción del cliente — ${periodoNombre}`
+                    : "Métricas de conversaciones, ventas y satisfacción del cliente"}
+                </CardDescription>
+              </div>
+              <p className="text-xs text-muted-foreground">Zona horaria: {timeZoneLabel}</p>
+            </div>
           </CardHeader>
           <CardContent>
             {loadingStats ? (
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
                 {Array.from({ length: 4 }).map((_, i) => (
-                  <div key={i} className="h-20 bg-muted/50 rounded-lg animate-pulse" />
+                  <div key={i} className="h-28 animate-pulse rounded-xl bg-muted/50" />
                 ))}
               </div>
             ) : (
               <>
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                  {stats.map((stat, index) => (
+                <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+                  {stats.map((stat) => (
                     <div
-                      key={index}
-                      className="flex items-center gap-3 p-4 rounded-lg bg-muted/30 border border-border/50"
+                      key={stat.title}
+                      className="rounded-xl border border-border/60 bg-muted/20 p-4"
                     >
-                      <div className={`p-2 rounded-md bg-background ${stat.color}`}>
-                        <stat.icon className="h-5 w-5" />
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-sm text-muted-foreground">{stat.title}</p>
+                        <div className={`rounded-md bg-background p-2 ${statToneText[stat.tone]}`}>
+                          <stat.icon className="h-4 w-4" />
+                        </div>
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-medium text-muted-foreground truncate">
-                          {stat.title}
-                        </p>
-                        <p className="text-lg font-semibold text-foreground truncate">
-                          {stat.value}
-                        </p>
-                        <p className="text-xs text-muted-foreground truncate">{stat.change}</p>
-                      </div>
+                      <p className="mt-3 text-3xl font-bold tracking-tight text-foreground">{stat.value}</p>
+                      <p className="mt-3 text-xs">
+                        <span className={`font-medium ${changeClassName(stat.change)}`}>{stat.change}</span>
+                        <span className="text-muted-foreground"> desde el mes pasado</span>
+                      </p>
                     </div>
                   ))}
                 </div>
 
                 {kpiRawData && (
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
-                    <div>
-                      <h4 className="text-sm font-medium text-foreground mb-3">Métricas del mes</h4>
+                  <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
+                    <div className="rounded-xl border border-border/60 p-4">
+                      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                        <h4 className="text-sm font-medium text-foreground">Métricas del mes</h4>
+                        <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                          <span>Comparativa consolidada</span>
+                          {barChartData.map((item, index) => (
+                            <span key={item.name} className="inline-flex items-center gap-1.5">
+                              <span
+                                className="h-2.5 w-2.5 rounded-sm"
+                                style={{ backgroundColor: MONTHLY_BAR_COLORS[index % MONTHLY_BAR_COLORS.length] }}
+                              />
+                              {item.name.replace(" (miles $)", "")}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
                       <div className="h-64">
                         <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={barChartData} margin={{ top: 8, right: 8, left: 8, bottom: 8 }}>
-                            <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                            <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                            <YAxis tick={{ fontSize: 11 }} />
-                            <Tooltip />
-                            <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                              {barChartData.map((_, index) => (
-                                <Cell key={index} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                          <BarChart data={barChartData} margin={{ top: 20, right: 8, left: 0, bottom: 0 }}>
+                            <CartesianGrid vertical={false} stroke="hsl(var(--border))" strokeDasharray="3 3" />
+                            <XAxis dataKey="name" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                            <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} width={32} />
+                            <Tooltip cursor={{ fill: "hsl(var(--accent))" }} />
+                            <Bar dataKey="value" radius={[8, 8, 0, 0]} maxBarSize={56}>
+                              {barChartData.map((item, index) => (
+                                <Cell key={item.name} fill={MONTHLY_BAR_COLORS[index % MONTHLY_BAR_COLORS.length]} />
                               ))}
+                              <LabelList
+                                dataKey="value"
+                                position="top"
+                                className="fill-foreground"
+                                fontSize={11}
+                                formatter={(value) => {
+                                  const amount = Number(value);
+                                  return Number.isInteger(amount)
+                                    ? formatCount(amount)
+                                    : amount.toLocaleString("es-MX", { maximumFractionDigits: 2 });
+                                }}
+                              />
                             </Bar>
                           </BarChart>
                         </ResponsiveContainer>
                       </div>
                     </div>
-                    <div>
-                      <h4 className="text-sm font-medium text-foreground mb-3">Distribución de actividad (conteos)</h4>
-                      <div className="h-64">
-                        {pieChartData.length > 0 ? (
-                          <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                              <Pie
-                                data={pieChartData}
-                                dataKey="value"
-                                nameKey="name"
-                                cx="50%"
-                                cy="50%"
-                                outerRadius={80}
-                                label
-                              >
-                                {pieChartData.map((_, index) => (
-                                  <Cell key={index} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                                ))}
-                              </Pie>
-                              <Tooltip />
-                              <Legend />
-                            </PieChart>
-                          </ResponsiveContainer>
-                        ) : (
-                          <p className="text-sm text-muted-foreground flex items-center justify-center h-full">
-                            No hay datos de conteos para mostrar
-                          </p>
-                        )}
+                    <div className="rounded-xl border border-border/60 p-4">
+                      <div className="mb-3 flex items-center justify-between gap-2">
+                        <h4 className="text-sm font-medium text-foreground">Distribución de actividad (conteos)</h4>
+                        <span className="text-xs text-muted-foreground">
+                          Total: {formatCount(pieTotal)} eventos
+                        </span>
                       </div>
+                      {pieChartData.length > 0 ? (
+                        <>
+                          <div className="relative h-56">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <PieChart>
+                                <Pie
+                                  data={pieChartData}
+                                  dataKey="value"
+                                  nameKey="name"
+                                  cx="50%"
+                                  cy="50%"
+                                  innerRadius={62}
+                                  outerRadius={86}
+                                  paddingAngle={2}
+                                  stroke="none"
+                                >
+                                  {pieChartData.map((item) => (
+                                    <Cell key={item.name} fill={item.fill} />
+                                  ))}
+                                </Pie>
+                                <Tooltip />
+                              </PieChart>
+                            </ResponsiveContainer>
+                            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                              <span className="text-2xl font-bold text-foreground">
+                                {formatCount(pieTotal)}
+                              </span>
+                              <span className="text-xs text-muted-foreground">Total registros</span>
+                            </div>
+                          </div>
+                          <div className="mt-2 flex flex-wrap justify-center gap-4 text-xs text-muted-foreground">
+                            {pieChartData.map((item) => {
+                              const share = pieTotal > 0 ? (item.value / pieTotal) * 100 : 0;
+                              return (
+                                <span key={item.name} className="inline-flex items-center gap-1.5">
+                                  <span
+                                    className="h-2.5 w-2.5 rounded-full"
+                                    style={{ backgroundColor: item.fill }}
+                                  />
+                                  {item.name}
+                                  <span>
+                                    {formatCount(item.value)} {item.value === 1 ? "unidad" : "unidades"} ({share.toLocaleString("es-MX", { maximumFractionDigits: 1 })}%)
+                                  </span>
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </>
+                      ) : (
+                        <p className="flex h-56 items-center justify-center text-sm text-muted-foreground">
+                          No hay datos de conteos para mostrar
+                        </p>
+                      )}
                     </div>
                   </div>
                 )}

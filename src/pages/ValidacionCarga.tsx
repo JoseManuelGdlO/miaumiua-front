@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -268,8 +268,12 @@ const ValidacionCarga = ({ solicitudId: solicitudIdProp, embedded = false, onBac
       </div>
 
       <Card>
-        <CardHeader><CardTitle>Carga de pedidos</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle>Carga de pedidos</CardTitle>
+          <CardDescription>Productos que salen con los pedidos del día</CardDescription>
+        </CardHeader>
         <CardContent>
+          <div className="rounded-md border">
           <Table>
             <TableHeader>
               <TableRow>
@@ -281,7 +285,11 @@ const ValidacionCarga = ({ solicitudId: solicitudIdProp, embedded = false, onBac
             </TableHeader>
             <TableBody>
               {pedidos.length === 0 ? (
-                <TableRow><TableCell colSpan={4}>No hay productos de pedidos</TableCell></TableRow>
+                <TableRow>
+                  <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
+                    No hay productos de pedidos
+                  </TableCell>
+                </TableRow>
               ) : pedidos.map((linea) => (
                 <TableRow key={`${linea.fkid_producto ?? linea.nombre}`}>
                   <TableCell>{linea.nombre}</TableCell>
@@ -292,15 +300,20 @@ const ValidacionCarga = ({ solicitudId: solicitudIdProp, embedded = false, onBac
               ))}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Carga extra</CardTitle>
+        <CardHeader className="flex flex-row items-start justify-between space-y-0">
+          <div>
+            <CardTitle>Carga extra</CardTitle>
+            <CardDescription>Productos que no vienen en los pedidos</CardDescription>
+          </div>
           <Button variant="outline" disabled={esperaReenvio} onClick={openModal}>Agregar extra</Button>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className="rounded-md border">
           <Table>
             <TableHeader>
               <TableRow>
@@ -308,12 +321,16 @@ const ValidacionCarga = ({ solicitudId: solicitudIdProp, embedded = false, onBac
                 <TableHead>Cantidad</TableHead>
                 <TableHead>Precio</TableHead>
                 <TableHead>Total</TableHead>
-                <TableHead></TableHead>
+                <TableHead className="w-[70px]">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {extras.length === 0 ? (
-                <TableRow><TableCell colSpan={5}>Sin producto extra</TableCell></TableRow>
+                <TableRow>
+                  <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                    Sin producto extra
+                  </TableCell>
+                </TableRow>
               ) : extras.map((linea) => (
                 <TableRow key={linea.key}>
                   <TableCell>{linea.nombre} · extra</TableCell>
@@ -339,6 +356,7 @@ const ValidacionCarga = ({ solicitudId: solicitudIdProp, embedded = false, onBac
               ))}
             </TableBody>
           </Table>
+          </div>
           {(extrasCambiaron || esperaReenvio) && (
             <p className="text-sm text-muted-foreground">
               {esperaReenvio
