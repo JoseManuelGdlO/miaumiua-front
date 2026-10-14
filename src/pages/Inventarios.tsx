@@ -28,6 +28,25 @@ import EditInventarioModal from "@/components/modals/EditInventarioModal";
 import ConfirmDeleteModal from "@/components/modals/ConfirmDeleteModal";
 import { inventariosService, Inventario } from "@/services/inventariosService";
 import { useToast } from "@/hooks/use-toast";
+import { formatCount, formatMoney } from "@/utils/format";
+
+const CATEGORY_CHIP_COLORS = [
+  "bg-pink-100 text-pink-800 border-pink-200",
+  "bg-rose-100 text-rose-800 border-rose-200",
+  "bg-fuchsia-100 text-fuchsia-800 border-fuchsia-200",
+  "bg-violet-100 text-violet-800 border-violet-200",
+  "bg-sky-100 text-sky-800 border-sky-200",
+  "bg-blue-100 text-blue-800 border-blue-200",
+  "bg-teal-100 text-teal-800 border-teal-200",
+  "bg-emerald-100 text-emerald-800 border-emerald-200",
+  "bg-amber-100 text-amber-800 border-amber-200",
+  "bg-orange-100 text-orange-800 border-orange-200",
+];
+
+function categoryChipClass(name: string) {
+  const index = [...name].reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  return CATEGORY_CHIP_COLORS[index % CATEGORY_CHIP_COLORS.length];
+}
 
 const Inventarios = () => {
   const [inventarios, setInventarios] = useState<Inventario[]>([]);
@@ -229,7 +248,7 @@ const Inventarios = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead>SKU</TableHead>
-                  <TableHead>Producto</TableHead>
+                  <TableHead className="min-w-[16rem]">Producto</TableHead>
                   <TableHead>Categoría</TableHead>
                   <TableHead>Stock</TableHead>
                   <TableHead>Precio</TableHead>
@@ -259,35 +278,47 @@ const Inventarios = () => {
                     const stockStatus = getStockStatus(inventario);
                     return (
                       <TableRow key={inventario.id}>
-                        <TableCell className="font-mono text-sm">
+                        <TableCell className="whitespace-nowrap font-mono text-sm">
                           {inventario.sku}
                         </TableCell>
-                        <TableCell>
-                          <div>
-                            <div className="font-medium">{inventario.nombre}</div>
+                        <TableCell className="min-w-[16rem] max-w-[28rem] whitespace-normal align-middle">
+                          <div className="space-y-1 text-left">
+                            <div className="font-medium break-words">{inventario.nombre}</div>
                             {inventario.descripcion && (
-                              <div className="text-sm text-muted-foreground">
+                              <div className="break-words text-sm text-muted-foreground">
                                 {inventario.descripcion}
                               </div>
                             )}
                           </div>
                         </TableCell>
                         <TableCell>
-                          {inventario.categoria?.nombre || 'N/A'}
+                          {inventario.categoria?.nombre ? (
+                            <Badge variant="outline" className={`whitespace-nowrap ${categoryChipClass(inventario.categoria.nombre)}`}>
+                              {inventario.categoria.nombre}
+                            </Badge>
+                          ) : (
+                            "N/A"
+                          )}
                         </TableCell>
-                        <TableCell>
-                          <div className="text-sm">
-                            <div>Actual: {inventario.stock_inicial}</div>
+                        <TableCell className="text-center">
+                          <div className="mx-auto inline-block whitespace-nowrap text-left text-sm leading-5">
+                            <div>
+                              <span className="text-muted-foreground">Total: </span>
+                              <span className="font-bold text-foreground">{formatCount(inventario.stock_inicial)}</span>
+                            </div>
                             <div className="text-muted-foreground">
-                              Mín: {inventario.stock_minimo}
+                              Mín: {formatCount(inventario.stock_minimo)}
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell>
-                          <div className="text-sm">
-                            <div>Venta: {formatPrice(inventario.precio_venta)}</div>
+                        <TableCell className="text-center">
+                          <div className="mx-auto inline-block whitespace-nowrap text-left text-sm leading-5">
+                            <div>
+                              <span className="text-muted-foreground">Venta: </span>
+                              <span className="font-bold text-foreground">{formatMoney(inventario.precio_venta)}</span>
+                            </div>
                             <div className="text-muted-foreground">
-                              Costo: {formatPrice(inventario.costo_unitario)}
+                              Costo: {formatMoney(inventario.costo_unitario)}
                             </div>
                           </div>
                         </TableCell>
