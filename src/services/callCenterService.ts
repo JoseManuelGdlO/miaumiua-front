@@ -55,6 +55,7 @@ export type PedidoDia = {
   direccion: string | null;
   repartidor: RepartidorRef;
   ciudad_id: number | null;
+  comprobante_url: string | null;
 };
 
 export type RepartidorOpcion = { id: number; nombre_completo: string; estado: string };

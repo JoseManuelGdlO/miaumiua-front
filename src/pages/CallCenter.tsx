@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,6 +20,7 @@ import {
   type Solicitud,
 } from "@/services/callCenterService";
 import { canReassign, keepSelection, shouldRefreshAfter, statusLabel, statusOptions } from "@/lib/call-center-rules.mjs";
+import { config } from "@/config/environment";
 
 const TIPO: Record<string, string> = {
   check_in: "Check-in",
@@ -47,6 +49,18 @@ const STATUS_CLASS: Record<string, string> = {
   no_entregado: "border-transparent bg-destructive text-destructive-foreground hover:bg-destructive",
   cancelado: "border-transparent bg-destructive text-destructive-foreground hover:bg-destructive",
 };
+
+function receiptSrc(path: string | null | undefined) {
+  if (!path) return "";
+  if (path.startsWith("http://") || path.startsWith("https://")) return path;
+  return `${config.imageBaseUrl}${path.startsWith("/") ? "" : "/"}${path}`;
+}
+
+function receiptFilename(numero: string, url: string) {
+  const clean = numero.replace(/[^\w.-]+/g, "-") || "pedido";
+  const match = url.match(/\.([a-z0-9]{2,5})(?:\?|$)/i);
+  return `comprobante-${clean}.${match?.[1] || "jpg"}`;
+}
 
 function OrderStatus({ estado, modificado }: { estado: string; modificado?: boolean }) {
   return (
@@ -86,6 +100,8 @@ const CallCenter = () => {
   const [historial, setHistorial] = useState<CargaValidada[]>([]);
   const [historialId, setHistorialId] = useState<number | null>(null);
   const [historialTick, setHistorialTick] = useState(0);
+  const [receipt, setReceipt] = useState<{ url: string; numero: string } | null>(null);
+  const [downloading, setDownloading] = useState(false);
   const listGeneration = useRef(0);
   const latestFilters = useRef({ ciudadId, repartidorId });
   const detailRequest = useRef(0);
@@ -279,6 +295,26 @@ const CallCenter = () => {
     }
   };
 
+  const downloadReceipt = async () => {
+    if (!receipt || downloading) return;
+    setDownloading(true);
+    try {
+      const response = await fetch(receipt.url);
+      if (!response.ok) throw new Error("No se pudo descargar el comprobante");
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = receiptFilename(receipt.numero, receipt.url);
+      link.click();
+      URL.revokeObjectURL(objectUrl);
+    } catch (error) {
+      notify(error);
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   const driverOptions = Array.from(
     new Map(pedidos.filter((row) => row.repartidor).map((row) => [row.repartidor!.id, row.repartidor!])).values()
   );
@@ -378,6 +414,7 @@ const CallCenter = () => {
                 <TableHead>Teléfono</TableHead>
                 <TableHead>Dirección</TableHead>
                 <TableHead>Estado</TableHead>
+                <TableHead>Comprobante</TableHead>
                 <TableHead>Repartidor</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
@@ -385,7 +422,7 @@ const CallCenter = () => {
             <TableBody>
               {pedidos.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
+                  <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
                     No hay pedidos para los filtros seleccionados
                   </TableCell>
                 </TableRow>
@@ -396,6 +433,22 @@ const CallCenter = () => {
                   <TableCell>{row.telefono ? <a href={`tel:${row.telefono}`}>{row.telefono}</a> : "—"}</TableCell>
                   <TableCell>{row.direccion || "—"}</TableCell>
                   <TableCell><OrderStatus estado={row.estado} modificado={row.modificado} /></TableCell>
+                  <TableCell>
+                    {row.comprobante_url ? (
+                      <button
+                        type="button"
+                        className="overflow-hidden rounded-md border bg-muted"
+                        onClick={() => setReceipt({ url: receiptSrc(row.comprobante_url), numero: row.numero_pedido })}
+                        aria-label={`Ver comprobante del pedido ${row.numero_pedido}`}
+                      >
+                        <img
+                          src={receiptSrc(row.comprobante_url)}
+                          alt={`Comprobante del pedido ${row.numero_pedido}`}
+                          className="h-12 w-12 object-cover"
+                        />
+                      </button>
+                    ) : "—"}
+                  </TableCell>
                   <TableCell>{row.repartidor?.nombre_completo || "—"}</TableCell>
                   <TableCell className="text-right">
                     {statusOptions(row.estado).length > 0 || canReassign(row.estado) ? (
@@ -416,6 +469,27 @@ const CallCenter = () => {
           </div>
         </CardContent>
       </Card>
+
+      <Dialog open={receipt != null} onOpenChange={(open) => { if (!open) setReceipt(null); }}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Comprobante {receipt?.numero}</DialogTitle>
+          </DialogHeader>
+          {receipt && (
+            <div className="space-y-4">
+              <img
+                src={receipt.url}
+                alt={`Comprobante del pedido ${receipt.numero}`}
+                className="max-h-[70vh] w-full rounded-md object-contain"
+              />
+              <Button disabled={downloading} onClick={() => void downloadReceipt()}>
+                <Download className="mr-2 h-4 w-4" />
+                {downloading ? "Descargando..." : "Descargar"}
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={detail != null} onOpenChange={(open) => { if (!open) dismissDetail(); }}>
         <DialogContent>
