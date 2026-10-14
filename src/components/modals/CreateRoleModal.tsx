@@ -138,15 +138,16 @@ const CreateRoleModal = ({ open, onOpenChange, onRoleCreated }: CreateRoleModalP
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[90vh] w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl">
+        <DialogHeader className="shrink-0 space-y-1.5 border-b px-6 py-5 pr-12 text-left">
           <DialogTitle>Crear Nuevo Rol</DialogTitle>
           <DialogDescription>
             Define un nuevo rol con sus permisos específicos para el sistema Miau Miau
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain px-6 py-5">
           <div className="grid gap-4">
             <div className="space-y-2">
               <Label htmlFor="roleName">Nombre del Rol *</Label>
@@ -178,7 +179,7 @@ const CreateRoleModal = ({ open, onOpenChange, onRoleCreated }: CreateRoleModalP
               </Badge>
             </div>
 
-            <div className="grid gap-4 max-h-96 overflow-y-auto">
+            <div className="grid gap-4">
               {Object.entries(permissionCategories).map(([categoryName, categoryPermissions]) => (
                 <Card key={categoryName}>
                   <CardHeader className="pb-3">
@@ -212,8 +213,9 @@ const CreateRoleModal = ({ open, onOpenChange, onRoleCreated }: CreateRoleModalP
               ))}
             </div>
           </div>
+          </div>
 
-          <DialogFooter>
+          <DialogFooter className="shrink-0 border-t bg-card px-6 py-4">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
               Cancelar
             </Button>
