@@ -332,6 +332,10 @@ class NotificationsService {
     return notification;
   }
 
+  mapFromBackend(backendNotif: BackendNotification): Notification {
+    return this.mapNotification(backendNotif);
+  }
+
   // Obtener todas las notificaciones con paginación y filtros
   async getAllNotifications(params: NotificationsQueryParams = {}): Promise<NotificationsResponse> {
     const queryParams = new URLSearchParams();

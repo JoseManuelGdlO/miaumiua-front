@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import NotificationPanel from "@/components/NotificationPanel";
+import { NotificationStreamProvider } from "@/hooks/useNotificationStream";
 import { PushNotificationSync } from "@/components/PushNotificationSync";
 import { useAuth } from "@/hooks/useAuth";
 import { hasPermission } from "@/utils/permissions";
@@ -20,7 +21,7 @@ const DashboardLayout = () => {
   const { logout, user } = useAuth();
   const canViewNotifications = hasPermission("ver_notificaciones");
 
-  return (
+  const layout = (
     <SidebarProvider>
       <div className="min-h-screen flex w-full bg-background">
         <AppSidebar />
@@ -105,6 +106,14 @@ const DashboardLayout = () => {
         </div>
       </div>
     </SidebarProvider>
+  );
+
+  if (!canViewNotifications) return layout;
+
+  return (
+    <NotificationStreamProvider>
+      {layout}
+    </NotificationStreamProvider>
   );
 };
 

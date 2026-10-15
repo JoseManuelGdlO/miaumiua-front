@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { notificationsService, Notification, handleNotificationNavigation } from "@/services/notificationsService";
@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { useNotificationStream } from "@/hooks/useNotificationStream";
 
 const NotificationPanel = () => {
   const navigate = useNavigate();
@@ -31,18 +32,37 @@ const NotificationPanel = () => {
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const openRef = useRef(open);
+  openRef.current = open;
+  const stream = useNotificationStream();
 
-  // Cargar notificaciones recientes del backend
   useEffect(() => {
     loadNotifications();
-    
-    // Recargar cada 60 segundos para mantener las notificaciones actualizadas
-    const interval = setInterval(() => {
-      loadNotifications();
-    }, 60000); // 60 segundos
-    
-    return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (!stream) return;
+
+    return stream.subscribe((event) => {
+      if (event.type === "reconnect") {
+        loadNotifications();
+        return;
+      }
+
+      const mapped = notificationsService.mapFromBackend(event.payload);
+      setNotifications((prev) => {
+        const withoutDup = prev.filter((item) => item.id !== mapped.id);
+        return [mapped, ...withoutDup].slice(0, 10);
+      });
+
+      if (!openRef.current && !mapped.read) {
+        toast({
+          title: mapped.title,
+          description: mapped.message || undefined,
+        });
+      }
+    });
+  }, [stream, toast]);
 
   const loadNotifications = async () => {
     try {
