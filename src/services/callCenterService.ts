@@ -54,6 +54,8 @@ export type PedidoDia = {
   telefono: string | null;
   direccion: string | null;
   notas?: string | null;
+  franja?: "manana" | "tarde";
+  orden_entrega?: number | null;
   repartidor: RepartidorRef;
   ciudad_id: number | null;
   comprobante_url: string | null;
@@ -121,5 +123,13 @@ export const callCenterService = {
   reagendar: (id: number, fecha: string, motivo: string) => request<{ id: number }>(`/call-center/pedidos/${id}/reagendar`, {
     method: 'POST',
     body: JSON.stringify({ fecha, motivo }),
+  }),
+  cambiarFranja: (id: number, franja: "manana" | "tarde", alcance?: "ruta") => request<{ franja: string }>(`/call-center/pedidos/${id}/franja`, {
+    method: 'POST',
+    body: JSON.stringify(alcance ? { franja, alcance } : { franja }),
+  }),
+  moverParada: (id: number, direccion: "subir" | "bajar") => request<{ orden_entrega: number }>(`/call-center/pedidos/${id}/orden`, {
+    method: 'POST',
+    body: JSON.stringify({ direccion }),
   }),
 };

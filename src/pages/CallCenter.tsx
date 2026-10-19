@@ -121,6 +121,24 @@ const CallCenter = () => {
     toast({ title: "Call Center", description: errorText(error), variant: "destructive" });
   };
 
+  const cambiarFranja = async (id: number, franja: "manana" | "tarde", alcance?: "ruta") => {
+    try {
+      await callCenterService.cambiarFranja(id, franja, alcance);
+      await loadLists();
+    } catch (error) {
+      notify(error);
+    }
+  };
+
+  const moverParada = async (id: number, direccion: "subir" | "bajar") => {
+    try {
+      await callCenterService.moverParada(id, direccion);
+      await loadLists();
+    } catch (error) {
+      notify(error);
+    }
+  };
+
   const loadLists = useCallback(async () => {
     const requestedCiudad = ciudadId;
     const requestedRepartidor = repartidorId;
@@ -446,6 +464,7 @@ const CallCenter = () => {
                 <TableHead>Teléfono</TableHead>
                 <TableHead>Dirección</TableHead>
                 <TableHead>Estado</TableHead>
+                <TableHead>Franja</TableHead>
                 <TableHead>Comprobante</TableHead>
                 <TableHead>Repartidor</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
@@ -454,7 +473,7 @@ const CallCenter = () => {
             <TableBody>
               {pedidos.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
+                  <TableCell colSpan={9} className="py-8 text-center text-muted-foreground">
                     No hay pedidos para los filtros seleccionados
                   </TableCell>
                 </TableRow>
@@ -465,6 +484,13 @@ const CallCenter = () => {
                   <TableCell>{row.telefono ? <a href={`tel:${row.telefono}`}>{row.telefono}</a> : "—"}</TableCell>
                   <TableCell>{row.direccion || "—"}</TableCell>
                   <TableCell><OrderStatus estado={row.estado} modificado={row.modificado} /></TableCell>
+                  <TableCell>
+                    <div className="flex flex-col gap-1">
+                      <Button variant={row.franja === "tarde" ? "outline" : "default"} size="sm" onClick={() => void cambiarFranja(row.id, "manana")}>Mañana</Button>
+                      <Button variant={row.franja === "tarde" ? "default" : "outline"} size="sm" onClick={() => void cambiarFranja(row.id, "tarde")}>Tarde</Button>
+                      <Button variant="ghost" size="sm" onClick={() => void cambiarFranja(row.id, row.franja === "tarde" ? "tarde" : "manana", "ruta")}>Aplicar a la ruta</Button>
+                    </div>
+                  </TableCell>
                   <TableCell>
                     {row.comprobante_url ? (
                       <button
@@ -483,6 +509,10 @@ const CallCenter = () => {
                   </TableCell>
                   <TableCell>{row.repartidor?.nombre_completo || "—"}</TableCell>
                   <TableCell className="text-right">
+                    <div className="mb-2 flex justify-end gap-1">
+                      <Button variant="outline" size="sm" onClick={() => void moverParada(row.id, "subir")}>Subir</Button>
+                      <Button variant="outline" size="sm" onClick={() => void moverParada(row.id, "bajar")}>Bajar</Button>
+                    </div>
                     {statusOptions(row.estado).length > 0 || canReassign(row.estado) ? (
                       <Button
                         variant="outline"
