@@ -20,6 +20,7 @@ import {
   type PedidoDia,
   type RepartidorOpcion,
   type Solicitud,
+  type VelocidadDia,
 } from "@/services/callCenterService";
 import { canReassign, keepSelection, shouldRefreshAfter, statusLabel, statusOptions } from "@/lib/call-center-rules.mjs";
 import { config } from "@/config/environment";
@@ -92,6 +93,7 @@ const CallCenter = () => {
   const cargaId = Number.isFinite(solicitudParam) && solicitudParam > 0 ? solicitudParam : null;
   const [solicitudes, setSolicitudes] = useState<Solicitud[]>([]);
   const [pedidos, setPedidos] = useState<PedidoDia[]>([]);
+  const [velocidades, setVelocidades] = useState<VelocidadDia[]>([]);
   const [cities, setCities] = useState<City[]>([]);
   const [ciudadId, setCiudadId] = useState<string>("all");
   const [repartidorId, setRepartidorId] = useState<string>("all");
@@ -139,6 +141,16 @@ const CallCenter = () => {
     }
   };
 
+  const liberarSiguiente = async (id: number) => {
+    try {
+      await callCenterService.liberarSiguiente(id);
+      toast({ title: "Siguiente pedido liberado" });
+      await loadLists();
+    } catch (error) {
+      notify(error);
+    }
+  };
+
   const loadLists = useCallback(async () => {
     const requestedCiudad = ciudadId;
     const requestedRepartidor = repartidorId;
@@ -152,13 +164,15 @@ const CallCenter = () => {
     };
     const stillCurrent = () => generation === listGeneration.current && filtersStillMatch();
     try {
-      const [nextSolicitudes, nextPedidos] = await Promise.all([
+      const [nextSolicitudes, nextPedidos, nextVelocidad] = await Promise.all([
         callCenterService.listSolicitudes(),
         callCenterService.listPedidos(filters),
+        callCenterService.listarVelocidad().catch(() => [] as VelocidadDia[]),
       ]);
       if (!stillCurrent()) return;
       setSolicitudes(nextSolicitudes);
       setPedidos(nextPedidos);
+      setVelocidades(nextVelocidad);
       setSelectedId((current) => keepSelection(current));
     } catch (error) {
       if (!stillCurrent()) return;
@@ -435,6 +449,27 @@ const CallCenter = () => {
 
       <Card>
         <CardHeader>
+          <CardTitle>Velocidad de hoy</CardTitle>
+          <CardDescription>Promedio registrado desde el mapa del repartidor</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {velocidades.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Todavía no hay lecturas de velocidad.</p>
+          ) : (
+            <div className="space-y-1 text-sm">
+              {velocidades.map((row) => (
+                <p key={row.repartidor_id} className="flex justify-between">
+                  <span>{row.nombre || `Repartidor ${row.repartidor_id}`}</span>
+                  <b>{row.promedio} km/h · {row.lecturas} lecturas</b>
+                </p>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Pedidos del día</CardTitle>
           <CardDescription>Pedidos asignados para hoy</CardDescription>
         </CardHeader>
@@ -512,6 +547,7 @@ const CallCenter = () => {
                     <div className="mb-2 flex justify-end gap-1">
                       <Button variant="outline" size="sm" onClick={() => void moverParada(row.id, "subir")}>Subir</Button>
                       <Button variant="outline" size="sm" onClick={() => void moverParada(row.id, "bajar")}>Bajar</Button>
+                      <Button size="sm" onClick={() => void liberarSiguiente(row.id)}>Liberar siguiente</Button>
                     </div>
                     {statusOptions(row.estado).length > 0 || canReassign(row.estado) ? (
                       <Button

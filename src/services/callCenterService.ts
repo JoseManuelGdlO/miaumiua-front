@@ -63,6 +63,13 @@ export type PedidoDia = {
 
 export type RepartidorOpcion = { id: number; nombre_completo: string; estado: string };
 
+export type VelocidadDia = {
+  repartidor_id: number;
+  nombre: string | null;
+  promedio: number;
+  lecturas: number;
+};
+
 export type CargaValidada = Solicitud & {
   validado_por_nombre: string | null;
 };
@@ -128,6 +135,10 @@ export const callCenterService = {
     method: 'POST',
     body: JSON.stringify(alcance ? { franja, alcance } : { franja }),
   }),
+  liberarSiguiente: (id: number) => request<{ pedido_id: number; minutos: number | null }>(`/call-center/pedidos/${id}/liberar-siguiente`, {
+    method: 'POST',
+  }),
+  listarVelocidad: () => request<VelocidadDia[]>('/call-center/velocidad'),
   moverParada: (id: number, direccion: "subir" | "bajar") => request<{ orden_entrega: number }>(`/call-center/pedidos/${id}/orden`, {
     method: 'POST',
     body: JSON.stringify({ direccion }),
