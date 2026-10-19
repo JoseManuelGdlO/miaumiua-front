@@ -28,6 +28,8 @@ export type InventarioHit = {
 export type Solicitud = {
   id: number;
   tipo: 'check_in' | 'llamada_cliente' | 'soporte' | 'cierre_dia';
+  efectivo_a_depositar?: number;
+  comprobante_url?: string | null;
   motivo: string | null;
   pedido_id: number | null;
   numero_pedido: string | null;
@@ -63,6 +65,29 @@ export type PedidoDia = {
 
 export type RepartidorOpcion = { id: number; nombre_completo: string; estado: string };
 
+export type ComprobantePago = {
+  pedido_id: number;
+  numero_pedido: string;
+  repartidor: string | null;
+  metodo: string;
+  comprobante_url: string | null;
+  puede_subir: boolean;
+};
+
+export type DepositoRuta = {
+  jornada_id: number;
+  repartidor: string | null;
+  efectivo_a_depositar: number;
+  comprobante_url: string | null;
+};
+
+export type ActividadDisponible = {
+  id: number;
+  numero_pedido: string;
+  cliente: string | null;
+  ciudad_id: number | null;
+};
+
 export type VelocidadDia = {
   repartidor_id: number;
   nombre: string | null;
@@ -84,7 +109,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(`${config.apiBaseUrl}${path}`, {
     ...options,
     headers: {
-      'Content-Type': 'application/json',
+      ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
       Authorization: `Bearer ${token}`,
       ...options.headers,
     },
@@ -139,6 +164,20 @@ export const callCenterService = {
     method: 'POST',
   }),
   listarVelocidad: () => request<VelocidadDia[]>('/call-center/velocidad'),
+  listarComprobantes: () => request<ComprobantePago[]>('/call-center/comprobantes'),
+  subirComprobante: (id: number, file: File) => {
+    const body = new FormData();
+    body.append('comprobante', file);
+    return request<{ comprobante_url: string }>(`/call-center/pedidos/${id}/comprobante`, { method: 'POST', body });
+  },
+  listarDepositos: () => request<DepositoRuta[]>('/call-center/depositos'),
+  listarActividades: (ciudadId?: number) => request<ActividadDisponible[]>(
+    `/call-center/actividades${ciudadId ? `?ciudadId=${ciudadId}` : ''}`,
+  ),
+  asignarActividad: (pedidoId: number, fkid_repartidor: number) => request<{ ruta_id: number }>(`/call-center/actividades`, {
+    method: 'POST',
+    body: JSON.stringify({ pedido_id: pedidoId, fkid_repartidor }),
+  }),
   moverParada: (id: number, direccion: "subir" | "bajar") => request<{ orden_entrega: number }>(`/call-center/pedidos/${id}/orden`, {
     method: 'POST',
     body: JSON.stringify({ direccion }),
