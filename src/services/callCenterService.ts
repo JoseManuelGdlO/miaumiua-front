@@ -27,7 +27,7 @@ export type InventarioHit = {
 
 export type Solicitud = {
   id: number;
-  tipo: 'check_in' | 'llamada_cliente' | 'soporte';
+  tipo: 'check_in' | 'llamada_cliente' | 'soporte' | 'cierre_dia';
   motivo: string | null;
   pedido_id: number | null;
   numero_pedido: string | null;
@@ -53,6 +53,7 @@ export type PedidoDia = {
   cliente: string | null;
   telefono: string | null;
   direccion: string | null;
+  notas?: string | null;
   repartidor: RepartidorRef;
   ciudad_id: number | null;
   comprobante_url: string | null;
@@ -113,5 +114,12 @@ export const callCenterService = {
   reasignar: (id: number, fkid_repartidor: number) => request<{ ruta_id: number }>(`/call-center/pedidos/${id}/reasignar`, {
     method: 'POST',
     body: JSON.stringify({ fkid_repartidor }),
+  }),
+  liberarCierre: (id: number) => request<{ cerrada: boolean; cerrado_por_nombre: string | null }>(`/call-center/solicitudes/${id}/liberar-cierre`, {
+    method: 'POST',
+  }),
+  reagendar: (id: number, fecha: string, motivo: string) => request<{ id: number }>(`/call-center/pedidos/${id}/reagendar`, {
+    method: 'POST',
+    body: JSON.stringify({ fecha, motivo }),
   }),
 };

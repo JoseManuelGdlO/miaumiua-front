@@ -10,8 +10,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { useNotificationStream } from "@/hooks/useNotificationStream";
 import { citiesService, type City } from "@/services/citiesService";
 import ValidacionCarga from "@/pages/ValidacionCarga";
+import IncidenciasPanel from "@/pages/IncidenciasPanel";
 import {
   callCenterService,
   type CargaValidada,
@@ -26,6 +28,7 @@ const TIPO: Record<string, string> = {
   check_in: "Check-in",
   llamada_cliente: "Llamada al cliente",
   soporte: "Soporte",
+  cierre_dia: "Cierre de día",
 };
 
 function errorStatus(error: unknown) {
@@ -77,10 +80,14 @@ function OrderStatus({ estado, modificado }: { estado: string; modificado?: bool
   );
 }
 
+const LIVE_TIPOS = new Set(["check_in", "llamada_cliente", "soporte", "cierre_dia"]);
+
 const CallCenter = () => {
   const { toast } = useToast();
+  const stream = useNotificationStream();
   const [searchParams, setSearchParams] = useSearchParams();
-  const tab = searchParams.get("tab") === "validacion" ? "validacion" : "operacion";
+  const tabParam = searchParams.get("tab");
+  const tab = tabParam === "validacion" || tabParam === "incidencias" ? tabParam : "operacion";
   const solicitudParam = Number(searchParams.get("solicitud"));
   const cargaId = Number.isFinite(solicitudParam) && solicitudParam > 0 ? solicitudParam : null;
   const [solicitudes, setSolicitudes] = useState<Solicitud[]>([]);
@@ -150,7 +157,7 @@ const CallCenter = () => {
   };
 
   const onTab = (value: string) => {
-    if (value === "validacion") setSearchParams({ tab: "validacion" });
+    if (value === "validacion" || value === "incidencias") setSearchParams({ tab: value });
     else setSearchParams({});
   };
 
@@ -182,12 +189,21 @@ const CallCenter = () => {
     };
     void run();
     const timer = setInterval(run, 5000);
+    const unsubscribe = stream?.subscribe((event) => {
+      if (event.type === "reconnect") {
+        void run();
+        return;
+      }
+      const tipo = event.payload?.datos?.tipo;
+      if (typeof tipo === "string" && LIVE_TIPOS.has(tipo)) void run();
+    });
     return () => {
       stop = true;
       listGeneration.current += 1;
       clearInterval(timer);
+      unsubscribe?.();
     };
-  }, [loadLists]);
+  }, [loadLists, stream]);
 
   const dismissDetail = () => {
     detailRequest.current += 1;
@@ -218,6 +234,21 @@ const CallCenter = () => {
       return;
     }
     try { await loadLists(); } catch (refreshError) { notify(refreshError); }
+  };
+
+  const liberar = async () => {
+    if (!detail || busy) return;
+    setBusy(true);
+    try {
+      const result = await callCenterService.liberarCierre(detail.id);
+      toast({ title: "Día liberado", description: result.cerrado_por_nombre || undefined });
+      dismissDetail();
+      await afterAction();
+    } catch (error) {
+      await afterAction(error);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const atender = async () => {
@@ -333,6 +364,7 @@ const CallCenter = () => {
       <Tabs value={tab} onValueChange={onTab}>
         <TabsList>
           <TabsTrigger value="operacion">Operación</TabsTrigger>
+          <TabsTrigger value="incidencias">Incidencias</TabsTrigger>
           <TabsTrigger value="validacion">Validación de carga</TabsTrigger>
         </TabsList>
         <TabsContent value="operacion" className="space-y-6">
@@ -494,7 +526,14 @@ const CallCenter = () => {
       <Dialog open={detail != null} onOpenChange={(open) => { if (!open) dismissDetail(); }}>
         <DialogContent>
           <DialogHeader><DialogTitle>{detail ? TIPO[detail.tipo] : ""}</DialogTitle></DialogHeader>
-          {detail && detail.tipo !== "check_in" && (
+          {detail && detail.tipo === "cierre_dia" && (
+            <div className="space-y-3">
+              <p>{detail.repartidor?.nombre_completo || "Repartidor"}</p>
+              <p>El repartidor ya subió la foto del depósito.</p>
+              <Button disabled={busy} onClick={() => void liberar()}>Liberar cierre</Button>
+            </div>
+          )}
+          {detail && detail.tipo !== "check_in" && detail.tipo !== "cierre_dia" && (
             <div className="space-y-3">
               <p>{detail.repartidor?.nombre_completo}</p>
               <p>Pedido {detail.numero_pedido || "—"}</p>
@@ -550,6 +589,14 @@ const CallCenter = () => {
           )}
         </DialogContent>
       </Dialog>
+        </TabsContent>
+        <TabsContent value="incidencias">
+          <IncidenciasPanel
+            pedidos={pedidos}
+            solicitudes={solicitudes}
+            onChanged={() => { void loadLists().catch(notify); }}
+            onError={notify}
+          />
         </TabsContent>
         <TabsContent value="validacion" className="space-y-6">
           {cargaId ? (
