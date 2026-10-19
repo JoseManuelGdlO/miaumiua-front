@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   AlignCenter,
   AlignLeft,
@@ -6,10 +6,12 @@ import {
   Bold,
   Heading2,
   Heading3,
+  ImagePlus,
   Italic,
   Link2,
   List,
   ListOrdered,
+  PaintBucket,
   RemoveFormatting,
   Strikethrough,
   Underline,
@@ -24,8 +26,58 @@ interface QrLinksRichTextProps {
   textColor: string;
   backgroundImage: string;
   preview?: ReactNode;
-  toolbarExtra?: ReactNode;
+  onPanelColorChange?: (color: string) => void;
+  onUploadImage?: (file: File) => Promise<string>;
   onChange: (html: string) => void;
+}
+
+function ToolbarColorButton({
+  label,
+  color,
+  disabled,
+  onPrepare,
+  onChange,
+  icon,
+}: {
+  label: string;
+  color: string;
+  disabled?: boolean;
+  onPrepare?: () => void;
+  onChange: (color: string) => void;
+  icon: ReactNode;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const safe = /^#[0-9a-fA-F]{6}$/.test(color) ? color : "#000000";
+
+  return (
+    <>
+      <button
+        type="button"
+        disabled={disabled}
+        aria-label={label}
+        title={label}
+        className="inline-flex h-9 w-9 flex-col items-center justify-center rounded-md border border-input bg-background py-1 text-sm font-medium ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+        onMouseDown={(event) => {
+          event.preventDefault();
+          onPrepare?.();
+        }}
+        onClick={() => inputRef.current?.click()}
+      >
+        {icon}
+        <span className="mt-0.5 h-1 w-4 rounded-sm" style={{ backgroundColor: safe }} />
+      </button>
+      <input
+        ref={inputRef}
+        type="color"
+        tabIndex={-1}
+        aria-hidden
+        value={safe}
+        disabled={disabled}
+        className="sr-only"
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </>
+  );
 }
 
 const FONT_OPTIONS = [
@@ -53,12 +105,15 @@ const QrLinksRichText = ({
   textColor,
   backgroundImage,
   preview,
-  toolbarExtra,
+  onPanelColorChange,
+  onUploadImage,
   onChange,
 }: QrLinksRichTextProps) => {
   const { toast } = useToast();
   const editorRef = useRef<HTMLDivElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const selectionRef = useRef<Range | null>(null);
+  const [fontBar, setFontBar] = useState(textColor);
 
   useEffect(() => {
     const id = "qr-editor-fonts";
@@ -71,7 +126,9 @@ const QrLinksRichText = ({
     }
   }, []);
 
-  const textColorReady = useRef(false);
+  useEffect(() => {
+    setFontBar(textColor);
+  }, [textColor]);
 
   useEffect(() => {
     const editor = editorRef.current;
@@ -86,7 +143,7 @@ const QrLinksRichText = ({
     if (!selection || selection.rangeCount === 0 || !editorRef.current) return;
     const range = selection.getRangeAt(0);
     if (editorRef.current.contains(range.commonAncestorContainer)) {
-      selectionRef.current = range;
+      selectionRef.current = range.cloneRange();
     }
   };
 
@@ -107,25 +164,20 @@ const QrLinksRichText = ({
     saveSelection();
   };
 
-  const clearInlineColors = (root: ParentNode) => {
-    root.querySelectorAll("font[color]").forEach((node) => node.removeAttribute("color"));
-    root.querySelectorAll<HTMLElement>("[style]").forEach((node) => {
-      if (!node.style.color) return;
-      node.style.removeProperty("color");
-      if (!node.getAttribute("style")?.trim()) node.removeAttribute("style");
-    });
+  const keepSelection = () => {
+    const selection = window.getSelection();
+    const editor = editorRef.current;
+    if (!selection || !editor || selection.rangeCount === 0) return;
+    const range = selection.getRangeAt(0);
+    if (!editor.contains(range.commonAncestorContainer)) return;
+    if (range.collapsed && selectionRef.current && !selectionRef.current.collapsed) return;
+    selectionRef.current = range.cloneRange();
   };
 
-  useEffect(() => {
-    const editor = editorRef.current;
-    if (!editor) return;
-    if (!textColorReady.current) {
-      textColorReady.current = true;
-      return;
-    }
-    clearInlineColors(editor);
-    if (editor.innerHTML !== value) onChange(editor.innerHTML);
-  }, [textColor]);
+  const applyTextColor = (color: string) => {
+    setFontBar(color);
+    apply("foreColor", color);
+  };
 
   const addLink = () => {
     const url = window.prompt("Escribe el link (https://)");
@@ -142,12 +194,42 @@ const QrLinksRichText = ({
     apply("createLink", trimmed);
   };
 
+  const insertImage = async (file: File) => {
+    if (disabled || !onUploadImage) return;
+    if (!file.type.startsWith("image/")) {
+      toast({
+        title: "Archivo no válido",
+        description: "Sube una imagen JPG, PNG, GIF o WebP",
+        variant: "destructive",
+      });
+      return;
+    }
+    try {
+      const url = await onUploadImage(file);
+      editorRef.current?.focus();
+      restoreSelection();
+      const inserted = document.execCommand("insertImage", false, url);
+      if (!inserted && editorRef.current) {
+        const safeUrl = url.replace(/"/g, "");
+        editorRef.current.insertAdjacentHTML("beforeend", `<img src="${safeUrl}" alt="">`);
+      }
+      onChange(editorRef.current?.innerHTML ?? "");
+      saveSelection();
+    } catch (error) {
+      toast({
+        title: "No se pudo subir la imagen",
+        description: error instanceof Error ? error.message : "Intenta con otra imagen",
+        variant: "destructive",
+      });
+    }
+  };
+
   const hasBackgroundImage = backgroundImage.trim().length > 0;
 
   return (
     <div className="space-y-4">
       <div className="space-y-3 rounded-xl border bg-card p-2">
-      <div className="flex w-full flex-wrap items-center gap-1">
+      <div className="flex w-full min-w-0 flex-wrap items-center gap-1">
         <select
           aria-label="Fuente"
           disabled={disabled}
@@ -195,6 +277,21 @@ const QrLinksRichText = ({
         <Button type="button" size="sm" variant="outline" disabled={disabled} onMouseDown={(event) => event.preventDefault()} onClick={() => apply("underline")} aria-label="Subrayado">
           <Underline className="h-4 w-4" />
         </Button>
+        <ToolbarColorButton
+          label="Color del texto"
+          color={fontBar}
+          disabled={disabled}
+          onPrepare={keepSelection}
+          onChange={applyTextColor}
+          icon={<span className="text-[15px] font-semibold leading-none">A</span>}
+        />
+        <ToolbarColorButton
+          label="Fondo del panel"
+          color={panelColor}
+          disabled={disabled || !onPanelColorChange}
+          onChange={(color) => onPanelColorChange?.(color)}
+          icon={<PaintBucket className="h-4 w-4" />}
+        />
         <Button type="button" size="sm" variant="outline" disabled={disabled} onMouseDown={(event) => event.preventDefault()} onClick={() => apply("strikeThrough")} aria-label="Tachado">
           <Strikethrough className="h-4 w-4" />
         </Button>
@@ -225,14 +322,38 @@ const QrLinksRichText = ({
         <Button type="button" size="sm" variant="outline" disabled={disabled} onMouseDown={(event) => event.preventDefault()} onClick={addLink} aria-label="Insertar enlace">
           <Link2 className="h-4 w-4" />
         </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={disabled || !onUploadImage}
+          onMouseDown={(event) => {
+            event.preventDefault();
+            saveSelection();
+          }}
+          onClick={() => imageInputRef.current?.click()}
+          aria-label="Insertar imagen"
+        >
+          <ImagePlus className="h-4 w-4" />
+        </Button>
+        <input
+          ref={imageInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/gif,image/webp"
+          className="hidden"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            event.target.value = "";
+            if (file) void insertImage(file);
+          }}
+        />
       </div>
-      {toolbarExtra}
       </div>
-      <div className="grid items-stretch gap-6 xl:grid-cols-2">
-      <div className="flex h-full min-h-72 flex-col gap-2">
+      <div className="flex flex-col gap-6">
+      <div className="flex min-h-[32rem] flex-col gap-2">
       <p className="text-sm font-medium">Edición</p>
       <div
-        className="relative flex min-h-64 flex-1 flex-col overflow-hidden rounded-md border"
+        className="relative flex min-h-[32rem] min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto rounded-md border"
         style={{
           backgroundColor: panelColor,
           color: textColor,
@@ -256,7 +377,7 @@ const QrLinksRichText = ({
           role="textbox"
           aria-multiline="true"
           aria-label="Texto de la sección de enlaces"
-          className="relative z-10 w-full flex-1 bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring [&_a]:text-inherit [&_a]:underline [&_h2]:text-3xl [&_h2]:font-black [&_h3]:text-xl [&_h3]:font-bold [&_img]:mx-auto [&_img]:my-3 [&_img]:max-h-80 [&_img]:max-w-full [&_img]:rounded-lg [&_ol]:list-decimal [&_ol]:pl-5 [&_s]:line-through [&_strike]:line-through [&_ul]:list-disc [&_ul]:pl-5"
+          className="relative z-10 min-h-[32rem] w-full min-w-0 max-w-full flex-1 overflow-x-hidden break-words bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring [&_a]:underline [&_font[size='1']]:text-xs [&_font[size='2']]:text-sm [&_font[size='3']]:text-base [&_font[size='4']]:text-lg [&_font[size='5']]:text-2xl [&_font[size='6']]:text-4xl [&_font[size='7']]:text-5xl [&_font[size='7']]:font-black [&_h2]:text-3xl [&_h2]:font-black [&_h3]:text-xl [&_h3]:font-bold [&_img]:mx-auto [&_img]:my-3 [&_img]:max-h-80 [&_img]:max-w-full [&_img]:rounded-lg [&_ol]:list-decimal [&_ol]:pl-5 [&_s]:line-through [&_strike]:line-through [&_ul]:list-disc [&_ul]:pl-5"
           onMouseUp={saveSelection}
           onKeyUp={saveSelection}
           onInput={() => onChange(editorRef.current?.innerHTML ?? "")}

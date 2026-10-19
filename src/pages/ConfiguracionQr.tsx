@@ -1,20 +1,25 @@
 import { useEffect, useRef, useState } from "react";
 import { Navigate } from "react-router-dom";
-import { ExternalLink, Eye, Link2, Loader2, Pencil, Plus, QrCode, Save, Trash2, Type, Upload } from "lucide-react";
+import { Eye, Link2, Loader2, QrCode, Save, Type, Upload } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { hasSectionAccess } from "@/utils/permissions";
+import { config } from "@/config/environment";
 import {
   DEFAULT_QR_ACTIONS,
   QrActions,
   normalizePublicSiteSettings,
   siteSettingsService,
+  withVisualState,
 } from "@/services/siteSettingsService";
+import QrCardsEditor from "@/components/QrCardsEditor";
+import QrLinkCardGrid, { type QrDisplayCard } from "@/components/QrLinkCardGrid";
 import QrLinksRichText from "@/components/QrLinksRichText";
 
 const QR_LINK = "https://miaumiau.com.mx/QR";
@@ -22,7 +27,7 @@ const QR_LINK = "https://miaumiau.com.mx/QR";
 type QrToggleId = "whatsapp" | "catalog" | "packages" | "promotions" | "mercadolibre" | "social";
 
 function visibleText(html: string) {
-  return html.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim();
+  return html.replace(/<[^>]*>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
 }
 
 function hasVisibleRichText(html: string) {
@@ -30,28 +35,15 @@ function hasVisibleRichText(html: string) {
   return visibleText(html).length > 0;
 }
 
-const DEFAULT_EDITOR_HTML = '<div style="text-align:center;color:#000000;font-family:Fredoka,sans-serif"><h2 style="color:#000000;font-family:Fredoka,sans-serif;font-weight:700">Miau Miau</h2><p style="color:#000000;font-family:Fredoka,sans-serif;font-weight:600">Elige lo que quieres ver</p></div>';
+const LOGO_HTML = '<p style="text-align:center"><img src="/miau-logo-mark.png" alt="Miau Miau"></p>';
+const DEFAULT_EDITOR_HTML = `${LOGO_HTML}<div style="text-align:center;color:#000000;font-family:Fredoka,sans-serif"><h2 style="color:#000000;font-family:Fredoka,sans-serif;font-weight:700">Miau Miau</h2><p style="color:#000000;font-family:Fredoka,sans-serif;font-weight:600">Elige lo que quieres ver</p></div>`;
 
 function withEditableHeading(html: string) {
-  const textHtml = html.replace(/<img\b[^>]*>/gi, "").replace(/<p[^>]*>\s*<\/p>/gi, "");
-  if (visibleText(textHtml).length > 0) return textHtml;
-  return DEFAULT_EDITOR_HTML;
-}
-
-function withExistingLinks(actions: QrActions, data: { mercadolibreUrl?: string; socialTiktokUrl?: string }) {
-  const restored = [
-    { name: "WHATSAPP POR CIUDAD", url: "https://linktr.ee/miaumiauarena" },
-    { name: "MERCADO LIBRE", url: data.mercadolibreUrl?.trim() ?? "" },
-    { name: "TIKTOK", url: data.socialTiktokUrl?.trim() ?? "" },
-  ].filter((item) => item.url && !actions.links.some((link) => link.name.trim().toUpperCase() === item.name));
-  return {
-    ...actions,
-    linksHtml: withEditableHeading(actions.linksHtml),
-    links: [
-      ...actions.links,
-      ...restored.map((item) => ({ id: `link-${item.name.toLowerCase().replace(/\s+/g, "-")}`, name: item.name, url: item.url })),
-    ],
-  };
+  const cleaned = html.replace(/<p[^>]*>\s*<\/p>/gi, "");
+  if (/<img\b/i.test(cleaned)) return cleaned;
+  const text = visibleText(cleaned).replace(/\s+/g, " ");
+  if (!text || text === "Miau Miau Elige lo que quieres ver") return DEFAULT_EDITOR_HTML;
+  return cleaned;
 }
 
 function isHttpUrl(value: string) {
@@ -61,71 +53,6 @@ function isHttpUrl(value: string) {
   } catch {
     return false;
   }
-}
-
-const LINK_COLOR_FIELDS: { key: "linksPanelColor" | "linksTextColor"; label: string }[] = [
-  { key: "linksPanelColor", label: "Fondo del panel" },
-  { key: "linksTextColor", label: "Color del texto" },
-];
-
-const ENLACE_COLOR_FIELDS: { key: "linksBubbleColor" | "linksBubbleTextColor"; label: string }[] = [
-  { key: "linksBubbleColor", label: "Color de las burbujas" },
-  { key: "linksBubbleTextColor", label: "Color del texto" },
-];
-
-function ColorSettingCard({
-  id,
-  label,
-  value,
-  disabled,
-  onChange,
-}: {
-  id: string;
-  label: string;
-  value: string;
-  disabled?: boolean;
-  onChange: (value: string) => void;
-}) {
-  const pickerRef = useRef<HTMLInputElement>(null);
-  const openPicker = () => {
-    if (disabled) return;
-    pickerRef.current?.click();
-  };
-
-  return (
-    <div className="space-y-2 rounded-xl border bg-card p-4">
-      <Label htmlFor={id}>{label}</Label>
-      <div className="flex items-center gap-2 rounded-lg border bg-background px-2">
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={openPicker}
-          aria-label={`Elegir ${label}`}
-          className="h-7 w-7 shrink-0 rounded-md border"
-          style={{ backgroundColor: /^#[0-9a-fA-F]{6}$/.test(value) ? value : "#000000" }}
-        />
-        <input
-          ref={pickerRef}
-          id={id}
-          type="color"
-          value={/^#[0-9a-fA-F]{6}$/.test(value) ? value : "#000000"}
-          disabled={disabled}
-          className="sr-only"
-          onChange={(event) => onChange(event.target.value)}
-        />
-        <Input
-          value={value}
-          disabled={disabled}
-          maxLength={7}
-          className="h-10 border-0 px-0 font-mono shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
-          onChange={(event) => onChange(event.target.value)}
-        />
-        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0" disabled={disabled} onClick={openPicker} aria-label={`Editar ${label}`}>
-          <Pencil className="h-4 w-4" />
-        </Button>
-      </div>
-    </div>
-  );
 }
 
 const QR_ACTION_OPTIONS: { id: QrToggleId; title: string; description: string }[] = [
@@ -161,15 +88,238 @@ const QR_ACTION_OPTIONS: { id: QrToggleId; title: string; description: string }[
   },
 ];
 
+type SaveSection = "toggles" | "links" | "text";
+
+const TOGGLE_IDS: QrToggleId[] = ["whatsapp", "catalog", "packages", "promotions", "mercadolibre", "social"];
+
+function textFieldsOf(actions: QrActions) {
+  return {
+    linksHtml: actions.linksHtml,
+    linksPanelColor: actions.linksPanelColor,
+    linksTextColor: actions.linksTextColor,
+    linksBackgroundImage: actions.linksBackgroundImage,
+  };
+}
+
+function completeLinks(links: QrActions["links"]) {
+  return links
+    .map((link) => ({
+      ...link,
+      name: link.name.trim(),
+      url: link.url.trim(),
+      description: link.description.trim(),
+    }))
+    .filter((link) => link.name && isHttpUrl(link.url));
+}
+
+function buildPayload(section: SaveSection, current: QrActions, saved: QrActions): QrActions {
+  const next: QrActions = {
+    ...saved,
+    customLink: false,
+    customLinkUrl: "",
+    customLinkLabel: "",
+  };
+  if (section === "toggles") {
+    for (const id of TOGGLE_IDS) next[id] = current[id];
+  } else if (section === "links") {
+    next.links = completeLinks(current.links);
+    next.cards = current.cards;
+    next.cardOrder = current.cardOrder.filter((id) =>
+      id === "mercadolibre" || id === "instagram" || id === "facebook" || id === "tiktok" || next.links.some((link) => link.id === id),
+    );
+    next.linksBubbleColor = current.linksBubbleColor;
+    next.linksBubbleTextColor = current.linksBubbleTextColor;
+  } else {
+    Object.assign(next, textFieldsOf(current));
+  }
+  return withVisualState(next);
+}
+
+type SiteLinks = {
+  mercadolibreUrl: string;
+  socialInstagramUrl: string;
+  socialFacebookUrl: string;
+  socialTiktokUrl: string;
+};
+
+const EMPTY_SITE_LINKS: SiteLinks = {
+  mercadolibreUrl: "",
+  socialInstagramUrl: "",
+  socialFacebookUrl: "",
+  socialTiktokUrl: "",
+};
+
+type SectionPreview = { status: "idle" | "loading" | "ready" | "error"; names: string[] };
+
+const idleSection: SectionPreview = { status: "idle", names: [] };
+
+function namesFrom(json: unknown, listKey: string) {
+  const data = (json as { data?: Record<string, { nombre?: string }[] | undefined> })?.data;
+  const list = data?.[listKey];
+  if (!Array.isArray(list)) return [];
+  return list.flatMap((item) => {
+    const name = item?.nombre?.trim();
+    return name ? [name] : [];
+  });
+}
+
+function QrPagePreview({
+  open,
+  onOpenChange,
+  actions,
+  siteLinks,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  actions: QrActions;
+  siteLinks: SiteLinks;
+}) {
+  const [catalog, setCatalog] = useState<SectionPreview>(idleSection);
+  const [packages, setPackages] = useState<SectionPreview>(idleSection);
+  const [promotions, setPromotions] = useState<SectionPreview>(idleSection);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    const load = async (
+      enabled: boolean,
+      path: string,
+      listKey: string,
+      setSection: (value: SectionPreview) => void,
+    ) => {
+      if (!enabled) {
+        setSection(idleSection);
+        return;
+      }
+      setSection({ status: "loading", names: [] });
+      try {
+        const response = await fetch(`${config.apiBaseUrl}${path}`);
+        if (!response.ok) throw new Error("No se pudo cargar");
+        const names = namesFrom(await response.json(), listKey);
+        if (!cancelled) setSection({ status: "ready", names });
+      } catch {
+        if (!cancelled) setSection({ status: "error", names: [] });
+      }
+    };
+    void load(actions.catalog, "/inventarios/catalogo", "productos", setCatalog);
+    void load(actions.packages, "/paquetes/activos", "paquetes", setPackages);
+    void load(actions.promotions, "/promotions/active", "promotions", setPromotions);
+    return () => {
+      cancelled = true;
+    };
+  }, [open, actions.catalog, actions.packages, actions.promotions]);
+
+  const featuredCard: QrDisplayCard | null = actions.whatsapp && !actions.cards.whatsapp.hidden
+    ? { id: "whatsapp", ...actions.cards.whatsapp }
+    : null;
+  const previewCards: QrDisplayCard[] = actions.cardOrder.flatMap((id) => {
+    if (id === "mercadolibre") {
+      return actions.mercadolibre && !actions.cards.mercadolibre.hidden && siteLinks.mercadolibreUrl.trim()
+        ? [{ id, ...actions.cards.mercadolibre }]
+        : [];
+    }
+    if (id === "instagram" || id === "facebook" || id === "tiktok") {
+      const url = id === "instagram"
+        ? siteLinks.socialInstagramUrl
+        : id === "facebook"
+          ? siteLinks.socialFacebookUrl
+          : siteLinks.socialTiktokUrl;
+      return actions.social && !actions.cards[id].hidden && url.trim() ? [{ id, ...actions.cards[id] }] : [];
+    }
+    const link = actions.links.find((item) => item.id === id);
+    if (!link || link.hidden || !link.name.trim() || !isHttpUrl(link.url)) return [];
+    return [{
+      id: link.id,
+      name: link.name,
+      description: link.description,
+      icon: link.icon,
+      size: link.size,
+      iconBackgroundColor: link.iconBackgroundColor,
+      cardColor: link.cardColor,
+      iconColor: link.iconColor,
+    }];
+  });
+  const sections = [
+    actions.catalog
+      ? { title: "Nuestros Productos", state: catalog, loading: "Cargando productos...", empty: "Por ahora no hay productos disponibles.", error: "No pudimos cargar los productos." }
+      : null,
+    actions.packages
+      ? { title: "Paquetes y Combos", state: packages, loading: "Cargando paquetes...", empty: "Por ahora no hay paquetes disponibles.", error: "No pudimos cargar los paquetes." }
+      : null,
+    actions.promotions
+      ? { title: "Promociones", state: promotions, loading: "Cargando promociones...", empty: "Lo sentimos, por el momento no tenemos promociones.", error: "No pudimos cargar las promociones." }
+      : null,
+  ].filter((section): section is { title: string; state: SectionPreview; loading: string; empty: string; error: string } => section !== null);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="flex h-[min(94vh,860px)] w-[min(100%-1.5rem,980px)] max-w-[980px] flex-col gap-0 overflow-hidden bg-white p-0 sm:max-w-[980px]">
+        <DialogHeader className="shrink-0 border-b px-6 py-4 pr-12">
+          <DialogTitle>Vista previa del QR</DialogTitle>
+        </DialogHeader>
+        <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-white text-neutral-950">
+          <section
+            className="px-4 py-8 text-center"
+            style={{
+              backgroundColor: actions.linksPanelColor || "#ffffff",
+              backgroundImage: actions.linksBackgroundImage
+                ? `url("${actions.linksBackgroundImage.replace(/"/g, "")}")`
+                : undefined,
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+            }}
+          >
+            {hasVisibleRichText(actions.linksHtml) && (
+              <div
+                className="mx-auto mt-8 max-w-3xl [&_a]:underline [&_h2]:text-4xl [&_h2]:font-black [&_h3]:text-2xl [&_h3]:font-bold [&_img]:mx-auto [&_img]:my-4 [&_img]:max-h-96 [&_img]:max-w-full [&_p]:mb-3"
+                style={{ color: actions.linksTextColor, fontFamily: "'Fredoka', sans-serif" }}
+                dangerouslySetInnerHTML={{ __html: actions.linksHtml.replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "") }}
+              />
+            )}
+            <QrLinkCardGrid featured={featuredCard} cards={previewCards} />
+          </section>
+          {sections.map((section) => (
+            <section key={section.title} className="border-t bg-white px-4 py-10 text-center">
+              <h2 className="text-3xl font-black" style={{ fontFamily: "'Fredoka', sans-serif" }}>{section.title}</h2>
+              {section.state.status === "loading" && <p className="mt-4 text-neutral-500">{section.loading}</p>}
+              {section.state.status === "error" && <p className="mt-4 text-neutral-500">{section.error}</p>}
+              {section.state.status === "ready" && section.state.names.length === 0 && (
+                <p className="mt-4 text-neutral-500">{section.empty}</p>
+              )}
+              {section.state.status === "ready" && section.state.names.length > 0 && (
+                <ul className="mx-auto mt-6 max-w-xl space-y-2 text-left">
+                  {section.state.names.map((name, index) => (
+                    <li key={`${section.title}-${index}`} className="rounded-xl border px-4 py-3 font-medium">{name}</li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          ))}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 const ConfiguracionQr = () => {
   const { toast } = useToast();
   const canSave = hasSectionAccess("qr");
   const [actions, setActions] = useState<QrActions>(DEFAULT_QR_ACTIONS);
+  const [siteLinks, setSiteLinks] = useState<SiteLinks>(EMPTY_SITE_LINKS);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [savingSection, setSavingSection] = useState<SaveSection | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [uploadingBackground, setUploadingBackground] = useState(false);
   const [draggingBackground, setDraggingBackground] = useState(false);
   const backgroundFileRef = useRef<HTMLInputElement>(null);
+  const actionsRef = useRef(actions);
+  const savedRef = useRef<QrActions>(DEFAULT_QR_ACTIONS);
+  const saveQueueRef = useRef(Promise.resolve());
+
+  const remember = (next: QrActions) => {
+    actionsRef.current = next;
+    return next;
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -177,7 +327,17 @@ const ConfiguracionQr = () => {
       try {
         const res = await siteSettingsService.getPublic();
         if (!cancelled && res.success) {
-          setActions(withExistingLinks(normalizePublicSiteSettings(res.data).qrActions, res.data));
+          const normalized = normalizePublicSiteSettings(res.data).qrActions;
+          const next = { ...normalized, linksHtml: withEditableHeading(normalized.linksHtml) };
+          actionsRef.current = next;
+          savedRef.current = next;
+          setActions(next);
+          setSiteLinks({
+            mercadolibreUrl: res.data.mercadolibreUrl ?? "",
+            socialInstagramUrl: res.data.socialInstagramUrl ?? "",
+            socialFacebookUrl: res.data.socialFacebookUrl ?? "",
+            socialTiktokUrl: res.data.socialTiktokUrl ?? "",
+          });
         }
       } catch (error) {
         if (!cancelled) {
@@ -201,33 +361,52 @@ const ConfiguracionQr = () => {
     setActions((current) => {
       const next = withEditableHeading(current.linksHtml);
       if (next === current.linksHtml) return current;
-      return { ...current, linksHtml: next };
+      return remember({ ...current, linksHtml: next });
     });
   }, [actions.linksHtml]);
 
+  const saveMessages: Record<SaveSection, string> = {
+    toggles: "Lo que se muestra al entrar quedó publicado",
+    links: "Los enlaces quedaron publicados",
+    text: "El texto de la sección quedó publicado",
+  };
+
+  const enqueueSave = (section: SaveSection) => {
+    if (!canSave) return;
+    if (section === "links") {
+      const incomplete = actionsRef.current.links.find((link) => !link.name.trim() || !isHttpUrl(link.url));
+      if (incomplete) {
+        toast({
+          title: "Enlace incompleto",
+          description: incomplete.name.trim()
+            ? `El enlace "${incomplete.name.trim()}" debe ser una URL http:// o https://`
+            : "Cada enlace necesita un nombre y un link http:// o https://",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+    saveQueueRef.current = saveQueueRef.current.then(async () => {
+      setSavingSection(section);
+      const payload = buildPayload(section, actionsRef.current, savedRef.current);
+      try {
+        await siteSettingsService.updateQrActions(payload);
+        savedRef.current = payload;
+        toast({ title: "Guardado", description: saveMessages[section] });
+      } catch (error) {
+        toast({
+          title: "Error al guardar",
+          description: error instanceof Error ? error.message : "No se pudieron guardar los cambios",
+          variant: "destructive",
+        });
+      } finally {
+        setSavingSection((current) => (current === section ? null : current));
+      }
+    });
+  };
+
   const toggleAction = (id: QrToggleId | "customLink", checked: boolean) => {
-    setActions((current) => ({ ...current, [id]: checked }));
-  };
-
-  const updateLink = (id: string, field: "name" | "url", value: string) => {
-    setActions((current) => ({
-      ...current,
-      links: current.links.map((link) => (link.id === id ? { ...link, [field]: value } : link)),
-    }));
-  };
-
-  const addLink = () => {
-    setActions((current) => ({
-      ...current,
-      links: [...current.links, { id: `link-${Date.now()}`, name: "", url: "" }],
-    }));
-  };
-
-  const removeLink = (id: string) => {
-    setActions((current) => ({
-      ...current,
-      links: current.links.filter((link) => link.id !== id),
-    }));
+    setActions((current) => remember({ ...current, [id]: checked }));
   };
 
   const uploadBackground = async (file: File) => {
@@ -243,7 +422,7 @@ const ConfiguracionQr = () => {
     setUploadingBackground(true);
     try {
       const url = await siteSettingsService.uploadQrImage(file);
-      setActions((current) => ({ ...current, linksBackgroundImage: url }));
+      setActions((current) => remember({ ...current, linksBackgroundImage: url }));
     } catch (error) {
       toast({
         title: "No se pudo subir la foto",
@@ -255,49 +434,8 @@ const ConfiguracionQr = () => {
     }
   };
 
-  const handleSave = async () => {
-    const links = actions.links.map((link) => ({
-      ...link,
-      name: link.name.trim(),
-      url: link.url.trim(),
-    }));
-    const incomplete = links.find((link) => !link.name || !isHttpUrl(link.url));
-    if (incomplete) {
-      toast({
-        title: "Enlace incompleto",
-        description: incomplete.name
-          ? `El enlace "${incomplete.name}" debe ser una URL http:// o https://`
-          : "Cada enlace necesita un nombre y un link http:// o https://",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      setSaving(true);
-      const res = await siteSettingsService.updateQrActions({
-        ...actions,
-        customLink: false,
-        customLinkUrl: "",
-        customLinkLabel: "",
-        links,
-      });
-      if (res.success && res.data) {
-        setActions(withExistingLinks(normalizePublicSiteSettings(res.data).qrActions, res.data));
-      }
-      toast({
-        title: "Guardado",
-        description: res.message ?? "Lo que se muestra al entrar al QR quedó actualizado",
-      });
-    } catch (error) {
-      toast({
-        title: "Error al guardar",
-        description: error instanceof Error ? error.message : "No se pudieron guardar las acciones",
-        variant: "destructive",
-      });
-    } finally {
-      setSaving(false);
-    }
+  const handleSaveText = () => {
+    enqueueSave("text");
   };
 
   if (!canSave) {
@@ -305,7 +443,7 @@ const ConfiguracionQr = () => {
   }
 
   return (
-    <div className="p-6 space-y-6 w-full">
+    <div className="w-full min-w-0 max-w-full space-y-6 overflow-x-hidden p-6">
       <div>
         <h1 className="flex items-center gap-2 text-3xl font-bold tracking-tight text-foreground">
           <QrCode className="h-5 w-5 text-primary" />
@@ -319,7 +457,18 @@ const ConfiguracionQr = () => {
             <Link2 className="h-4 w-4" />
             Liga vinculada
           </Label>
-          <Input id="qr-link" value={QR_LINK} readOnly />
+          <div className="flex gap-2">
+            <Input id="qr-link" value={QR_LINK} readOnly />
+            <Button
+              type="button"
+              variant="outline"
+              className="shrink-0"
+              onClick={() => setPreviewOpen(true)}
+            >
+              <Eye className="h-4 w-4" />
+              Vista previa
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -349,8 +498,8 @@ const ConfiguracionQr = () => {
                     <AccordionContent>
                       <div className="divide-y rounded-lg border">
                         {QR_ACTION_OPTIONS.map((option) => (
-                          <div key={option.id} className="flex items-center justify-between gap-4 p-4">
-                            <div>
+                          <div key={option.id} className="flex min-w-0 items-center justify-between gap-4 p-4">
+                            <div className="min-w-0">
                               <Label htmlFor={`qr-action-${option.id}`} className="text-base">
                                 {option.title}
                               </Label>
@@ -359,11 +508,17 @@ const ConfiguracionQr = () => {
                             <Switch
                               id={`qr-action-${option.id}`}
                               checked={actions[option.id]}
-                              disabled={!canSave || saving}
+                              disabled={!canSave }
                               onCheckedChange={(checked) => toggleAction(option.id, checked)}
                             />
                           </div>
                         ))}
+                      </div>
+                      <div className="mt-4 flex justify-end">
+                        <Button type="button" className="rounded-xl px-5" onClick={() => enqueueSave("toggles")} disabled={!canSave || savingSection !== null}>
+                          {savingSection === "toggles" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                          Guardar
+                        </Button>
                       </div>
                     </AccordionContent>
                   </AccordionItem>
@@ -375,84 +530,28 @@ const ConfiguracionQr = () => {
                           Enlaces
                         </span>
                         <span className="block text-sm font-normal text-muted-foreground">
-                          Todos se muestran juntos, en la misma sección de la página del QR
+                          Arrastra para cambiar el orden. WhatsApp siempre va primero.
                         </span>
                       </span>
                     </AccordionTrigger>
                     <AccordionContent className="space-y-4">
-                      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                        <div className="grid flex-1 gap-4 sm:grid-cols-2">
-                          {ENLACE_COLOR_FIELDS.map((field) => (
-                            <ColorSettingCard
-                              key={field.key}
-                              id={field.key}
-                              label={field.label}
-                              value={actions[field.key]}
-                              disabled={!canSave || saving || loading}
-                              onChange={(next) => setActions((current) => ({ ...current, [field.key]: next }))}
-                            />
-                          ))}
-                        </div>
-                        <Button type="button" variant="outline" onClick={addLink} disabled={!canSave || saving}>
-                          <Plus className="h-4 w-4 mr-2" />
-                          Añadir enlace
+                      <QrCardsEditor
+                        actions={actions}
+                        siteLinks={siteLinks}
+                        disabled={!canSave || savingSection === "links"}
+                        saving={savingSection === "links"}
+                        onChange={(next) => {
+                          remember(next);
+                          setActions(next);
+                        }}
+                        onPersist={() => enqueueSave("links")}
+                      />
+                      <div className="mt-4 flex justify-end">
+                        <Button type="button" className="rounded-xl px-5" onClick={() => enqueueSave("links")} disabled={!canSave || savingSection !== null}>
+                          {savingSection === "links" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                          Guardar
                         </Button>
                       </div>
-                      {actions.links.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">Todavía no hay enlaces extra.</p>
-                      ) : (
-                        <div className="space-y-3">
-                          {actions.links.map((link, index) => (
-                            <div key={link.id} className="rounded-xl border p-4">
-                              <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
-                                <div className="space-y-2">
-                                  <Label htmlFor={`qr-link-name-${link.id}`} className="text-xs uppercase tracking-wide text-muted-foreground">Nombre del enlace</Label>
-                                  <Input
-                                    id={`qr-link-name-${link.id}`}
-                                    value={link.name}
-                                    disabled={!canSave || saving}
-                                    placeholder={`Enlace ${index + 1}`}
-                                    maxLength={80}
-                                    onChange={(event) => updateLink(link.id, "name", event.target.value)}
-                                  />
-                                </div>
-                                <div className="space-y-2">
-                                  <Label htmlFor={`qr-link-url-${link.id}`} className="text-xs uppercase tracking-wide text-muted-foreground">Link</Label>
-                                  <div className="flex items-center gap-2">
-                                    <Input
-                                      id={`qr-link-url-${link.id}`}
-                                      value={link.url}
-                                      disabled={!canSave || saving}
-                                      placeholder="https://"
-                                      onChange={(event) => updateLink(link.id, "url", event.target.value)}
-                                    />
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="icon"
-                                      disabled={!isHttpUrl(link.url)}
-                                      aria-label={`Abrir ${link.name || "enlace"}`}
-                                      onClick={() => window.open(link.url.trim(), "_blank", "noopener,noreferrer")}
-                                    >
-                                      <ExternalLink className="h-4 w-4" />
-                                    </Button>
-                                  </div>
-                                </div>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  disabled={!canSave || saving}
-                                  onClick={() => removeLink(link.id)}
-                                  aria-label={`Quitar ${link.name || "enlace"}`}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
                     </AccordionContent>
                   </AccordionItem>
                 </Accordion>
@@ -476,25 +575,25 @@ const ConfiguracionQr = () => {
               <Label htmlFor="qr-background-image">Imagen de fondo</Label>
               <div
                 onClick={() => {
-                  if (!canSave || saving || loading || uploadingBackground) return;
+                  if (!canSave  || loading || uploadingBackground) return;
                   backgroundFileRef.current?.click();
                 }}
                 onDragOver={(event) => {
                   event.preventDefault();
-                  if (!canSave || saving || loading || uploadingBackground) return;
+                  if (!canSave  || loading || uploadingBackground) return;
                   setDraggingBackground(true);
                 }}
                 onDragLeave={() => setDraggingBackground(false)}
                 onDrop={(event) => {
                   event.preventDefault();
                   setDraggingBackground(false);
-                  if (!canSave || saving || loading || uploadingBackground) return;
+                  if (!canSave  || loading || uploadingBackground) return;
                   const file = event.dataTransfer.files?.[0];
                   if (file) void uploadBackground(file);
                 }}
                 className={`flex w-full flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed p-6 text-center transition-colors ${
                   draggingBackground ? "border-primary bg-primary/5" : "border-muted-foreground/25 hover:border-primary/50"
-                } ${!canSave || saving || loading || uploadingBackground ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
+                } ${!canSave  || loading || uploadingBackground ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
               >
                 <input
                   ref={backgroundFileRef}
@@ -525,10 +624,10 @@ const ConfiguracionQr = () => {
                       <Button
                         type="button"
                         variant="ghost"
-                        disabled={!canSave || saving || loading}
+                        disabled={!canSave  || loading}
                         onClick={(event) => {
                           event.stopPropagation();
-                          setActions((current) => ({ ...current, linksBackgroundImage: "" }));
+                          setActions((current) => remember({ ...current, linksBackgroundImage: "" }));
                         }}
                       >
                         Quitar
@@ -549,27 +648,15 @@ const ConfiguracionQr = () => {
             </div>
             <QrLinksRichText
               value={actions.linksHtml}
-              disabled={!canSave || saving || loading}
+              disabled={!canSave  || loading}
               panelColor={actions.linksPanelColor}
               textColor={actions.linksTextColor}
               backgroundImage={actions.linksBackgroundImage}
-              onChange={(linksHtml) => setActions((current) => ({ ...current, linksHtml }))}
-              toolbarExtra={
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {LINK_COLOR_FIELDS.map((field) => (
-                    <ColorSettingCard
-                      key={field.key}
-                      id={field.key}
-                      label={field.label}
-                      value={actions[field.key]}
-                      disabled={!canSave || saving || loading}
-                      onChange={(next) => setActions((current) => ({ ...current, [field.key]: next }))}
-                    />
-                  ))}
-                </div>
-              }
+              onUploadImage={(file) => siteSettingsService.uploadQrImage(file)}
+              onChange={(linksHtml) => setActions((current) => remember({ ...current, linksHtml }))}
+              onPanelColorChange={(linksPanelColor) => setActions((current) => remember({ ...current, linksPanelColor }))}
               preview={
-                <div className="flex h-full min-h-72 flex-col gap-2">
+                <div className="flex min-h-[24rem] flex-col gap-2">
                   <p className="text-sm font-medium">Vista previa</p>
                   <div
                     className="relative min-h-0 flex-1 overflow-hidden rounded-lg border text-center"
@@ -592,7 +679,7 @@ const ConfiguracionQr = () => {
                     <span className="pointer-events-none absolute bottom-3 right-3 z-20 rounded-full bg-background/80 px-2 py-0.5 text-[11px] text-muted-foreground">
                       Render
                     </span>
-                    <div className="relative flex h-full min-h-64 items-center justify-center px-4 py-10">
+                    <div className="relative flex min-h-[24rem] items-center justify-center px-4 py-10">
                       {hasVisibleRichText(actions.linksHtml) ? (
                         <div
                           className="mx-auto max-w-3xl [&_a]:underline [&_font[size='1']]:text-xs [&_font[size='2']]:text-sm [&_font[size='3']]:text-base [&_font[size='4']]:text-lg [&_font[size='5']]:text-2xl [&_font[size='6']]:text-4xl [&_font[size='7']]:text-5xl [&_font[size='7']]:font-black [&_h2]:text-4xl [&_h2]:font-black [&_h3]:text-2xl [&_h3]:font-bold [&_img]:mx-auto [&_img]:my-4 [&_img]:max-h-80 [&_img]:max-w-full [&_img]:rounded-lg [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:text-left [&_p]:mb-3 [&_s]:line-through [&_strike]:line-through [&_strong]:font-bold [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:text-left"
@@ -618,21 +705,16 @@ const ConfiguracionQr = () => {
                 </div>
               }
             />
+            <div className="flex justify-end">
+              <Button type="button" className="rounded-xl px-5" onClick={handleSaveText} disabled={!canSave || loading || savingSection !== null}>
+                {savingSection === "text" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                Guardar
+              </Button>
+            </div>
           </CardContent>
         </Card>
-        {!loading && (
-          canSave ? (
-            <Button type="button" className="rounded-xl px-5" onClick={handleSave} disabled={saving}>
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              Guardar configuración
-            </Button>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              Solo un usuario con el permiso de configuración QR puede guardar estos cambios.
-            </p>
-          )
-        )}
       </div>
+      <QrPagePreview open={previewOpen} onOpenChange={setPreviewOpen} actions={actions} siteLinks={siteLinks} />
     </div>
   );
 };
