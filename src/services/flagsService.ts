@@ -1,4 +1,5 @@
 import { config } from '../config/environment';
+import { mensajeDeError } from '@/lib/api-error';
 import { authService } from './authService';
 
 export interface Flag {
@@ -56,13 +57,7 @@ class FlagsService {
 			.then(async (response) => {
 				if (!response.ok) {
 					authService.handleAuthError(response);
-					
-					let message = `Error ${response.status}: ${response.statusText}`;
-					try {
-						const err = await response.json();
-						message = err?.message || message;
-					} catch {}
-					throw new Error(message);
+					throw new Error(await mensajeDeError(response));
 				}
 				return response.json();
 			});

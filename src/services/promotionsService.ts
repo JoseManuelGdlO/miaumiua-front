@@ -1,4 +1,5 @@
 import { config } from '../config/environment';
+import { mensajeDeError } from '@/lib/api-error';
 import { City } from './citiesService';
 
 // Interfaces para Promociones
@@ -115,7 +116,7 @@ class PromotionsService {
           const { authService } = await import('./authService');
           authService.handleAuthError(response);
           
-          throw new Error(`Error ${response.status}: ${response.statusText}`);
+          throw new Error(await mensajeDeError(response));
         }
         return response.json();
       });

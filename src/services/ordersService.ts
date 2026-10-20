@@ -1,4 +1,5 @@
 import { config } from '../config/environment';
+import { mensajeDeError, textoDeError } from '@/lib/api-error';
 import { authService } from './authService';
 
 // Interfaces para Pedidos
@@ -218,8 +219,7 @@ class OrdersService {
         if (!response.ok) {
           // Manejar errores de autenticación (401/403) y desloguear automáticamente
           authService.handleAuthError(response);
-          
-          throw new Error(`Error ${response.status}: ${response.statusText}`);
+          throw new Error(await mensajeDeError(response));
         }
         return response.json();
       });
@@ -292,18 +292,7 @@ class OrdersService {
 
     if (!response.ok) {
       authService.handleAuthError(response);
-      const b = body as Record<string, unknown> | null;
-      const msg =
-        (b &&
-          (typeof b.message === 'string'
-            ? b.message
-            : typeof b.error === 'string'
-              ? b.error
-              : typeof (b.data as Record<string, unknown> | undefined)?.message === 'string'
-                ? String((b.data as Record<string, unknown>).message)
-                : null)) ||
-        `Error ${response.status}: ${response.statusText}`;
-      throw new Error(msg);
+      throw new Error(textoDeError(body));
     }
 
     return body as StripePaymentLinkResponse;

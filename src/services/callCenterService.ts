@@ -1,4 +1,5 @@
 import { config } from '@/config/environment';
+import { textoDeError } from '@/lib/api-error';
 import { authService } from '@/services/authService';
 import { pedidosPath, repartidoresPath } from '@/lib/call-center-rules.mjs';
 
@@ -117,7 +118,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   if (!response.ok) {
     authService.handleAuthError(response);
     const body = await response.json().catch(() => ({}));
-    const error = new Error(body.message || `Error ${response.status}`) as Error & { status?: number };
+    const error = new Error(textoDeError(body)) as Error & { status?: number };
     error.status = response.status;
     throw error;
   }

@@ -1,4 +1,5 @@
 import { config } from '../config/environment';
+import { mensajeDeError } from '@/lib/api-error';
 import { authService } from './authService';
 
 export interface ConversacionLogEntry {
@@ -37,15 +38,7 @@ class ConversationLogsService {
 		return fetch(`${config.apiBaseUrl}${endpoint}`, { ...options, headers }).then(async (response) => {
 			if (!response.ok) {
 				authService.handleAuthError(response);
-
-				let message = `Error ${response.status}: ${response.statusText}`;
-				try {
-					const err = await response.json();
-					message = err?.message || message;
-				} catch {
-					// ignore
-				}
-				throw new Error(message);
+				throw new Error(await mensajeDeError(response));
 			}
 			return response.json();
 		});

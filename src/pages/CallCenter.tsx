@@ -226,11 +226,21 @@ const CallCenter = () => {
 
   useEffect(() => {
     let stop = false;
+    let inFlight = false;
+    let failureNotified = false;
     const run = async () => {
+      if (inFlight) return;
+      inFlight = true;
       try {
         await loadLists();
+        failureNotified = false;
       } catch (error) {
-        if (!stop) notify(error);
+        if (!stop && !failureNotified) {
+          failureNotified = true;
+          notify(error);
+        }
+      } finally {
+        inFlight = false;
       }
     };
     void run();

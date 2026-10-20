@@ -1,4 +1,5 @@
 import { config } from '../config/environment';
+import { mensajeDeError, textoDeError } from '@/lib/api-error';
 
 // Interfaces para Inventarios
 export interface Inventario {
@@ -157,7 +158,7 @@ class InventariosService {
           const { authService } = await import('./authService');
           authService.handleAuthError(response);
           
-          throw new Error(`Error ${response.status}: ${response.statusText}`);
+          throw new Error(await mensajeDeError(response));
         }
         return response.json();
       });
@@ -225,8 +226,7 @@ class InventariosService {
       body: formData,
     });
     if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      throw new Error(err.message || `Error ${response.status}`);
+      throw new Error(textoDeError(await response.json().catch(() => null)));
     }
     return response.json();
   }
