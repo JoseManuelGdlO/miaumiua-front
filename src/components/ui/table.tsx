@@ -22,7 +22,7 @@ const TableHeader = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <thead
     ref={ref}
-    className={cn("[&_tr]:border-b [&_tr]:bg-accent [&_tr:hover]:bg-accent", className)}
+    className={cn("[&_tr]:border-b [&_tr]:border-sidebar-border [&_tr]:bg-primary/10 [&_tr:hover]:bg-primary/10", className)}
     {...props}
   />
 ))
@@ -34,7 +34,7 @@ const TableBody = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <tbody
     ref={ref}
-    className={cn("[&_tr:last-child]:border-0", className)}
+    className={cn("[&_tr:last-child]:border-0 [&_tr:nth-child(odd)]:bg-background [&_tr:nth-child(even)]:bg-muted [&_tr:nth-child(n):hover]:bg-accent [&_tr:nth-child(n)[data-state=selected]]:bg-accent", className)}
     {...props}
   />
 ))
@@ -62,7 +62,7 @@ const TableRow = React.forwardRef<
   <tr
     ref={ref}
     className={cn(
-      "border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted",
+      "border-b transition-colors hover:bg-accent data-[state=selected]:bg-accent",
       className
     )}
     {...props}
@@ -77,7 +77,7 @@ const TableHead = React.forwardRef<
   <th
     ref={ref}
     className={cn(
-      "h-12 px-4 text-center align-middle font-medium text-accent-foreground [&:has([role=checkbox])]:pr-0",
+      "h-12 px-4 text-center align-middle font-semibold text-primary [&:has([role=checkbox])]:pr-0",
       className
     )}
     {...props}

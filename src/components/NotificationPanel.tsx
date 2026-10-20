@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { notificationsService, Notification, handleNotificationNavigation } from "@/services/notificationsService";
+import { notificationsService, Notification, handleNotificationNavigation, ORIGEN_COLA } from "@/services/notificationsService";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -134,6 +134,7 @@ const NotificationPanel = () => {
   const markAsRead = async (id: string) => {
     try {
       await notificationsService.markAsRead(parseInt(id));
+      stream?.dismissAviso(id);
       setNotifications(prev =>
         prev.map(n => n.id === id ? { ...n, read: true } : n)
       );
@@ -145,6 +146,7 @@ const NotificationPanel = () => {
   const markAllAsRead = async () => {
     try {
       await notificationsService.markAllAsRead();
+      stream?.dismissAvisos((aviso) => aviso.origen === "check_in");
       setNotifications(prev =>
         prev.map(n => n.preserveUnread ? n : { ...n, read: true })
       );
@@ -157,6 +159,7 @@ const NotificationPanel = () => {
     setDeletingId(id);
     try {
       await notificationsService.deleteNotification(parseInt(id));
+      stream?.dismissAviso(id);
       setNotifications(prev => prev.filter(n => n.id !== id));
       toast({
         title: "Notificación eliminada",
@@ -300,6 +303,9 @@ const NotificationPanel = () => {
                             </div>
                           </div>
                           
+                          {notification.tipo && ORIGEN_COLA[notification.tipo] && (
+                            <p className="mb-1 text-[11px] font-semibold text-primary">Viene de {ORIGEN_COLA[notification.tipo]}</p>
+                          )}
                           <p className="text-xs text-muted-foreground line-clamp-2 mb-2">
                             {notification.message}
                           </p>
