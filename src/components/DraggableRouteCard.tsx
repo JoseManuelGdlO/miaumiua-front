@@ -3,6 +3,7 @@ import { useDraggable } from '@dnd-kit/core';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { MoreHorizontal, MapPin, User, Package } from 'lucide-react';
 import { DraggableAssignedOrderCard } from './DraggableAssignedOrderCard';
 import {
@@ -61,7 +62,7 @@ export const DraggableRouteCard: React.FC<DraggableRouteCardProps> = ({
           {...listeners}
           {...attributes}
         >
-          <Badge className="bg-primary text-primary-foreground">
+          <Badge className="rounded-md bg-primary text-primary-foreground">
             {route.nombre_ruta}
           </Badge>
           <span className="text-sm text-muted-foreground">
@@ -78,25 +79,13 @@ export const DraggableRouteCard: React.FC<DraggableRouteCardProps> = ({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            {canEdit && (
-              <>
-                {route.repartidor && (
-                  <DropdownMenuItem
-                    onClick={() => onUnassignDriver(route.id.toString())}
-                    className="text-orange-600"
-                  >
-                    Desasignar Repartidor
-                  </DropdownMenuItem>
-                )}
-                {drivers.map((driver) => (
-                  <DropdownMenuItem
-                    key={driver.id}
-                    onClick={() => onAssignDriver(route.id.toString(), driver.id)}
-                  >
-                    Asignar a {driver.nombre_completo}
-                  </DropdownMenuItem>
-                ))}
-              </>
+            {canEdit && route.repartidor && (
+              <DropdownMenuItem
+                onClick={() => onUnassignDriver(route.id.toString())}
+                className="text-orange-600"
+              >
+                Desasignar Repartidor
+              </DropdownMenuItem>
             )}
             {canDelete && (
               <DropdownMenuItem
@@ -117,6 +106,26 @@ export const DraggableRouteCard: React.FC<DraggableRouteCardProps> = ({
             {route.repartidor?.nombre_completo || 'Sin repartidor'}
           </span>
         </div>
+        {canEdit && (
+          <div className="space-y-1">
+            {!route.repartidor && (
+              <p className="text-xs font-medium text-amber-700">Asigna un repartidor para esta ruta.</p>
+            )}
+            <Select
+              value={route.repartidor ? String(route.repartidor.id) : undefined}
+              onValueChange={(value) => onAssignDriver(route.id.toString(), Number(value))}
+            >
+              <SelectTrigger aria-label="Repartidor de la ruta">
+                <SelectValue placeholder="Elige un repartidor" />
+              </SelectTrigger>
+              <SelectContent>
+                {drivers.map((driver) => (
+                  <SelectItem key={driver.id} value={String(driver.id)}>{driver.nombre_completo}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
         
         <div className="text-xs text-muted-foreground mb-2">
           Total: ${totalValue.toLocaleString('es-CO')}

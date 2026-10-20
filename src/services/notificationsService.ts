@@ -1,5 +1,6 @@
 import type { NavigateFunction } from 'react-router-dom';
 import { config } from '../config/environment';
+import { textoDeError } from '@/lib/api-error';
 import { authService } from './authService';
 
 // Interfaces para las notificaciones del backend
@@ -256,7 +257,7 @@ class NotificationsService {
           authService.handleAuthError(response);
           
           const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
+          throw new Error(textoDeError(errorData));
         }
         return response.json();
       });

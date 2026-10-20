@@ -60,6 +60,7 @@ const RouteManagement = () => {
   const [draggedItem, setDraggedItem] = useState<any>(null);
   const [expandedRoutes, setExpandedRoutes] = useState<Set<number>>(new Set());
   const [expandedOrderDetails, setExpandedOrderDetails] = useState<Set<number>>(new Set());
+  const [repartidorParaRuta, setRepartidorParaRuta] = useState("");
 
   // Cargar datos iniciales
   useEffect(() => {
@@ -431,12 +432,21 @@ const RouteManagement = () => {
       return;
     }
 
+    if (!repartidorParaRuta) {
+      toast({
+        title: "Elige un repartidor",
+        description: "Asigna un repartidor antes de crear la ruta.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     try {
       const response = await routesService.createRoute({
         nombre_ruta: `Ruta Manual - ${new Date().toLocaleString()}`,
         fecha_ruta: selectedDate,
         fkid_ciudad: parseInt(selectedCity),
-        fkid_repartidor: drivers[0].id, // Asignar primer repartidor disponible
+        fkid_repartidor: Number(repartidorParaRuta),
         estado: "planificada",
         notas: "Ruta creada manualmente"
       });
@@ -452,7 +462,7 @@ const RouteManagement = () => {
       console.error('Error creando ruta:', error);
       toast({
         title: "Error",
-        description: "No se pudo crear la ruta",
+        description: error instanceof Error ? error.message : "No se pudo crear la ruta",
         variant: "destructive"
       });
     }
@@ -897,14 +907,28 @@ const RouteManagement = () => {
             Organiza pedidos automáticamente con IA o manualmente por rutas y asigna repartidores
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-col items-end gap-2">
+          <p className="text-xs text-muted-foreground">Elige un repartidor antes de crear la ruta.</p>
+          <div className="flex gap-2">
+          {canCreate('routes') && (
+            <Select value={repartidorParaRuta || undefined} onValueChange={setRepartidorParaRuta}>
+              <SelectTrigger className="w-56" aria-label="Repartidor de la ruta nueva">
+                <SelectValue placeholder="Elige un repartidor" />
+              </SelectTrigger>
+              <SelectContent>
+                {drivers.map((driver) => (
+                  <SelectItem key={driver.id} value={String(driver.id)}>{driver.nombre_completo}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           {canCreate('routes') && (
             <Button 
               onClick={createManualRoute} 
               variant="outline" 
               className="gap-2" 
-              disabled={loading || drivers.length === 0 || availableOrders.length === 0}
-              title={drivers.length === 0 ? "No hay repartidores disponibles" : availableOrders.length === 0 ? "No hay pedidos disponibles" : ""}
+              disabled={loading || drivers.length === 0 || availableOrders.length === 0 || !repartidorParaRuta}
+              title={drivers.length === 0 ? "No hay repartidores disponibles" : availableOrders.length === 0 ? "No hay pedidos disponibles" : !repartidorParaRuta ? "Elige un repartidor" : ""}
             >
               {loading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -914,6 +938,7 @@ const RouteManagement = () => {
             Nueva Ruta Manual
           </Button>
           )}
+          </div>
         </div>
       </div>
 
@@ -962,17 +987,16 @@ const RouteManagement = () => {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Pedidos Sin Asignar */}
-        <div className="space-y-4">
-          <Card>
+      <div className="grid grid-cols-1 items-stretch gap-6 lg:grid-cols-3">
+        <div className="flex h-full">
+          <Card className="flex h-full w-full flex-col">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <MapPin className="h-5 w-5" />
                 Pedidos Disponibles ({availableOrders.length})
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3 max-h-96 overflow-y-auto">
+            <CardContent className="max-h-96 flex-1 space-y-3 overflow-y-auto">
               <DropZone id="unassigned-orders" className="min-h-[200px]">
                 {loading ? (
                   <div className="flex items-center justify-center py-8">
@@ -995,16 +1019,15 @@ const RouteManagement = () => {
           </Card>
         </div>
 
-        {/* Rutas Creadas */}
-        <div className="space-y-4">
-          <Card>
+        <div className="flex h-full">
+          <Card className="flex h-full w-full flex-col">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <Navigation className="h-5 w-5" />
                 Rutas Creadas ({routes.length})
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4 max-h-96 overflow-y-auto">
+            <CardContent className="max-h-96 flex-1 space-y-4 overflow-y-auto">
               {loading ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin" />
@@ -1036,16 +1059,15 @@ const RouteManagement = () => {
           </Card>
         </div>
 
-        {/* Repartidores */}
-        <div className="space-y-4">
-          <Card>
+        <div className="flex h-full">
+          <Card className="flex h-full w-full flex-col">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <Truck className="h-5 w-5" />
                 Repartidores Disponibles
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="max-h-96 flex-1 space-y-3 overflow-y-auto">
               {loading ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin" />
@@ -1712,8 +1734,8 @@ const RouteManagement = () => {
              )}
              {draggedItem.type === 'driver' && (
                <DraggableDriverCard driver={draggedItem.driver} />
-      )}
-    </div>
+             )}
+           </div>
          ) : null}
        </DragOverlay>
     </DndContext>

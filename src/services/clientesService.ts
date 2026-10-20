@@ -1,4 +1,5 @@
 import { config } from '@/config/environment';
+import { textoDeError } from '@/lib/api-error';
 
 // Interfaces - Updated to match API response
 export interface Cliente {
@@ -130,7 +131,7 @@ class ClientesService {
       authService.handleAuthError(response);
       
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
+      throw new Error(textoDeError(errorData));
     }
 
     return response.json();
@@ -224,7 +225,7 @@ class ClientesService {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
+      throw new Error(textoDeError(errorData));
     }
 
     return response.blob();
@@ -258,7 +259,7 @@ class ClientesService {
       authService.handleAuthError(response);
       
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
+      throw new Error(textoDeError(errorData));
     }
 
     return response.json();

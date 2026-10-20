@@ -10,14 +10,20 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { useNotificationStream } from "@/hooks/useNotificationStream";
 import { citiesService, type City } from "@/services/citiesService";
 import ValidacionCarga from "@/pages/ValidacionCarga";
+import IncidenciasPanel from "@/pages/IncidenciasPanel";
 import {
   callCenterService,
   type CargaValidada,
   type PedidoDia,
   type RepartidorOpcion,
+  type ActividadDisponible,
+  type ComprobantePago,
+  type DepositoRuta,
   type Solicitud,
+  type VelocidadDia,
 } from "@/services/callCenterService";
 import { canReassign, keepSelection, shouldRefreshAfter, statusLabel, statusOptions } from "@/lib/call-center-rules.mjs";
 import { config } from "@/config/environment";
@@ -26,6 +32,7 @@ const TIPO: Record<string, string> = {
   check_in: "Check-in",
   llamada_cliente: "Llamada al cliente",
   soporte: "Soporte",
+  cierre_dia: "Cierre de día",
 };
 
 function errorStatus(error: unknown) {
@@ -77,14 +84,26 @@ function OrderStatus({ estado, modificado }: { estado: string; modificado?: bool
   );
 }
 
+const LIVE_TIPOS = new Set(["check_in", "llamada_cliente", "soporte", "cierre_dia"]);
+
 const CallCenter = () => {
   const { toast } = useToast();
+  const stream = useNotificationStream();
   const [searchParams, setSearchParams] = useSearchParams();
-  const tab = searchParams.get("tab") === "validacion" ? "validacion" : "operacion";
+  const tabParam = searchParams.get("tab");
+  const tab = tabParam === "validacion" || tabParam === "incidencias" ? tabParam : "operacion";
   const solicitudParam = Number(searchParams.get("solicitud"));
   const cargaId = Number.isFinite(solicitudParam) && solicitudParam > 0 ? solicitudParam : null;
   const [solicitudes, setSolicitudes] = useState<Solicitud[]>([]);
   const [pedidos, setPedidos] = useState<PedidoDia[]>([]);
+  const [velocidades, setVelocidades] = useState<VelocidadDia[]>([]);
+  const [comprobantes, setComprobantes] = useState<ComprobantePago[]>([]);
+  const [depositos, setDepositos] = useState<DepositoRuta[]>([]);
+  const [actividades, setActividades] = useState<ActividadDisponible[]>([]);
+  const [actividadCiudad, setActividadCiudad] = useState("");
+  const [actividadDriver, setActividadDriver] = useState("");
+  const [actividadPedido, setActividadPedido] = useState("");
+  const [actividadDrivers, setActividadDrivers] = useState<RepartidorOpcion[]>([]);
   const [cities, setCities] = useState<City[]>([]);
   const [ciudadId, setCiudadId] = useState<string>("all");
   const [repartidorId, setRepartidorId] = useState<string>("all");
@@ -114,6 +133,34 @@ const CallCenter = () => {
     toast({ title: "Call Center", description: errorText(error), variant: "destructive" });
   };
 
+  const cambiarFranja = async (id: number, franja: "manana" | "tarde", alcance?: "ruta") => {
+    try {
+      await callCenterService.cambiarFranja(id, franja, alcance);
+      await loadLists();
+    } catch (error) {
+      notify(error);
+    }
+  };
+
+  const moverParada = async (id: number, direccion: "subir" | "bajar") => {
+    try {
+      await callCenterService.moverParada(id, direccion);
+      await loadLists();
+    } catch (error) {
+      notify(error);
+    }
+  };
+
+  const liberarSiguiente = async (id: number) => {
+    try {
+      await callCenterService.liberarSiguiente(id);
+      toast({ title: "Siguiente pedido liberado" });
+      await loadLists();
+    } catch (error) {
+      notify(error);
+    }
+  };
+
   const loadLists = useCallback(async () => {
     const requestedCiudad = ciudadId;
     const requestedRepartidor = repartidorId;
@@ -127,13 +174,19 @@ const CallCenter = () => {
     };
     const stillCurrent = () => generation === listGeneration.current && filtersStillMatch();
     try {
-      const [nextSolicitudes, nextPedidos] = await Promise.all([
+      const [nextSolicitudes, nextPedidos, nextVelocidad, nextComprobantes, nextDepositos] = await Promise.all([
         callCenterService.listSolicitudes(),
         callCenterService.listPedidos(filters),
+        callCenterService.listarVelocidad().catch(() => [] as VelocidadDia[]),
+        callCenterService.listarComprobantes().catch(() => [] as ComprobantePago[]),
+        callCenterService.listarDepositos().catch(() => [] as DepositoRuta[]),
       ]);
       if (!stillCurrent()) return;
       setSolicitudes(nextSolicitudes);
       setPedidos(nextPedidos);
+      setVelocidades(nextVelocidad);
+      setComprobantes(nextComprobantes);
+      setDepositos(nextDepositos);
       setSelectedId((current) => keepSelection(current));
     } catch (error) {
       if (!stillCurrent()) return;
@@ -150,7 +203,7 @@ const CallCenter = () => {
   };
 
   const onTab = (value: string) => {
-    if (value === "validacion") setSearchParams({ tab: "validacion" });
+    if (value === "validacion" || value === "incidencias") setSearchParams({ tab: value });
     else setSearchParams({});
   };
 
@@ -173,21 +226,40 @@ const CallCenter = () => {
 
   useEffect(() => {
     let stop = false;
+    let inFlight = false;
+    let failureNotified = false;
     const run = async () => {
+      if (inFlight) return;
+      inFlight = true;
       try {
         await loadLists();
+        failureNotified = false;
       } catch (error) {
-        if (!stop) notify(error);
+        if (!stop && !failureNotified) {
+          failureNotified = true;
+          notify(error);
+        }
+      } finally {
+        inFlight = false;
       }
     };
     void run();
     const timer = setInterval(run, 5000);
+    const unsubscribe = stream?.subscribe((event) => {
+      if (event.type === "reconnect") {
+        void run();
+        return;
+      }
+      const tipo = event.payload?.datos?.tipo;
+      if (typeof tipo === "string" && LIVE_TIPOS.has(tipo)) void run();
+    });
     return () => {
       stop = true;
       listGeneration.current += 1;
       clearInterval(timer);
+      unsubscribe?.();
     };
-  }, [loadLists]);
+  }, [loadLists, stream]);
 
   const dismissDetail = () => {
     detailRequest.current += 1;
@@ -218,6 +290,21 @@ const CallCenter = () => {
       return;
     }
     try { await loadLists(); } catch (refreshError) { notify(refreshError); }
+  };
+
+  const liberar = async () => {
+    if (!detail || busy) return;
+    setBusy(true);
+    try {
+      const result = await callCenterService.liberarCierre(detail.id);
+      toast({ title: "Día liberado", description: result.cerrado_por_nombre || undefined });
+      dismissDetail();
+      await afterAction();
+    } catch (error) {
+      await afterAction(error);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const atender = async () => {
@@ -333,6 +420,7 @@ const CallCenter = () => {
       <Tabs value={tab} onValueChange={onTab}>
         <TabsList>
           <TabsTrigger value="operacion">Operación</TabsTrigger>
+          <TabsTrigger value="incidencias">Incidencias</TabsTrigger>
           <TabsTrigger value="validacion">Validación de carga</TabsTrigger>
         </TabsList>
         <TabsContent value="operacion" className="space-y-6">
@@ -385,6 +473,171 @@ const CallCenter = () => {
 
       <Card>
         <CardHeader>
+          <CardTitle>Comprobantes de pago</CardTitle>
+          <CardDescription>Cobros de hoy. Si la transferencia no tiene foto, súbela aquí.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {comprobantes.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No hay comprobantes de hoy.</p>
+          ) : (
+            <div className="space-y-3">
+              {comprobantes.map((row) => (
+                <div key={row.pedido_id} className="flex items-center justify-between gap-3 text-sm">
+                  <div>
+                    <p className="font-medium">{row.numero_pedido}</p>
+                    <p className="text-muted-foreground">{row.repartidor || "—"} · {row.metodo}</p>
+                  </div>
+                  {row.comprobante_url ? (
+                    <button
+                      type="button"
+                      className="overflow-hidden rounded-md border bg-muted"
+                      onClick={() => setReceipt({ url: receiptSrc(row.comprobante_url), numero: row.numero_pedido })}
+                      aria-label={`Ver comprobante del pedido ${row.numero_pedido}`}
+                    >
+                      <img src={receiptSrc(row.comprobante_url)} alt="" className="h-12 w-12 object-cover" />
+                    </button>
+                  ) : row.puede_subir ? (
+                    <label className="cursor-pointer text-sm font-medium text-primary">
+                      Subir foto
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(event) => {
+                          const file = event.target.files?.[0];
+                          event.target.value = "";
+                          if (!file) return;
+                          void callCenterService.subirComprobante(row.pedido_id, file)
+                            .then(() => loadLists())
+                            .catch(notify);
+                        }}
+                      />
+                    </label>
+                  ) : "—"}
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Depósitos del día</CardTitle>
+          <CardDescription>Siguen visibles después de liberar el cierre</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {depositos.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Todavía no hay depósitos de hoy.</p>
+          ) : (
+            <div className="space-y-3">
+              {depositos.map((row) => (
+                <div key={row.jornada_id} className="flex items-center justify-between gap-3 text-sm">
+                  <div>
+                    <p className="font-medium">{row.repartidor || "Repartidor"}</p>
+                    <p className="text-muted-foreground">Efectivo ${formatMoney(row.efectivo_a_depositar)}</p>
+                  </div>
+                  {row.comprobante_url ? (
+                    <button
+                      type="button"
+                      className="overflow-hidden rounded-md border bg-muted"
+                      onClick={() => setReceipt({ url: receiptSrc(row.comprobante_url), numero: row.repartidor || "deposito" })}
+                      aria-label={`Ver depósito de ${row.repartidor || "repartidor"}`}
+                    >
+                      <img src={receiptSrc(row.comprobante_url)} alt="" className="h-12 w-12 object-cover" />
+                    </button>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Actividad extra</CardTitle>
+          <CardDescription>El pedido entra a la ruta y el repartidor lo ve al terminar la parada en curso</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Select
+            value={actividadCiudad}
+            onValueChange={(value) => {
+              setActividadCiudad(value);
+              setActividadDriver("");
+              setActividadPedido("");
+              void callCenterService.listRepartidores(Number(value)).then(setActividadDrivers).catch(notify);
+              void callCenterService.listarActividades(Number(value)).then(setActividades).catch(notify);
+            }}
+          >
+            <SelectTrigger><SelectValue placeholder="Ciudad" /></SelectTrigger>
+            <SelectContent>
+              {cities.map((city) => <SelectItem key={city.id} value={String(city.id)}>{city.nombre}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={actividadDriver} onValueChange={setActividadDriver}>
+            <SelectTrigger><SelectValue placeholder="Repartidor" /></SelectTrigger>
+            <SelectContent>
+              {actividadDrivers.map((driver) => (
+                <SelectItem key={driver.id} value={String(driver.id)}>{driver.nombre_completo}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={actividadPedido} onValueChange={setActividadPedido}>
+            <SelectTrigger><SelectValue placeholder="Pedido sin ruta" /></SelectTrigger>
+            <SelectContent>
+              {actividades.map((pedido) => (
+                <SelectItem key={pedido.id} value={String(pedido.id)}>
+                  {pedido.numero_pedido}{pedido.cliente ? ` · ${pedido.cliente}` : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            disabled={!actividadDriver || !actividadPedido || busy}
+            onClick={() => {
+              setBusy(true);
+              void callCenterService.asignarActividad(Number(actividadPedido), Number(actividadDriver))
+                .then(() => {
+                  toast({ title: "Actividad asignada" });
+                  setActividadPedido("");
+                  return Promise.all([
+                    loadLists(),
+                    callCenterService.listarActividades(Number(actividadCiudad)).then(setActividades),
+                  ]);
+                })
+                .catch(notify)
+                .finally(() => setBusy(false));
+            }}
+          >
+            Asignar
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Velocidad de hoy</CardTitle>
+          <CardDescription>Promedio registrado desde el mapa del repartidor</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {velocidades.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Todavía no hay lecturas de velocidad.</p>
+          ) : (
+            <div className="space-y-1 text-sm">
+              {velocidades.map((row) => (
+                <p key={row.repartidor_id} className="flex justify-between">
+                  <span>{row.nombre || `Repartidor ${row.repartidor_id}`}</span>
+                  <b>{row.promedio} km/h · {row.lecturas} lecturas</b>
+                </p>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Pedidos del día</CardTitle>
           <CardDescription>Pedidos asignados para hoy</CardDescription>
         </CardHeader>
@@ -414,6 +667,7 @@ const CallCenter = () => {
                 <TableHead>Teléfono</TableHead>
                 <TableHead>Dirección</TableHead>
                 <TableHead>Estado</TableHead>
+                <TableHead>Franja</TableHead>
                 <TableHead>Comprobante</TableHead>
                 <TableHead>Repartidor</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
@@ -422,7 +676,7 @@ const CallCenter = () => {
             <TableBody>
               {pedidos.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
+                  <TableCell colSpan={9} className="py-8 text-center text-muted-foreground">
                     No hay pedidos para los filtros seleccionados
                   </TableCell>
                 </TableRow>
@@ -433,6 +687,13 @@ const CallCenter = () => {
                   <TableCell>{row.telefono ? <a href={`tel:${row.telefono}`}>{row.telefono}</a> : "—"}</TableCell>
                   <TableCell>{row.direccion || "—"}</TableCell>
                   <TableCell><OrderStatus estado={row.estado} modificado={row.modificado} /></TableCell>
+                  <TableCell>
+                    <div className="flex flex-col gap-1">
+                      <Button variant={row.franja === "tarde" ? "outline" : "default"} size="sm" onClick={() => void cambiarFranja(row.id, "manana")}>Mañana</Button>
+                      <Button variant={row.franja === "tarde" ? "default" : "outline"} size="sm" onClick={() => void cambiarFranja(row.id, "tarde")}>Tarde</Button>
+                      <Button variant="ghost" size="sm" onClick={() => void cambiarFranja(row.id, row.franja === "tarde" ? "tarde" : "manana", "ruta")}>Aplicar a la ruta</Button>
+                    </div>
+                  </TableCell>
                   <TableCell>
                     {row.comprobante_url ? (
                       <button
@@ -451,6 +712,11 @@ const CallCenter = () => {
                   </TableCell>
                   <TableCell>{row.repartidor?.nombre_completo || "—"}</TableCell>
                   <TableCell className="text-right">
+                    <div className="mb-2 flex justify-end gap-1">
+                      <Button variant="outline" size="sm" onClick={() => void moverParada(row.id, "subir")}>Subir</Button>
+                      <Button variant="outline" size="sm" onClick={() => void moverParada(row.id, "bajar")}>Bajar</Button>
+                      <Button size="sm" onClick={() => void liberarSiguiente(row.id)}>Liberar siguiente</Button>
+                    </div>
                     {statusOptions(row.estado).length > 0 || canReassign(row.estado) ? (
                       <Button
                         variant="outline"
@@ -494,7 +760,30 @@ const CallCenter = () => {
       <Dialog open={detail != null} onOpenChange={(open) => { if (!open) dismissDetail(); }}>
         <DialogContent>
           <DialogHeader><DialogTitle>{detail ? TIPO[detail.tipo] : ""}</DialogTitle></DialogHeader>
-          {detail && detail.tipo !== "check_in" && (
+          {detail && detail.tipo === "cierre_dia" && (
+            <div className="space-y-3">
+              <p>{detail.repartidor?.nombre_completo || "Repartidor"}</p>
+              <p>Efectivo a depositar ${formatMoney(detail.efectivo_a_depositar || 0)}</p>
+              {detail.comprobante_url ? (
+                <button
+                  type="button"
+                  className="block overflow-hidden rounded-md border"
+                  onClick={() => setReceipt({
+                    url: receiptSrc(detail.comprobante_url),
+                    numero: detail.repartidor?.nombre_completo || "deposito",
+                  })}
+                >
+                  <img
+                    src={receiptSrc(detail.comprobante_url)}
+                    alt="Comprobante del depósito"
+                    className="max-h-64 w-full object-contain"
+                  />
+                </button>
+              ) : null}
+              <Button disabled={busy} onClick={() => void liberar()}>Liberar cierre</Button>
+            </div>
+          )}
+          {detail && detail.tipo !== "check_in" && detail.tipo !== "cierre_dia" && (
             <div className="space-y-3">
               <p>{detail.repartidor?.nombre_completo}</p>
               <p>Pedido {detail.numero_pedido || "—"}</p>
@@ -550,6 +839,14 @@ const CallCenter = () => {
           )}
         </DialogContent>
       </Dialog>
+        </TabsContent>
+        <TabsContent value="incidencias">
+          <IncidenciasPanel
+            pedidos={pedidos}
+            solicitudes={solicitudes}
+            onChanged={() => { void loadLists().catch(notify); }}
+            onError={notify}
+          />
         </TabsContent>
         <TabsContent value="validacion" className="space-y-6">
           {cargaId ? (

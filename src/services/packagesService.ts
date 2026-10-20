@@ -1,4 +1,5 @@
 import { config } from '../config/environment';
+import { textoDeError } from '@/lib/api-error';
 import { authService } from './authService';
 
 // Interfaces para Paquetes
@@ -93,8 +94,7 @@ class PackagesService {
     });
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ message: 'Error desconocido' }));
-      throw new Error(error.message || `Error: ${response.statusText}`);
+      throw new Error(textoDeError(await response.json().catch(() => null)));
     }
 
     return response.json();
@@ -161,8 +161,7 @@ class PackagesService {
       body: formData,
     });
     if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      throw new Error(err.message || `Error ${response.status}`);
+      throw new Error(textoDeError(await response.json().catch(() => null)));
     }
     return response.json();
   }

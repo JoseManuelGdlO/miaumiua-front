@@ -1,4 +1,5 @@
 import { config } from '../config/environment';
+import { mensajeDeError } from '@/lib/api-error';
 import { authService } from './authService';
 
 export function resolveChatImageUrl(url: string | null | undefined): string {
@@ -114,13 +115,7 @@ class ConversationsService {
 				if (!response.ok) {
 					// Manejar errores de autenticación (401/403) y desloguear automáticamente
 					authService.handleAuthError(response);
-					
-					let message = `Error ${response.status}: ${response.statusText}`;
-					try {
-						const err = await response.json();
-						message = err?.message || message;
-					} catch {}
-					throw new Error(message);
+					throw new Error(await mensajeDeError(response));
 				}
 				return response.json();
 			});
@@ -206,12 +201,7 @@ class ConversationsService {
 
 		if (!response.ok) {
 			authService.handleAuthError(response);
-			let message = `Error ${response.status}: ${response.statusText}`;
-			try {
-				const err = await response.json();
-				message = err?.message || message;
-			} catch {}
-			throw new Error(message);
+			throw new Error(await mensajeDeError(response));
 		}
 
 		return response.json();
