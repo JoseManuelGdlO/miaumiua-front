@@ -22,6 +22,7 @@ import {
   Headphones,
 } from "lucide-react";
 import { canConfigureSystem, hasSectionAccess } from "@/utils/permissions";
+import { useNotificationStream } from "@/hooks/useNotificationStream";
 import {
   Sidebar,
   SidebarContent,
@@ -120,6 +121,7 @@ const menuSections: { label: string | null; items: MenuItem[] }[] = [
 
 export function AppSidebar() {
   const { state } = useSidebar();
+  const avisosCola = useNotificationStream()?.avisos.length ?? 0;
   const location = useLocation();
   const currentPath = location.pathname;
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
@@ -297,10 +299,16 @@ export function AppSidebar() {
                       <SidebarMenuButton asChild tooltip={item.title}>
                         <NavLink
                           to={item.url ?? "/dashboard"}
-                          className={`${isCollapsed ? "mx-auto justify-center" : ""} ${getNavClasses(isActive(item.url ?? ""))}`}
+                          className={`relative ${isCollapsed ? "mx-auto justify-center" : ""} ${getNavClasses(isActive(item.url ?? ""))}`}
                         >
                           <item.icon className="h-4 w-4 flex-shrink-0" />
                           {!isCollapsed && <span>{item.title}</span>}
+                          {item.url === "/dashboard/call-center" && avisosCola > 0 && (
+                            <span
+                              className={`${isCollapsed ? "absolute right-1.5 top-1.5" : "ml-auto"} h-2 w-2 shrink-0 rounded-full bg-red-500`}
+                              aria-label="Hay avisos en Call Center"
+                            />
+                          )}
                         </NavLink>
                       </SidebarMenuButton>
                     )}

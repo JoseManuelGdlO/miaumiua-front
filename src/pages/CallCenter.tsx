@@ -94,6 +94,9 @@ const CallCenter = () => {
   const tab = tabParam === "validacion" || tabParam === "incidencias" ? tabParam : "operacion";
   const solicitudParam = Number(searchParams.get("solicitud"));
   const cargaId = Number.isFinite(solicitudParam) && solicitudParam > 0 ? solicitudParam : null;
+  const avisoParam = Number(searchParams.get("aviso"));
+  const avisoId = Number.isFinite(avisoParam) && avisoParam > 0 ? avisoParam : null;
+  const avisosCola = stream?.avisos ?? [];
   const [solicitudes, setSolicitudes] = useState<Solicitud[]>([]);
   const [pedidos, setPedidos] = useState<PedidoDia[]>([]);
   const [velocidades, setVelocidades] = useState<VelocidadDia[]>([]);
@@ -281,6 +284,14 @@ const CallCenter = () => {
     }
   };
 
+  const openedAviso = useRef<number | null>(null);
+  useEffect(() => {
+    if (!avisoId || tab !== "operacion" || openedAviso.current === avisoId) return;
+    openedAviso.current = avisoId;
+    stream?.dismissAviso(String(avisoId));
+    void openSolicitud(avisoId);
+  }, [avisoId, tab, stream]);
+
   const afterAction = async (error?: unknown) => {
     if (error) {
       notify(error);
@@ -447,22 +458,131 @@ const CallCenter = () => {
                     No hay solicitudes en la cola
                   </TableCell>
                 </TableRow>
-              ) : solicitudes.map((row) => (
+              ) : solicitudes.map((row) => {
+                const fresco = avisosCola.some((aviso) => aviso.id === String(row.id));
+                return (
                 <TableRow
                   key={row.id}
                   onClick={() => {
+                    stream?.dismissAviso(String(row.id));
                     if (row.tipo === "check_in") {
                       openValidacion(row.id);
                       return;
                     }
                     void openSolicitud(row.id);
                   }}
-                  className="cursor-pointer"
+                  className={fresco ? "cursor-pointer bg-red-50" : "cursor-pointer"}
                 >
-                  <TableCell>{TIPO[row.tipo] || row.tipo}</TableCell>
+                  <TableCell>
+                    <span className="inline-flex items-center gap-2">
+                      {fresco && <span className="h-2 w-2 rounded-full bg-red-500" aria-hidden />}
+                      {TIPO[row.tipo] || row.tipo}
+                    </span>
+                  </TableCell>
                   <TableCell>{row.repartidor?.nombre_completo || "—"}</TableCell>
                   <TableCell>{row.hora}</TableCell>
                   <TableCell>{row.numero_pedido || "—"}</TableCell>
+                </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Pedidos del día</CardTitle>
+          <CardDescription>Pedidos asignados para hoy</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="mb-4 flex items-center space-x-2">
+            <Select value={ciudadId} onValueChange={(value) => { setCiudadId(value); setRepartidorId("all"); }}>
+              <SelectTrigger className="w-56"><SelectValue placeholder="Ciudad" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas las ciudades</SelectItem>
+                {cities.map((city) => <SelectItem key={city.id} value={String(city.id)}>{city.nombre}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={repartidorId} onValueChange={setRepartidorId}>
+              <SelectTrigger className="w-56"><SelectValue placeholder="Repartidor" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los repartidores</SelectItem>
+                {driverOptions.map((driver) => <SelectItem key={driver.id} value={String(driver.id)}>{driver.nombre_completo}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="rounded-md border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Pedido</TableHead>
+                <TableHead>Cliente</TableHead>
+                <TableHead>Teléfono</TableHead>
+                <TableHead>Dirección</TableHead>
+                <TableHead>Estado</TableHead>
+                <TableHead>Franja</TableHead>
+                <TableHead>Comprobante</TableHead>
+                <TableHead>Repartidor</TableHead>
+                <TableHead className="text-right">Acciones</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {pedidos.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={9} className="py-8 text-center text-muted-foreground">
+                    No hay pedidos para los filtros seleccionados
+                  </TableCell>
+                </TableRow>
+              ) : pedidos.map((row) => (
+                <TableRow key={row.ruta_pedido_id}>
+                  <TableCell>{row.numero_pedido}</TableCell>
+                  <TableCell>{row.cliente || "—"}</TableCell>
+                  <TableCell>{row.telefono ? <a href={`tel:${row.telefono}`}>{row.telefono}</a> : "—"}</TableCell>
+                  <TableCell>{row.direccion || "—"}</TableCell>
+                  <TableCell><OrderStatus estado={row.estado} modificado={row.modificado} /></TableCell>
+                  <TableCell>
+                    <div className="flex flex-col gap-1">
+                      <Button variant={row.franja === "tarde" ? "outline" : "default"} size="sm" onClick={() => void cambiarFranja(row.id, "manana")}>Mañana</Button>
+                      <Button variant={row.franja === "tarde" ? "default" : "outline"} size="sm" onClick={() => void cambiarFranja(row.id, "tarde")}>Tarde</Button>
+                      <Button variant="ghost" size="sm" onClick={() => void cambiarFranja(row.id, row.franja === "tarde" ? "tarde" : "manana", "ruta")}>Aplicar a la ruta</Button>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    {row.comprobante_url ? (
+                      <button
+                        type="button"
+                        className="overflow-hidden rounded-md border bg-muted"
+                        onClick={() => setReceipt({ url: receiptSrc(row.comprobante_url), numero: row.numero_pedido })}
+                        aria-label={`Ver comprobante del pedido ${row.numero_pedido}`}
+                      >
+                        <img
+                          src={receiptSrc(row.comprobante_url)}
+                          alt={`Comprobante del pedido ${row.numero_pedido}`}
+                          className="h-12 w-12 object-cover"
+                        />
+                      </button>
+                    ) : "—"}
+                  </TableCell>
+                  <TableCell>{row.repartidor?.nombre_completo || "—"}</TableCell>
+                  <TableCell className="text-right">
+                    <div className="mb-2 flex justify-end gap-1">
+                      <Button variant="outline" size="sm" onClick={() => void moverParada(row.id, "subir")}>Subir</Button>
+                      <Button variant="outline" size="sm" onClick={() => void moverParada(row.id, "bajar")}>Bajar</Button>
+                      <Button size="sm" onClick={() => void liberarSiguiente(row.id)}>Liberar siguiente</Button>
+                    </div>
+                    {statusOptions(row.estado).length > 0 || canReassign(row.estado) ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={estadoBusyIds.includes(row.id)}
+                        onClick={() => void openCambios(row)}
+                      >
+                        Cambiar
+                      </Button>
+                    ) : null}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -636,105 +756,6 @@ const CallCenter = () => {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Pedidos del día</CardTitle>
-          <CardDescription>Pedidos asignados para hoy</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="mb-4 flex items-center space-x-2">
-            <Select value={ciudadId} onValueChange={(value) => { setCiudadId(value); setRepartidorId("all"); }}>
-              <SelectTrigger className="w-56"><SelectValue placeholder="Ciudad" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas las ciudades</SelectItem>
-                {cities.map((city) => <SelectItem key={city.id} value={String(city.id)}>{city.nombre}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select value={repartidorId} onValueChange={setRepartidorId}>
-              <SelectTrigger className="w-56"><SelectValue placeholder="Repartidor" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos los repartidores</SelectItem>
-                {driverOptions.map((driver) => <SelectItem key={driver.id} value={String(driver.id)}>{driver.nombre_completo}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Pedido</TableHead>
-                <TableHead>Cliente</TableHead>
-                <TableHead>Teléfono</TableHead>
-                <TableHead>Dirección</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead>Franja</TableHead>
-                <TableHead>Comprobante</TableHead>
-                <TableHead>Repartidor</TableHead>
-                <TableHead className="text-right">Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {pedidos.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={9} className="py-8 text-center text-muted-foreground">
-                    No hay pedidos para los filtros seleccionados
-                  </TableCell>
-                </TableRow>
-              ) : pedidos.map((row) => (
-                <TableRow key={row.ruta_pedido_id}>
-                  <TableCell>{row.numero_pedido}</TableCell>
-                  <TableCell>{row.cliente || "—"}</TableCell>
-                  <TableCell>{row.telefono ? <a href={`tel:${row.telefono}`}>{row.telefono}</a> : "—"}</TableCell>
-                  <TableCell>{row.direccion || "—"}</TableCell>
-                  <TableCell><OrderStatus estado={row.estado} modificado={row.modificado} /></TableCell>
-                  <TableCell>
-                    <div className="flex flex-col gap-1">
-                      <Button variant={row.franja === "tarde" ? "outline" : "default"} size="sm" onClick={() => void cambiarFranja(row.id, "manana")}>Mañana</Button>
-                      <Button variant={row.franja === "tarde" ? "default" : "outline"} size="sm" onClick={() => void cambiarFranja(row.id, "tarde")}>Tarde</Button>
-                      <Button variant="ghost" size="sm" onClick={() => void cambiarFranja(row.id, row.franja === "tarde" ? "tarde" : "manana", "ruta")}>Aplicar a la ruta</Button>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    {row.comprobante_url ? (
-                      <button
-                        type="button"
-                        className="overflow-hidden rounded-md border bg-muted"
-                        onClick={() => setReceipt({ url: receiptSrc(row.comprobante_url), numero: row.numero_pedido })}
-                        aria-label={`Ver comprobante del pedido ${row.numero_pedido}`}
-                      >
-                        <img
-                          src={receiptSrc(row.comprobante_url)}
-                          alt={`Comprobante del pedido ${row.numero_pedido}`}
-                          className="h-12 w-12 object-cover"
-                        />
-                      </button>
-                    ) : "—"}
-                  </TableCell>
-                  <TableCell>{row.repartidor?.nombre_completo || "—"}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="mb-2 flex justify-end gap-1">
-                      <Button variant="outline" size="sm" onClick={() => void moverParada(row.id, "subir")}>Subir</Button>
-                      <Button variant="outline" size="sm" onClick={() => void moverParada(row.id, "bajar")}>Bajar</Button>
-                      <Button size="sm" onClick={() => void liberarSiguiente(row.id)}>Liberar siguiente</Button>
-                    </div>
-                    {statusOptions(row.estado).length > 0 || canReassign(row.estado) ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={estadoBusyIds.includes(row.id)}
-                        onClick={() => void openCambios(row)}
-                      >
-                        Cambiar
-                      </Button>
-                    ) : null}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-          </div>
-        </CardContent>
-      </Card>
 
       <Dialog open={receipt != null} onOpenChange={(open) => { if (!open) setReceipt(null); }}>
         <DialogContent className="max-w-3xl">
