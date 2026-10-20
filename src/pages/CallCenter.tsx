@@ -547,7 +547,7 @@ const CallCenter = () => {
       <Card>
         <CardHeader>
           <CardTitle>Actividad extra</CardTitle>
-          <CardDescription>El pedido queda oculto en la app hasta Liberar siguiente</CardDescription>
+          <CardDescription>El pedido entra a la ruta y el repartidor lo ve al terminar la parada en curso</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <Select
