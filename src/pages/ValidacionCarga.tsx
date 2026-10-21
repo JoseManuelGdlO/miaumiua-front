@@ -75,7 +75,8 @@ const ValidacionCarga = ({ solicitudId: solicitudIdProp, embedded = false, onBac
   const [solicitud, setSolicitud] = useState<Solicitud | null>(null);
   const [extras, setExtras] = useState<ExtraDraft[]>([]);
   const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [accion, setAccion] = useState<"" | "guardar" | "aprobar">("");
+  const busy = accion !== "";
   const [modalOpen, setModalOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<InventarioHit[]>([]);
@@ -171,7 +172,7 @@ const ValidacionCarga = ({ solicitudId: solicitudIdProp, embedded = false, onBac
 
   const guardar = async () => {
     if (busy) return;
-    setBusy(true);
+    setAccion("guardar");
     try {
       const saved = await callCenterService.guardarExtras(solicitudId, payloadExtras());
       if (saved.reenvio) {
@@ -186,13 +187,13 @@ const ValidacionCarga = ({ solicitudId: solicitudIdProp, embedded = false, onBac
     } catch (err) {
       notify(err);
     } finally {
-      setBusy(false);
+      setAccion("");
     }
   };
 
   const aprobar = async () => {
     if (busy) return;
-    setBusy(true);
+    setAccion("aprobar");
     try {
       await callCenterService.guardarExtras(solicitudId, payloadExtras());
       await callCenterService.aprobar(solicitudId);
@@ -202,7 +203,7 @@ const ValidacionCarga = ({ solicitudId: solicitudIdProp, embedded = false, onBac
     } catch (err) {
       notify(err);
     } finally {
-      setBusy(false);
+      setAccion("");
     }
   };
 
@@ -244,15 +245,33 @@ const ValidacionCarga = ({ solicitudId: solicitudIdProp, embedded = false, onBac
 
   if (error) {
     return (
-      <div className="space-y-4 p-6">
-        <p>{error}</p>
-        <Button variant="outline" onClick={leave}>Volver</Button>
+      <div className={embedded ? "space-y-4" : "space-y-4 p-6"}>
+        <div className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          <p className="font-semibold">No hay una solicitud abierta con ese número.</p>
+          <p className="mt-1">Si la carga ya se aprobó, está en el histórico de abajo. Si el repartidor acaba de enviarla, vuelve a Por validar: la nueva aparece en esa tabla. En la app se envía desde Check-in, con Enviar a call-center.</p>
+        </div>
+        <Button variant="outline" onClick={leave}>Ver cargas por validar</Button>
       </div>
     );
   }
 
   if (!solicitud) {
-    return <div className={embedded ? "" : "p-6"}>Cargando validación…</div>;
+    return <div className={embedded ? "text-sm text-muted-foreground" : "p-6 text-sm text-muted-foreground"}>Cargando la validación…</div>;
+  }
+
+  if (solicitud.ya_validada) {
+    return (
+      <div className={embedded ? "space-y-4" : "space-y-4 p-6"}>
+        <div className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
+          <p className="font-semibold">Esta carga ya fue validada.</p>
+          <p className="mt-1">
+            {solicitud.repartidor?.nombre_completo || "El repartidor"} puede pulsar Iniciar ruta de pedidos en la app.
+            Si hay que validar otra vez, debe volver a pulsar Enviar a call-center. La solicitud nueva aparece en Por validar, no en esta.
+          </p>
+        </div>
+        <Button variant="outline" onClick={leave}>Ver cargas por validar</Button>
+      </div>
+    );
   }
 
   return (
@@ -365,8 +384,14 @@ const ValidacionCarga = ({ solicitudId: solicitudIdProp, embedded = false, onBac
             </p>
           )}
           <div className="flex gap-3">
-            <Button variant="outline" disabled={busy || esperaReenvio} onClick={() => void guardar()}>Guardar extra</Button>
-            <Button disabled={aprobarBloqueado} onClick={() => void aprobar()}>Aprobar carga</Button>
+            <Button variant="outline" disabled={busy || esperaReenvio} onClick={() => void guardar()}>
+              {accion === "guardar" ? <Loader2 className="animate-spin" /> : null}
+              {accion === "guardar" ? "Guardando…" : "Guardar extra"}
+            </Button>
+            <Button disabled={aprobarBloqueado} onClick={() => void aprobar()}>
+              {accion === "aprobar" ? <Loader2 className="animate-spin" /> : null}
+              {accion === "aprobar" ? "Aprobando…" : "Aprobar carga"}
+            </Button>
           </div>
         </CardContent>
       </Card>

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Download } from "lucide-react";
+import { ChevronDown, Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -92,6 +93,7 @@ const CallCenter = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get("tab");
   const tab = tabParam === "validacion" || tabParam === "incidencias" ? tabParam : "operacion";
+  const cargaPanel = useRef<HTMLDivElement>(null);
   const solicitudParam = Number(searchParams.get("solicitud"));
   const cargaId = Number.isFinite(solicitudParam) && solicitudParam > 0 ? solicitudParam : null;
   const avisoParam = Number(searchParams.get("aviso"));
@@ -114,6 +116,7 @@ const CallCenter = () => {
   const [detail, setDetail] = useState<Solicitud | null>(null);
   const [nota, setNota] = useState("");
   const [busy, setBusy] = useState(false);
+  const [trabajando, setTrabajando] = useState("");
   const [reassignFor, setReassignFor] = useState<PedidoDia | null>(null);
   const [drivers, setDrivers] = useState<RepartidorOpcion[]>([]);
   const [targetDriver, setTargetDriver] = useState<string>("");
@@ -123,6 +126,7 @@ const CallCenter = () => {
   const [historialId, setHistorialId] = useState<number | null>(null);
   const [historialTick, setHistorialTick] = useState(0);
   const [receipt, setReceipt] = useState<{ url: string; numero: string } | null>(null);
+  const [flujoAbierto, setFlujoAbierto] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const listGeneration = useRef(0);
   const latestFilters = useRef({ ciudadId, repartidorId });
@@ -155,12 +159,16 @@ const CallCenter = () => {
   };
 
   const liberarSiguiente = async (id: number) => {
+    if (trabajando) return;
+    setTrabajando(`liberar:${id}`);
     try {
       await callCenterService.liberarSiguiente(id);
-      toast({ title: "Siguiente pedido liberado" });
+      toast({ title: "Siguiente pedido liberado", description: "El repartidor ya puede ver esa parada en la app." });
       await loadLists();
     } catch (error) {
       notify(error);
+    } finally {
+      setTrabajando("");
     }
   };
 
@@ -200,6 +208,11 @@ const CallCenter = () => {
   const openValidacion = (id: number) => {
     setSearchParams({ tab: "validacion", solicitud: String(id) });
   };
+
+  useEffect(() => {
+    if (!cargaId || tab !== "validacion") return;
+    cargaPanel.current?.scrollIntoView({ block: "nearest" });
+  }, [cargaId, tab]);
 
   const closeValidacion = () => {
     setSearchParams({ tab: "validacion" });
@@ -428,6 +441,30 @@ const CallCenter = () => {
           Solicitudes, pedidos del día y validación de carga
         </p>
       </div>
+      <Collapsible open={flujoAbierto} onOpenChange={setFlujoAbierto} className="rounded-lg bg-primary/10">
+        <CollapsibleTrigger className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm font-semibold text-primary">
+          Cómo funciona Call Center
+          <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${flujoAbierto ? "rotate-180" : ""}`} />
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <ol className="grid gap-4 px-4 pb-4 sm:grid-cols-2">
+            {[
+              ["Cola", "El repartidor llega aquí al pedir la validación, al llamar, al pedir soporte o al enviar el cierre. Si es un check-in, la fila abre Validación de carga."],
+              ["Validación de carga", "En Por validar pulsa Aprobar y después Aprobar carga. Con eso el repartidor puede iniciar la ruta en la app."],
+              ["Pedidos del día", "Elige Mañana o Tarde, ordena con Subir y Bajar, y pulsa Liberar siguiente. Solo esa parada se ve en la app."],
+              ["Cierre e incidencias", "Cuando envía el cierre, ábrelo en la cola y pulsa Liberar cierre. Si algo falló en una entrega, revísalo en Incidencias."],
+            ].map(([title, text], index) => (
+              <li key={title} className="flex gap-3 text-sm">
+                <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-background text-xs font-semibold text-primary">{index + 1}</span>
+                <span>
+                  <span className="block font-semibold text-foreground">{title}</span>
+                  <span className="mt-0.5 block text-foreground/80">{text}</span>
+                </span>
+              </li>
+            ))}
+          </ol>
+        </CollapsibleContent>
+      </Collapsible>
       <Tabs value={tab} onValueChange={onTab}>
         <TabsList>
           <TabsTrigger value="operacion">Operación</TabsTrigger>
@@ -513,6 +550,22 @@ const CallCenter = () => {
               </SelectContent>
             </Select>
           </div>
+          <ol className="mb-4 grid gap-3 rounded-lg bg-muted p-4 sm:grid-cols-4">
+            {[
+              ["Horario", "Mañana o Tarde elige cuándo la ve. El botón rosa es el actual. Aplicar a la ruta copia ese horario a toda la ruta."],
+              ["Orden", "Subir y Bajar cambian el lugar de la parada en la ruta."],
+              ["Liberar", "Liberar siguiente es el paso que la muestra en la app. Hasta entonces el repartidor no la ve."],
+              ["Cambiar", "Cambiar sirve para el estado del pedido o para pasarlo a otro repartidor."],
+            ].map(([title, text], index) => (
+              <li key={title} className="flex gap-3 text-sm">
+                <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-background text-xs font-semibold text-foreground">{index + 1}</span>
+                <span>
+                  <span className="block font-semibold text-foreground">{title}</span>
+                  <span className="mt-0.5 block text-muted-foreground">{text}</span>
+                </span>
+              </li>
+            ))}
+          </ol>
           <div className="rounded-md border">
           <Table>
             <TableHeader>
@@ -525,7 +578,7 @@ const CallCenter = () => {
                 <TableHead>Franja</TableHead>
                 <TableHead>Comprobante</TableHead>
                 <TableHead>Repartidor</TableHead>
-                <TableHead className="text-right">Acciones</TableHead>
+                <TableHead>Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -543,10 +596,30 @@ const CallCenter = () => {
                   <TableCell>{row.direccion || "—"}</TableCell>
                   <TableCell><OrderStatus estado={row.estado} modificado={row.modificado} /></TableCell>
                   <TableCell>
-                    <div className="flex flex-col gap-1">
-                      <Button variant={row.franja === "tarde" ? "outline" : "default"} size="sm" onClick={() => void cambiarFranja(row.id, "manana")}>Mañana</Button>
-                      <Button variant={row.franja === "tarde" ? "default" : "outline"} size="sm" onClick={() => void cambiarFranja(row.id, "tarde")}>Tarde</Button>
-                      <Button variant="ghost" size="sm" onClick={() => void cambiarFranja(row.id, row.franja === "tarde" ? "tarde" : "manana", "ruta")}>Aplicar a la ruta</Button>
+                    <div className="flex min-w-36 flex-col gap-1.5">
+                      <div role="group" aria-label={`Horario del pedido ${row.numero_pedido}`} className="flex rounded-md bg-muted p-0.5">
+                        {(["manana", "tarde"] as const).map((value) => {
+                          const active = (row.franja === "tarde" ? "tarde" : "manana") === value;
+                          return (
+                            <button
+                              key={value}
+                              type="button"
+                              aria-pressed={active}
+                              className={`flex-1 rounded px-2 py-1 text-xs font-semibold ${active ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+                              onClick={() => void cambiarFranja(row.id, value)}
+                            >
+                              {value === "manana" ? "Mañana" : "Tarde"}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => void cambiarFranja(row.id, row.franja === "tarde" ? "tarde" : "manana", "ruta")}
+                      >
+                        Aplicar a la ruta
+                      </Button>
                     </div>
                   </TableCell>
                   <TableCell>
@@ -566,22 +639,27 @@ const CallCenter = () => {
                     ) : "—"}
                   </TableCell>
                   <TableCell>{row.repartidor?.nombre_completo || "—"}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="mb-2 flex justify-end gap-1">
-                      <Button variant="outline" size="sm" onClick={() => void moverParada(row.id, "subir")}>Subir</Button>
-                      <Button variant="outline" size="sm" onClick={() => void moverParada(row.id, "bajar")}>Bajar</Button>
-                      <Button size="sm" onClick={() => void liberarSiguiente(row.id)}>Liberar siguiente</Button>
-                    </div>
-                    {statusOptions(row.estado).length > 0 || canReassign(row.estado) ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={estadoBusyIds.includes(row.id)}
-                        onClick={() => void openCambios(row)}
-                      >
-                        Cambiar
+                  <TableCell>
+                    <div className="flex w-44 flex-col gap-1.5">
+                      <div className="flex gap-1">
+                        <Button variant="outline" size="sm" className="flex-1" onClick={() => void moverParada(row.id, "subir")}>Subir</Button>
+                        <Button variant="outline" size="sm" className="flex-1" onClick={() => void moverParada(row.id, "bajar")}>Bajar</Button>
+                      </div>
+                      <Button size="sm" disabled={trabajando !== ""} onClick={() => void liberarSiguiente(row.id)}>
+                        {trabajando === `liberar:${row.id}` ? <Loader2 className="animate-spin" /> : null}
+                        {trabajando === `liberar:${row.id}` ? "Liberando…" : "Liberar siguiente"}
                       </Button>
-                    ) : null}
+                      {statusOptions(row.estado).length > 0 || canReassign(row.estado) ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={estadoBusyIds.includes(row.id)}
+                          onClick={() => void openCambios(row)}
+                        >
+                          {estadoBusyIds.includes(row.id) ? "Cambiando…" : "Cambiar"}
+                        </Button>
+                      ) : null}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -801,7 +879,10 @@ const CallCenter = () => {
                   />
                 </button>
               ) : null}
-              <Button disabled={busy} onClick={() => void liberar()}>Liberar cierre</Button>
+              <Button disabled={busy} onClick={() => void liberar()}>
+                {busy ? <Loader2 className="animate-spin" /> : null}
+                {busy ? "Liberando cierre…" : "Liberar cierre"}
+              </Button>
             </div>
           )}
           {detail && detail.tipo !== "check_in" && detail.tipo !== "cierre_dia" && (
@@ -813,7 +894,10 @@ const CallCenter = () => {
               <p>{detail.direccion}</p>
               <p>{detail.motivo}</p>
               <Textarea value={nota} onChange={(event) => setNota(event.target.value)} placeholder="Nota opcional" />
-              <Button disabled={busy} onClick={() => void atender()}>Atendido</Button>
+              <Button disabled={busy} onClick={() => void atender()}>
+                {busy ? <Loader2 className="animate-spin" /> : null}
+                {busy ? "Marcando atendido…" : "Atendido"}
+              </Button>
             </div>
           )}
         </DialogContent>
@@ -870,20 +954,13 @@ const CallCenter = () => {
           />
         </TabsContent>
         <TabsContent value="validacion" className="space-y-6">
-          {cargaId ? (
-            <ValidacionCarga
-              key={cargaId}
-              solicitudId={cargaId}
-              embedded
-              onBack={closeValidacion}
-              onApproved={() => {
-                closeValidacion();
-                setHistorialTick((current) => current + 1);
-                void loadLists().catch(notify);
-              }}
-            />
-          ) : (
-            <Card>
+          {!cargaId && (
+            <div className="rounded-lg bg-primary/10 px-4 py-3 text-sm text-foreground">
+              <p className="font-semibold">Aquí se aprueba la carga antes de que el repartidor salga.</p>
+              <p className="mt-1 text-muted-foreground">El repartidor la envía desde la app, en Check-in, con Enviar a call-center. Cuando llegue, ábrela en la tabla y pulsa Aprobar carga. Si ya se aprobó, queda en el histórico.</p>
+            </div>
+          )}
+          <Card>
               <CardHeader>
                 <CardTitle>Por validar</CardTitle>
                 <CardDescription>Cargas de check-in pendientes</CardDescription>
@@ -896,20 +973,26 @@ const CallCenter = () => {
                       <TableHead>Repartidor</TableHead>
                       <TableHead>Fecha</TableHead>
                       <TableHead>Hora</TableHead>
+                      <TableHead className="text-right">Acción</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {pendientes.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={3} className="py-8 text-center text-muted-foreground">
-                          No hay cargas esperando validación
+                        <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
+                          No hay cargas esperando validación. Cuando el repartidor pulse Enviar a call-center, aparece aquí.
                         </TableCell>
                       </TableRow>
                     ) : pendientes.map((row) => (
-                      <TableRow key={row.id} onClick={() => openValidacion(row.id)} className="cursor-pointer">
+                      <TableRow key={row.id} className={cargaId === row.id ? "bg-primary/10" : undefined}>
                         <TableCell>{row.repartidor?.nombre_completo || "—"}</TableCell>
                         <TableCell>{row.fecha}</TableCell>
                         <TableCell>{row.hora}</TableCell>
+                        <TableCell className="text-right">
+                          <Button size="sm" onClick={() => openValidacion(row.id)}>
+                            {cargaId === row.id ? "Abierta" : "Aprobar"}
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -917,7 +1000,21 @@ const CallCenter = () => {
                 </div>
               </CardContent>
             </Card>
-          )}
+          {cargaId ? (
+            <div ref={cargaPanel}>
+              <ValidacionCarga
+                key={cargaId}
+                solicitudId={cargaId}
+                embedded
+                onBack={closeValidacion}
+                onApproved={() => {
+                  closeValidacion();
+                  setHistorialTick((current) => current + 1);
+                  void loadLists().catch(notify);
+                }}
+              />
+            </div>
+          ) : null}
           <Card>
             <CardHeader>
               <CardTitle>Histórico</CardTitle>
