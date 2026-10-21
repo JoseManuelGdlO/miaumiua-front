@@ -40,6 +40,7 @@ export type Solicitud = {
   prioridad: string;
   dinero_esperado?: number;
   espera_reenvio?: boolean;
+  ya_validada?: boolean;
   cargas?: CargaLinea[];
   cliente?: string | null;
   telefono?: string | null;
