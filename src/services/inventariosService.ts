@@ -1,5 +1,5 @@
 import { config } from '../config/environment';
-import { mensajeDeError, textoDeError } from '@/lib/api-error';
+import { falloHttp, mensajeDeError } from '@/lib/api-error';
 
 // Interfaces para Inventarios
 export interface Inventario {
@@ -226,7 +226,7 @@ class InventariosService {
       body: formData,
     });
     if (!response.ok) {
-      throw new Error(textoDeError(await response.json().catch(() => null)));
+      throw falloHttp(response, await response.json().catch(() => null));
     }
     return response.json();
   }

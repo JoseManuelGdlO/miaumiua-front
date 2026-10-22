@@ -1,5 +1,5 @@
 import { config } from '../config/environment';
-import { textoDeError } from '@/lib/api-error';
+import { falloHttp } from '@/lib/api-error';
 import { authService } from './authService';
 
 // Interfaces para Paquetes
@@ -94,7 +94,7 @@ class PackagesService {
     });
 
     if (!response.ok) {
-      throw new Error(textoDeError(await response.json().catch(() => null)));
+      throw falloHttp(response, await response.json().catch(() => null));
     }
 
     return response.json();
@@ -161,7 +161,7 @@ class PackagesService {
       body: formData,
     });
     if (!response.ok) {
-      throw new Error(textoDeError(await response.json().catch(() => null)));
+      throw falloHttp(response, await response.json().catch(() => null));
     }
     return response.json();
   }

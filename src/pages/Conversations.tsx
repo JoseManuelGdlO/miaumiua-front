@@ -13,6 +13,7 @@ import { canChangeConversationStatus } from "@/utils/permissions";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useNavigate } from "react-router-dom";
 import ErrorDetailsModal from "@/components/ErrorDetailsModal";
+import { vistaDeError } from "@/lib/api-error";
 import AssignFlagsModal from "@/components/modals/AssignFlagsModal";
 import FlagsSelector from "@/components/FlagsSelector";
 import { conversationsService } from "@/services/conversationsService";
@@ -153,7 +154,7 @@ const Conversations = () => {
       setTotalPages(listRes?.data?.pagination?.totalPages || 1);
       setTotalCount(listRes?.data?.pagination?.total ?? mapped.length);
     } catch (e: any) {
-      setError(e?.message || "Error al cargar conversaciones");
+      setError(vistaDeError(e?.message || "Error al cargar conversaciones"));
     } finally {
       setLoading(false);
     }
@@ -509,7 +510,7 @@ const Conversations = () => {
         <CardContent>
           {error && (
             <Alert className="mb-4 border-destructive/20 bg-destructive/5">
-              <AlertDescription className="text-destructive">{error}</AlertDescription>
+              <AlertDescription className="whitespace-pre-line text-destructive">{error}</AlertDescription>
             </Alert>
           )}
           <div className="space-y-4">

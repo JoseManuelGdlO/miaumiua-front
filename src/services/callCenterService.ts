@@ -1,5 +1,5 @@
 import { config } from '@/config/environment';
-import { textoDeError } from '@/lib/api-error';
+import { falloHttp } from '@/lib/api-error';
 import { authService } from '@/services/authService';
 import { pedidosPath, repartidoresPath } from '@/lib/call-center-rules.mjs';
 
@@ -119,9 +119,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   if (!response.ok) {
     authService.handleAuthError(response);
     const body = await response.json().catch(() => ({}));
-    const error = new Error(textoDeError(body)) as Error & { status?: number };
-    error.status = response.status;
-    throw error;
+    throw falloHttp(response, body);
   }
   const payload = await response.json();
   return payload.data as T;
@@ -179,6 +177,10 @@ export const callCenterService = {
   asignarActividad: (pedidoId: number, fkid_repartidor: number) => request<{ ruta_id: number }>(`/call-center/actividades`, {
     method: 'POST',
     body: JSON.stringify({ pedido_id: pedidoId, fkid_repartidor }),
+  }),
+  cerrarSinCodigo: (id: number, motivo: string) => request<{ id: number; estado: string }>(`/call-center/pedidos/${id}/cerrar-sin-codigo`, {
+    method: "POST",
+    body: JSON.stringify({ motivo }),
   }),
   moverParada: (id: number, direccion: "subir" | "bajar") => request<{ orden_entrega: number }>(`/call-center/pedidos/${id}/orden`, {
     method: 'POST',

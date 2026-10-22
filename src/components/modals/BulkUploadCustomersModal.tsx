@@ -11,6 +11,7 @@ import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Upload, FileSpreadsheet, X, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { vistaDeError } from "@/lib/api-error";
 import { clientesService } from "@/services/clientesService";
 
 interface BulkUploadCustomersModalProps {
@@ -105,13 +106,14 @@ export default function BulkUploadCustomersModal({
         // Llamar al callback para recargar la lista (sin cerrar el modal)
         onUploadComplete();
       } else {
-        setError(response.message || 'Error al procesar el archivo');
+        setError(vistaDeError(response.message || 'Error al procesar el archivo'));
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al cargar el archivo');
+      const aviso = vistaDeError(err instanceof Error ? err.message : 'Error al cargar el archivo');
+      setError(aviso);
       toast({
-        title: "Error",
-        description: err instanceof Error ? err.message : 'Error al cargar el archivo',
+        title: "Clientes",
+        description: aviso,
         variant: "destructive",
       });
     } finally {
@@ -322,7 +324,7 @@ export default function BulkUploadCustomersModal({
           {error && (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
+              <AlertDescription className="whitespace-pre-line">{error}</AlertDescription>
             </Alert>
           )}
 

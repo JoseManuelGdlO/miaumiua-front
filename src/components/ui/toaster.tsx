@@ -1,4 +1,5 @@
 import { useToast } from "@/hooks/use-toast"
+import { vistaDeError } from "@/lib/api-error"
 import {
   Toast,
   ToastClose,
@@ -19,7 +20,9 @@ export function Toaster() {
             <div className="grid gap-1">
               {title && <ToastTitle>{title}</ToastTitle>}
               {description && (
-                <ToastDescription>{description}</ToastDescription>
+                <ToastDescription className="whitespace-pre-line">
+                  {props.variant === "destructive" && typeof description === "string" ? vistaDeError(description) : description}
+                </ToastDescription>
               )}
             </div>
             {action}

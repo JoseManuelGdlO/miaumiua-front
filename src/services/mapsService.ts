@@ -1,3 +1,4 @@
+import { falloHttp } from '@/lib/api-error';
 import { config } from '../config/environment';
 import { authService } from './authService';
 
@@ -64,7 +65,7 @@ class MapsService {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ message: 'Error desconocido' }));
-      throw new Error(error.message || `Error ${response.status}`);
+      throw falloHttp(response, error);
     }
 
     return response.json();

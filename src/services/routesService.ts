@@ -1,3 +1,4 @@
+import { falloHttp } from '@/lib/api-error';
 import { config } from '@/config/environment';
 import { authService } from './authService';
 
@@ -97,9 +98,10 @@ export interface CreateRouteRequest {
   nombre_ruta: string;
   fecha_ruta: string;
   fkid_ciudad: number;
-  fkid_repartidor: number;
+  fkid_repartidor?: number;
   notas?: string;
   orden_prioridad?: number;
+  estado?: string;
 }
 
 export interface UpdateRouteRequest {
@@ -259,7 +261,7 @@ class RoutesService {
       authService.handleAuthError(response);
       
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      throw falloHttp(response, errorData);
     }
 
     return response.json();
