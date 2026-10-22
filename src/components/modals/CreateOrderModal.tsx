@@ -149,6 +149,7 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
         ...updatedProducts[index],
         fkid_producto: product.id,
         precio_unidad: Number(product.precio_venta || 0),
+        cantidad: Number(product.compra_minima) > 0 ? Number(product.compra_minima) : 1,
         producto: product
       };
     } else {

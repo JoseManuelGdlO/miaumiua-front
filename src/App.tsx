@@ -9,6 +9,7 @@ import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import DashboardLayout from "./pages/DashboardLayout";
 import Users from "./pages/Users";
+import Historial from "./pages/Historial";
 import Drivers from "./pages/Drivers";
 import Roles from "./pages/Roles";
 import Permissions from "./pages/Permissions";
@@ -67,6 +68,7 @@ const App = () => (
             <Route index element={<Dashboard />} />
             <Route path="configuracion-qr" element={<ConfiguracionQr />} />
             <Route path="users" element={<Users />} />
+            <Route path="historial" element={<Historial />} />
             <Route path="drivers" element={<Drivers />} />
             <Route path="roles" element={<Roles />} />
             <Route path="permissions" element={<Permissions />} />

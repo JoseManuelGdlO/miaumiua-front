@@ -1,5 +1,5 @@
 import { config } from '@/config/environment';
-import { textoDeError } from '@/lib/api-error';
+import { falloHttp } from '@/lib/api-error';
 import { authService } from './authService';
 
 export interface PushSubscriptionPayload {
@@ -32,7 +32,7 @@ class PushService {
     if (!response.ok) {
       authService.handleAuthError(response);
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(textoDeError(errorData));
+      throw falloHttp(response, errorData);
     }
 
     return response.json();

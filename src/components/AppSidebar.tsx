@@ -46,6 +46,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { authService } from "@/services/authService";
 import miauMiauLogo from "/lovable-uploads/9f868334-2970-46f8-a783-9ab32ecc297b.png";
 
 type MenuItem = {
@@ -54,7 +55,7 @@ type MenuItem = {
   icon: ComponentType<{ className?: string }>;
   permission: string | null;
   requireConfigureSystem?: boolean;
-  submenu?: { title: string; url: string; permission: string | null }[];
+  submenu?: { title: string; url: string; permission: string | null; adminOnly?: boolean }[];
 };
 
 const menuSections: { label: string | null; items: MenuItem[] }[] = [
@@ -67,12 +68,12 @@ const menuSections: { label: string | null; items: MenuItem[] }[] = [
     items: [
       { title: "Conversaciones", url: "/dashboard/conversations", icon: MessageCircle, permission: "conversations" },
       { title: "Contexto de Agentes", url: "/dashboard/agents", icon: Bot, permission: "agents" },
-      { title: "Pedidos", url: "/dashboard/orders", icon: Package2, permission: "orders" },
-      { title: "Call Center", url: "/dashboard/call-center", icon: Headphones, permission: "callCenter" },
-      { title: "Repartidores", url: "/dashboard/drivers", icon: Truck, permission: "drivers" },
-      { title: "Planeación de Rutas", url: "/dashboard/routes", icon: Route, permission: "routes" },
-      { title: "Promociones", url: "/dashboard/promotions", icon: Tag, permission: "promotions" },
       { title: "Clientes", url: "/dashboard/customers", icon: UserCheck, permission: "customers" },
+      { title: "Repartidores", url: "/dashboard/drivers", icon: Truck, permission: "drivers" },
+      { title: "Pedidos", url: "/dashboard/orders", icon: Package2, permission: "orders" },
+      { title: "Planeación de Rutas", url: "/dashboard/routes", icon: Route, permission: "routes" },
+      { title: "Call Center", url: "/dashboard/call-center", icon: Headphones, permission: "callCenter" },
+      { title: "Promociones", url: "/dashboard/promotions", icon: Tag, permission: "promotions" },
     ],
   },
   {
@@ -86,6 +87,7 @@ const menuSections: { label: string | null; items: MenuItem[] }[] = [
           { title: "Usuarios", url: "/dashboard/users", permission: "users" },
           { title: "Roles", url: "/dashboard/roles", permission: "roles" },
           { title: "Permisos", url: "/dashboard/permissions", permission: "permissions" },
+          { title: "Historial", url: "/dashboard/historial", permission: null, adminOnly: true },
         ],
       },
       { title: "Inventario", url: "/dashboard/inventory", icon: Package, permission: "inventory" },
@@ -149,6 +151,15 @@ export function AppSidebar() {
       ...prev,
       [title]: !prev[title]
     }));
+  };
+
+  const puedeVer = (item: { permission: string | null; adminOnly?: boolean }) => {
+    if (item.adminOnly) {
+      const rol = authService.getUserData()?.rol?.nombre;
+      return rol === "admin" || rol === "super_admin";
+    }
+    if (item.permission && !hasSectionAccess(item.permission as never)) return false;
+    return true;
   };
 
   const getNavClasses = (active: boolean) => {
@@ -233,7 +244,7 @@ export function AppSidebar() {
                           <DropdownMenuLabel>{item.title}</DropdownMenuLabel>
                           <DropdownMenuSeparator />
                           {item.submenu.map((subItem) => {
-                            if (subItem.permission && !hasSectionAccess(subItem.permission as never)) {
+                            if (!puedeVer(subItem)) {
                               return null;
                             }
                             return (
@@ -272,8 +283,7 @@ export function AppSidebar() {
                           <CollapsibleContent>
                             <SidebarMenuSub className="ml-4 mt-2 border-l border-sidebar-border pl-4">
                               {item.submenu.map((subItem) => {
-                                // Check if user has access to this submenu item
-                                if (subItem.permission && !hasSectionAccess(subItem.permission as any)) {
+                                if (!puedeVer(subItem)) {
                                   return null;
                                 }
 

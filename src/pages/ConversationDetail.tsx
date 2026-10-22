@@ -6,6 +6,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { vistaDeError } from "@/lib/api-error";
 import { conversationsService, resolveChatImageUrl } from "@/services/conversationsService";
 import { conversationLogsService, type ConversacionLogEntry } from "@/services/conversationLogsService";
 import { canChangeConversationStatus, hasPermission } from "@/utils/permissions";
@@ -66,7 +67,7 @@ const ConversationDetail = () => {
       setConversation(res?.data?.conversacion || null);
     } catch (e: any) {
       if (!options.silent) {
-        setError(e?.message || 'Error al cargar la conversación');
+        setError(vistaDeError(e?.message || 'Error al cargar la conversación'));
       }
     } finally {
       if (!options.silent) {
@@ -340,7 +341,7 @@ const ConversationDetail = () => {
 
       {error && (
         <Alert>
-          <AlertDescription className="text-destructive">{error}</AlertDescription>
+          <AlertDescription className="whitespace-pre-line text-destructive">{error}</AlertDescription>
         </Alert>
       )}
 

@@ -29,6 +29,7 @@ import { Search, Plus, MoreHorizontal, Edit, Trash2, UserCheck, Star, MessageSqu
 import { canCreate, canEdit, canDelete, canViewStats, canResetClientePortalPassword } from "@/utils/permissions";
 import { useToast } from "@/hooks/use-toast";
 import { clientesService, Cliente } from "@/services/clientesService";
+import { citiesService, City } from "@/services/citiesService";
 import CreateCustomerModal from "@/components/modals/CreateCustomerModal";
 import BulkUploadCustomersModal from "@/components/modals/BulkUploadCustomersModal";
 
@@ -56,6 +57,9 @@ import ChangeClientePortalPasswordModal from "@/components/modals/ChangeClienteP
 const Customers = () => {
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
+  const [ciudadFiltro, setCiudadFiltro] = useState("all");
+  const [estadoFiltro, setEstadoFiltro] = useState("all");
+  const [ciudades, setCiudades] = useState<City[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -72,7 +76,13 @@ const Customers = () => {
   // Cargar clientes al montar el componente
   useEffect(() => {
     loadClientes();
-  }, [currentPage, searchTerm]);
+  }, [currentPage, searchTerm, ciudadFiltro, estadoFiltro]);
+
+  useEffect(() => {
+    citiesService.getAllCities().then((response) => {
+      if (response.success) setCiudades(response.data.cities || []);
+    }).catch(() => setCiudades([]));
+  }, []);
 
   const loadClientes = async () => {
     try {
@@ -80,7 +90,9 @@ const Customers = () => {
       const response = await clientesService.getAllClientes({
         search: searchTerm || undefined,
         page: currentPage,
-        limit: itemsPerPage
+        limit: itemsPerPage,
+        fkid_ciudad: ciudadFiltro === "all" ? undefined : Number(ciudadFiltro),
+        activos: estadoFiltro === "all" ? undefined : estadoFiltro as "true" | "false",
       });
       
       if (response.success) {
@@ -200,16 +212,33 @@ const Customers = () => {
         </CardHeader>
         <CardContent>
           {/* Search */}
-          <div className="flex items-center space-x-2 mb-6">
+          <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-center">
             <div className="relative flex-1">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar por nombre o email..."
+                placeholder="Buscar por nombre, correo o teléfono..."
                 value={searchTerm}
                 onChange={(e) => handleSearch(e.target.value)}
                 className="pl-8"
               />
             </div>
+            <Select value={ciudadFiltro} onValueChange={(value) => { setCiudadFiltro(value); setCurrentPage(1); }}>
+              <SelectTrigger className="w-full sm:w-52"><SelectValue placeholder="Ciudad" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas las ciudades</SelectItem>
+                {ciudades.map((ciudad) => (
+                  <SelectItem key={ciudad.id} value={String(ciudad.id)}>{ciudad.nombre}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={estadoFiltro} onValueChange={(value) => { setEstadoFiltro(value); setCurrentPage(1); }}>
+              <SelectTrigger className="w-full sm:w-44"><SelectValue placeholder="Estado" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="true">Activos</SelectItem>
+                <SelectItem value="false">Inactivos</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Clientes Table */}

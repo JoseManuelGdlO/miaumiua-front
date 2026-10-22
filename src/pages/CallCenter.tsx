@@ -28,6 +28,8 @@ import {
 } from "@/services/callCenterService";
 import { canReassign, keepSelection, shouldRefreshAfter, statusLabel, statusOptions } from "@/lib/call-center-rules.mjs";
 import { config } from "@/config/environment";
+import { FlujoPasos } from "@/components/FlujoPasos";
+import { vistaDeError } from "@/lib/api-error";
 
 const TIPO: Record<string, string> = {
   check_in: "Check-in",
@@ -41,7 +43,7 @@ function errorStatus(error: unknown) {
 }
 
 function errorText(error: unknown) {
-  return error instanceof Error ? error.message : "No se pudo completar la solicitud";
+  return vistaDeError(error instanceof Error ? error.message : "No se pudo completar la solicitud");
 }
 
 function formatMoney(value: number) {
@@ -121,6 +123,7 @@ const CallCenter = () => {
   const [drivers, setDrivers] = useState<RepartidorOpcion[]>([]);
   const [targetDriver, setTargetDriver] = useState<string>("");
   const [nuevoEstado, setNuevoEstado] = useState<string>("");
+  const [motivoCierre, setMotivoCierre] = useState("");
   const [estadoBusyIds, setEstadoBusyIds] = useState<number[]>([]);
   const [historial, setHistorial] = useState<CargaValidada[]>([]);
   const [historialId, setHistorialId] = useState<number | null>(null);
@@ -351,6 +354,7 @@ const CallCenter = () => {
     reassignPedidoId.current = null;
     setReassignFor(null);
     setNuevoEstado("");
+    setMotivoCierre("");
   };
 
   const openCambios = async (pedido: PedidoDia) => {
@@ -360,6 +364,7 @@ const CallCenter = () => {
     setDrivers([]);
     setTargetDriver("");
     setNuevoEstado("");
+    setMotivoCierre("");
     if (!pedido.ciudad_id || !canReassign(pedido.estado)) return;
     try {
       const next = await callCenterService.listRepartidores(pedido.ciudad_id);
@@ -388,6 +393,21 @@ const CallCenter = () => {
     } finally {
       estadoPending.current.delete(pedido.id);
       setEstadoBusyIds([...estadoPending.current]);
+    }
+  };
+
+  const cerrarSinCodigo = async () => {
+    if (!reassignFor || busy || motivoCierre.trim().length < 5) return;
+    setBusy(true);
+    try {
+      await callCenterService.cerrarSinCodigo(reassignFor.id, motivoCierre.trim());
+      toast({ title: "Pedido cerrado sin código", description: "Quedó como no entregado y el motivo se guardó en el historial." });
+      closeReassign();
+      await loadLists();
+    } catch (error) {
+      notify(error);
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -447,22 +467,18 @@ const CallCenter = () => {
           <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${flujoAbierto ? "rotate-180" : ""}`} />
         </CollapsibleTrigger>
         <CollapsibleContent>
-          <ol className="grid gap-4 px-4 pb-4 sm:grid-cols-2">
-            {[
-              ["Cola", "El repartidor llega aquí al pedir la validación, al llamar, al pedir soporte o al enviar el cierre. Si es un check-in, la fila abre Validación de carga."],
-              ["Validación de carga", "En Por validar pulsa Aprobar y después Aprobar carga. Con eso el repartidor puede iniciar la ruta en la app."],
-              ["Pedidos del día", "Elige Mañana o Tarde, ordena con Subir y Bajar, y pulsa Liberar siguiente. Solo esa parada se ve en la app."],
-              ["Cierre e incidencias", "Cuando envía el cierre, ábrelo en la cola y pulsa Liberar cierre. Si algo falló en una entrega, revísalo en Incidencias."],
-            ].map(([title, text], index) => (
-              <li key={title} className="flex gap-3 text-sm">
-                <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-background text-xs font-semibold text-primary">{index + 1}</span>
-                <span>
-                  <span className="block font-semibold text-foreground">{title}</span>
-                  <span className="mt-0.5 block text-foreground/80">{text}</span>
-                </span>
-              </li>
-            ))}
-          </ol>
+          <FlujoPasos
+            columnas={2}
+            className="px-4 pb-4"
+            numeroClassName="bg-background text-primary"
+            textoClassName="text-foreground/80"
+            pasos={[
+              { titulo: "Cola", texto: "El repartidor llega aquí al pedir la validación, al llamar, al pedir soporte o al enviar el cierre. Si es un check-in, la fila abre Validación de carga." },
+              { titulo: "Validación de carga", texto: "En Por validar pulsa Aprobar y después Aprobar carga. Con eso el repartidor puede iniciar la ruta en la app." },
+              { titulo: "Pedidos del día", texto: "Elige Mañana o Tarde, ordena con Subir y Bajar, y pulsa Liberar siguiente. Solo esa parada se ve en la app." },
+              { titulo: "Cierre e incidencias", texto: "Cuando envía el cierre, ábrelo en la cola y pulsa Liberar cierre. Si algo falló en una entrega, revísalo en Incidencias." },
+            ]}
+          />
         </CollapsibleContent>
       </Collapsible>
       <Tabs value={tab} onValueChange={onTab}>
@@ -550,22 +566,15 @@ const CallCenter = () => {
               </SelectContent>
             </Select>
           </div>
-          <ol className="mb-4 grid gap-3 rounded-lg bg-muted p-4 sm:grid-cols-4">
-            {[
-              ["Horario", "Mañana o Tarde elige cuándo la ve. El botón rosa es el actual. Aplicar a la ruta copia ese horario a toda la ruta."],
-              ["Orden", "Subir y Bajar cambian el lugar de la parada en la ruta."],
-              ["Liberar", "Liberar siguiente es el paso que la muestra en la app. Hasta entonces el repartidor no la ve."],
-              ["Cambiar", "Cambiar sirve para el estado del pedido o para pasarlo a otro repartidor."],
-            ].map(([title, text], index) => (
-              <li key={title} className="flex gap-3 text-sm">
-                <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-background text-xs font-semibold text-foreground">{index + 1}</span>
-                <span>
-                  <span className="block font-semibold text-foreground">{title}</span>
-                  <span className="mt-0.5 block text-muted-foreground">{text}</span>
-                </span>
-              </li>
-            ))}
-          </ol>
+          <FlujoPasos
+            className="mb-4 rounded-lg bg-muted p-4"
+            pasos={[
+              { titulo: "Horario", texto: "Mañana o Tarde elige cuándo la ve. El botón rosa es el actual. Aplicar a la ruta copia ese horario a toda la ruta." },
+              { titulo: "Orden", texto: "Subir y Bajar cambian el lugar de la parada en la ruta." },
+              { titulo: "Liberar", texto: "Liberar siguiente es el paso que la muestra en la app. Hasta entonces el repartidor no la ve." },
+              { titulo: "Cambiar", texto: "Cambiar sirve para el estado del pedido o para pasarlo a otro repartidor." },
+            ]}
+          />
           <div className="rounded-md border">
           <Table>
             <TableHeader>
@@ -924,6 +933,19 @@ const CallCenter = () => {
                     onClick={() => void aplicarEstado()}
                   >
                     Actualizar estado
+                  </Button>
+                </div>
+              )}
+              {!["entregado", "cancelado", "no_entregado"].includes(reassignFor.estado) && (
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">Si el cliente no recibió el paquete, ciérralo aquí. No hace falta el código de la app. El motivo queda en el historial.</p>
+                  <Textarea value={motivoCierre} onChange={(event) => setMotivoCierre(event.target.value)} placeholder="Por qué se cierra sin código" />
+                  <Button
+                    variant="outline"
+                    disabled={busy || motivoCierre.trim().length < 5}
+                    onClick={() => void cerrarSinCodigo()}
+                  >
+                    {busy ? "Cerrando…" : "Cerrar sin código"}
                   </Button>
                 </div>
               )}

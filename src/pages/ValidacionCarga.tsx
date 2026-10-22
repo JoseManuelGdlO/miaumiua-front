@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
+import { vistaDeError } from "@/lib/api-error";
 import { cn } from "@/lib/utils";
 import {
   callCenterService,
@@ -24,7 +25,8 @@ type ExtraDraft = {
 };
 
 function errorText(error: unknown) {
-  return error instanceof Error ? error.message : "No se pudo completar la solicitud";
+  const raw = error instanceof Error ? error.message : "No se pudo completar la solicitud";
+  return vistaDeError(raw);
 }
 
 function formatMoney(value: number) {

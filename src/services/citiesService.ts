@@ -1,5 +1,5 @@
 import { config } from '@/config/environment';
-import { textoDeError } from '@/lib/api-error';
+import { falloHttp } from '@/lib/api-error';
 
 // Horario por día: claves "0" (domingo) a "6" (sábado), horas 0-23, inicio < fin
 export interface HorarioSlot {
@@ -201,7 +201,7 @@ class CitiesService {
       authService.handleAuthError(response);
       
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(textoDeError(errorData));
+      throw falloHttp(response, errorData);
     }
 
     return response.json();

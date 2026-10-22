@@ -23,6 +23,7 @@ import { DraggableRouteCard } from "@/components/DraggableRouteCard";
 import { DraggableOrderCard } from "@/components/DraggableOrderCard";
 import { DraggableAssignedOrderCard } from "@/components/DraggableAssignedOrderCard";
 import { DraggableDriverCard } from "@/components/DraggableDriverCard";
+import { FlujoPasos } from "@/components/FlujoPasos";
 import { DropZone } from "@/components/DropZone";
 import { DndContext, DragEndEvent, DragOverEvent, DragOverlay, DragStartEvent, closestCenter } from '@dnd-kit/core';
 import { MapPin, Truck, Plus, Users, MoreHorizontal, Calendar, Navigation, Sparkles, Loader2, ChevronDown, Download, Package as PackageIcon } from "lucide-react";
@@ -60,7 +61,6 @@ const RouteManagement = () => {
   const [draggedItem, setDraggedItem] = useState<any>(null);
   const [expandedRoutes, setExpandedRoutes] = useState<Set<number>>(new Set());
   const [expandedOrderDetails, setExpandedOrderDetails] = useState<Set<number>>(new Set());
-  const [repartidorParaRuta, setRepartidorParaRuta] = useState("");
 
   // Cargar datos iniciales
   useEffect(() => {
@@ -412,30 +412,10 @@ const RouteManagement = () => {
       return;
     }
 
-    // Verificar que haya repartidores disponibles
-    if (drivers.length === 0) {
-      toast({
-        title: "Error",
-        description: "No hay repartidores disponibles. Debe haber al menos un repartidor disponible para crear una ruta.",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    // Verificar que haya pedidos disponibles
     if (availableOrders.length === 0) {
       toast({
         title: "Error",
         description: "No hay pedidos disponibles. Debe haber al menos un pedido para crear una ruta.",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    if (!repartidorParaRuta) {
-      toast({
-        title: "Elige un repartidor",
-        description: "Asigna un repartidor antes de crear la ruta.",
         variant: "destructive"
       });
       return;
@@ -446,9 +426,8 @@ const RouteManagement = () => {
         nombre_ruta: `Ruta Manual - ${new Date().toLocaleString()}`,
         fecha_ruta: selectedDate,
         fkid_ciudad: parseInt(selectedCity),
-        fkid_repartidor: Number(repartidorParaRuta),
         estado: "planificada",
-        notas: "Ruta creada manualmente"
+        notas: "Ruta creada manualmente. El repartidor se asigna en la tarjeta de la ruta."
       });
       
       if (response.success) {
@@ -908,27 +887,15 @@ const RouteManagement = () => {
           </p>
         </div>
         <div className="flex flex-col items-end gap-2">
-          <p className="text-xs text-muted-foreground">Elige un repartidor antes de crear la ruta.</p>
+          <p className="text-xs text-muted-foreground">El repartidor se asigna en la tarjeta de la ruta.</p>
           <div className="flex gap-2">
-          {canCreate('routes') && (
-            <Select value={repartidorParaRuta || undefined} onValueChange={setRepartidorParaRuta}>
-              <SelectTrigger className="w-56" aria-label="Repartidor de la ruta nueva">
-                <SelectValue placeholder="Elige un repartidor" />
-              </SelectTrigger>
-              <SelectContent>
-                {drivers.map((driver) => (
-                  <SelectItem key={driver.id} value={String(driver.id)}>{driver.nombre_completo}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
           {canCreate('routes') && (
             <Button 
               onClick={createManualRoute} 
               variant="outline" 
               className="gap-2" 
-              disabled={loading || drivers.length === 0 || availableOrders.length === 0 || !repartidorParaRuta}
-              title={drivers.length === 0 ? "No hay repartidores disponibles" : availableOrders.length === 0 ? "No hay pedidos disponibles" : !repartidorParaRuta ? "Elige un repartidor" : ""}
+              disabled={loading || availableOrders.length === 0}
+              title={availableOrders.length === 0 ? "No hay pedidos disponibles" : "Crea la ruta y asigna el repartidor abajo"}
             >
               {loading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -941,6 +908,16 @@ const RouteManagement = () => {
           </div>
         </div>
       </div>
+
+      <FlujoPasos
+        className="rounded-lg bg-muted p-4"
+        pasos={[
+          { titulo: "Ciudad y fecha", texto: "Arriba eliges el día y la ciudad. La tabla de abajo solo muestra ese corte." },
+          { titulo: "Crear la ruta", texto: "Pulsa Nueva ruta manual. La ruta se crea sin repartidor." },
+          { titulo: "Meter pedidos", texto: "Arrastra un pedido disponible y suéltalo sobre la ruta." },
+          { titulo: "Asignar al repartidor", texto: "En la tarjeta de la ruta elige el repartidor, o arrástralo sobre la ruta." },
+        ]}
+      />
 
       {/* Filters */}
       <Card>

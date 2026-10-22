@@ -1,5 +1,5 @@
 import { config } from '../config/environment';
-import { mensajeDeError, textoDeError } from '@/lib/api-error';
+import { falloHttp, mensajeDeError } from '@/lib/api-error';
 import { authService } from './authService';
 
 // Interfaces para Pedidos
@@ -292,7 +292,7 @@ class OrdersService {
 
     if (!response.ok) {
       authService.handleAuthError(response);
-      throw new Error(textoDeError(body));
+      throw falloHttp(response, body);
     }
 
     return body as StripePaymentLinkResponse;
