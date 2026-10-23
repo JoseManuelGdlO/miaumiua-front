@@ -443,8 +443,8 @@ const RouteManagement = () => {
   const createManualRoute = async () => {
     if (!selectedCity || !selectedDate) {
       toast({
-        title: "Error",
-        description: "Selecciona una ciudad y fecha",
+        title: "Planeación",
+        description: "Primero selecciona la ciudad y la fecha.",
         variant: "destructive"
       });
       return;
@@ -473,7 +473,8 @@ const RouteManagement = () => {
           title: "Ruta creada",
           description: "La ruta ha sido creada exitosamente",
         });
-        loadRouteData(); // Recargar datos
+        await loadRouteData();
+        document.getElementById("rutas-creadas")?.scrollIntoView({ behavior: "smooth", block: "start" });
       }
     } catch (error) {
       console.error('Error creando ruta:', error);
@@ -934,8 +935,7 @@ const RouteManagement = () => {
               onClick={createManualRoute} 
               variant="outline" 
               className="gap-2 bg-background"
-              disabled={loading || availableOrders.length === 0}
-              title={availableOrders.length === 0 ? "No hay pedidos disponibles" : "Crea la ruta y asigna el repartidor abajo"}
+              disabled={loading}
             >
               {loading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -1229,7 +1229,7 @@ const RouteManagement = () => {
       )}
       </div>
 
-      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.6fr)_340px]">
+      <div id="rutas-creadas" className="grid scroll-mt-6 items-start gap-6 xl:grid-cols-[minmax(0,1.6fr)_340px]">
       {/* Listado de Rutas Planificadas */}
       {routes.length === 0 ? (
         <Card>
