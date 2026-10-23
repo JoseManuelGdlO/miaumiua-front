@@ -116,6 +116,7 @@ const CallCenter = () => {
   const [repartidorId, setRepartidorId] = useState<string>("all");
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [detail, setDetail] = useState<Solicitud | null>(null);
+  const [codigoAyuda, setCodigoAyuda] = useState("");
   const [nota, setNota] = useState("");
   const [busy, setBusy] = useState(false);
   const [trabajando, setTrabajando] = useState("");
@@ -283,6 +284,7 @@ const CallCenter = () => {
   const dismissDetail = () => {
     detailRequest.current += 1;
     setDetail(null);
+    setCodigoAyuda("");
     setSelectedId(null);
   };
 
@@ -393,6 +395,24 @@ const CallCenter = () => {
     } finally {
       estadoPending.current.delete(pedido.id);
       setEstadoBusyIds([...estadoPending.current]);
+    }
+  };
+
+  const resolverAyuda = async (accion: "ver_codigo" | "aprobar_codigo" | "autorizar_tercero") => {
+    if (!detail) return;
+    setBusy(true);
+    try {
+      const result = await callCenterService.resolverAyuda(detail.id, accion);
+      if (accion === "ver_codigo") setCodigoAyuda(result.codigo || "");
+      else {
+        toast({ title: accion === "aprobar_codigo" ? "Entrega aprobada sin código" : "Entrega a otra persona autorizada" });
+        dismissDetail();
+        await loadLists();
+      }
+    } catch (error) {
+      notify(error);
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -629,6 +649,9 @@ const CallCenter = () => {
                       >
                         Aplicar a la ruta
                       </Button>
+                      {row.horario_preferente ? (
+                        <p className="text-[11px] text-muted-foreground">A partir de las {row.horario_preferente.slice(0, 5)}</p>
+                      ) : null}
                     </div>
                   </TableCell>
                   <TableCell>
@@ -902,6 +925,18 @@ const CallCenter = () => {
               {detail.telefono && <a href={`tel:${detail.telefono}`}>{detail.telefono}</a>}
               <p>{detail.direccion}</p>
               <p>{detail.motivo}</p>
+              {detail.ayuda === "codigo" && (
+                <div className="space-y-2 rounded-md bg-primary/10 p-3">
+                  <p className="text-sm">El repartidor no tiene el código del cliente.</p>
+                  {codigoAyuda ? <p className="text-2xl font-semibold tracking-widest">{codigoAyuda}</p> : (
+                    <Button variant="outline" disabled={busy} onClick={() => void resolverAyuda("ver_codigo")}>Ver código</Button>
+                  )}
+                  <Button disabled={busy} onClick={() => void resolverAyuda("aprobar_codigo")}>Aprobar entrega sin código</Button>
+                </div>
+              )}
+              {detail.pedido_id && (
+                <Button variant="outline" disabled={busy} onClick={() => void resolverAyuda("autorizar_tercero")}>Autorizar entrega a otra persona</Button>
+              )}
               <Textarea value={nota} onChange={(event) => setNota(event.target.value)} placeholder="Nota opcional" />
               <Button disabled={busy} onClick={() => void atender()}>
                 {busy ? <Loader2 className="animate-spin" /> : null}

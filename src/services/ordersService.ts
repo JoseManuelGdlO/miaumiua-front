@@ -79,6 +79,7 @@ export interface CreateOrderData {
   direccion_entrega: string;
   fkid_ciudad: number;
   fecha_entrega_estimada?: string;
+  horario_preferente?: string;
   metodo_pago: 'efectivo' | 'tarjeta' | 'transferencia' | 'pago_movil';
   notas?: string;
   codigo_promocion?: string;

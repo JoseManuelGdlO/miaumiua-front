@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -19,15 +20,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 // import RouteMap from "@/components/RouteMap";
 import AIRouteOptimizer from "@/components/AIRouteOptimizer";
-import { DraggableRouteCard } from "@/components/DraggableRouteCard";
 import { DraggableOrderCard } from "@/components/DraggableOrderCard";
 import { DraggableAssignedOrderCard } from "@/components/DraggableAssignedOrderCard";
 import { DraggableDriverCard } from "@/components/DraggableDriverCard";
 import { FlujoPasos } from "@/components/FlujoPasos";
+import { AgregarPedidosRuta } from "@/components/AgregarPedidosRuta";
 import { DropZone } from "@/components/DropZone";
 import { DndContext, DragEndEvent, DragOverEvent, DragOverlay, DragStartEvent, closestCenter } from '@dnd-kit/core';
-import { MapPin, Truck, Plus, Users, MoreHorizontal, Calendar, Navigation, Sparkles, Loader2, ChevronDown, Download, Package as PackageIcon } from "lucide-react";
+import { MapPin, Truck, Plus, Users, MoreHorizontal, Calendar, Navigation, Sparkles, Loader2, ChevronDown, Download, Trash2, X } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import jsPDF from "jspdf";
 import { routesService, Route, AvailableDriver, AvailableOrder } from "@/services/routesService";
 import { usersService } from "@/services/usersService";
@@ -47,10 +49,38 @@ interface AvailableDriverSimple {
 import { useToast } from "@/hooks/use-toast";
 import { canCreate, canEdit, canDelete, canViewStats } from "@/utils/permissions";
 
+function claseEstadoRuta(estado?: string) {
+  if (estado === "en_progreso") return "border-transparent bg-sky-100 text-sky-800";
+  if (estado === "completada") return "border-transparent bg-emerald-100 text-emerald-800";
+  if (estado === "cancelada") return "border-transparent bg-red-100 text-red-800";
+  return "border-transparent bg-violet-100 text-violet-800";
+}
+
+function claseEstadoEntrega(estado?: string) {
+  if (estado === "entregado") return "border-transparent bg-emerald-100 text-emerald-800";
+  if (estado === "en_camino") return "border-transparent bg-sky-100 text-sky-800";
+  if (estado === "fallido") return "border-transparent bg-red-100 text-red-800";
+  return "border-transparent bg-amber-100 text-amber-800";
+}
+
+function tituloEnCrear(route: { nombre_ruta: string; fecha_ruta: string }) {
+  const fecha = new Date(route.fecha_ruta).toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  if (route.nombre_ruta.startsWith("Ruta Manual")) return `Ruta Manual - ${fecha}`;
+  return route.nombre_ruta;
+}
+
+function textoEstadoEntrega(estado?: string) {
+  if (estado === "entregado") return "Entregado";
+  if (estado === "en_camino") return "En camino";
+  if (estado === "fallido") return "Fallido";
+  return "Pendiente";
+}
+
 const RouteManagement = () => {
   const { toast } = useToast();
-  const [selectedCity, setSelectedCity] = useState("");
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [searchParams] = useSearchParams();
+  const [selectedCity, setSelectedCity] = useState(searchParams.get("ciudad") || "");
+  const [selectedDate, setSelectedDate] = useState(searchParams.get("fecha") || new Date().toISOString().split("T")[0]);
   const [routes, setRoutes] = useState<Route[]>([]);
   const [drivers, setDrivers] = useState<(Driver | AvailableDriverSimple)[]>([]);
   const [availableOrders, setAvailableOrders] = useState<AvailableOrder[]>([]);
@@ -59,8 +89,10 @@ const RouteManagement = () => {
   const [stats, setStats] = useState<any>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [draggedItem, setDraggedItem] = useState<any>(null);
-  const [expandedRoutes, setExpandedRoutes] = useState<Set<number>>(new Set());
+  const [collapsedRoutes, setCollapsedRoutes] = useState<Set<number>>(new Set());
   const [expandedOrderDetails, setExpandedOrderDetails] = useState<Set<number>>(new Set());
+  const [rutaModal, setRutaModal] = useState<number | null>(null);
+  const [asignando, setAsignando] = useState(false);
 
   // Cargar datos iniciales
   useEffect(() => {
@@ -73,6 +105,12 @@ const RouteManagement = () => {
       loadRouteData();
     }
   }, [selectedCity, selectedDate]);
+
+  useEffect(() => {
+    const ruta = searchParams.get("ruta");
+    if (!ruta || !routes.some((route) => String(route.id) === ruta)) return;
+    document.getElementById(`ruta-${ruta}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [routes, searchParams]);
 
   const loadInitialData = async () => {
     try {
@@ -649,15 +687,17 @@ const RouteManagement = () => {
   };
 
   const toggleRouteExpanded = (routeId: number) => {
-    setExpandedRoutes(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(routeId)) {
-        newSet.delete(routeId);
-      } else {
-        newSet.add(routeId);
-      }
-      return newSet;
+    setCollapsedRoutes(prev => {
+      const next = new Set(prev);
+      if (next.has(routeId)) next.delete(routeId);
+      else next.add(routeId);
+      return next;
     });
+  };
+
+  const guardar = async () => {
+    await loadRouteDataSilently();
+    toast({ title: "Cambios guardados", description: "La ruta quedó actualizada." });
   };
 
   const downloadRoutePDF = (route: Route) => {
@@ -893,7 +933,7 @@ const RouteManagement = () => {
             <Button 
               onClick={createManualRoute} 
               variant="outline" 
-              className="gap-2" 
+              className="gap-2 bg-background"
               disabled={loading || availableOrders.length === 0}
               title={availableOrders.length === 0 ? "No hay pedidos disponibles" : "Crea la ruta y asigna el repartidor abajo"}
             >
@@ -905,6 +945,12 @@ const RouteManagement = () => {
             Nueva Ruta Manual
           </Button>
           )}
+          <Button
+            className="gap-2"
+            onClick={() => document.getElementById("optimizacion-rutas")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+          >
+            Ruta inteligente
+          </Button>
           </div>
         </div>
       </div>
@@ -914,7 +960,7 @@ const RouteManagement = () => {
         pasos={[
           { titulo: "Ciudad y fecha", texto: "Arriba eliges el día y la ciudad. La tabla de abajo solo muestra ese corte." },
           { titulo: "Crear la ruta", texto: "Pulsa Nueva ruta manual. La ruta se crea sin repartidor." },
-          { titulo: "Meter pedidos", texto: "Arrastra un pedido disponible y suéltalo sobre la ruta." },
+          { titulo: "Meter pedidos", texto: "Pulsa Asignar en el pedido, o Agregar pedidos en el detalle de la ruta. También puedes arrastrarlo." },
           { titulo: "Asignar al repartidor", texto: "En la tarjeta de la ruta elige el repartidor, o arrástralo sobre la ruta." },
         ]}
       />
@@ -951,126 +997,19 @@ const RouteManagement = () => {
                 onChange={(e) => setSelectedDate(e.target.value)}
               />
             </div>
-            <div className="flex items-end">
-              <div className="text-sm text-muted-foreground">
-                <div><strong>{availableOrders.length}</strong> pedidos disponibles</div>
-                <div><strong>{routes.length}</strong> rutas creadas</div>
-                {stats && (
-                  <div><strong>{stats.total_pedidos}</strong> total pedidos</div>
-                )}
-              </div>
+            <div className="flex items-end gap-6 text-sm">
+              <div><span className="block text-lg font-semibold text-primary">{availableOrders.length}</span><span className="text-muted-foreground">pedidos disponibles</span></div>
+              <div><span className="block text-lg font-semibold text-primary">{routes.length}</span><span className="text-muted-foreground">rutas creadas</span></div>
+              {stats ? <div><span className="block text-lg font-semibold text-primary">{stats.total_pedidos}</span><span className="text-muted-foreground">total pedidos</span></div> : null}
             </div>
           </div>
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 items-stretch gap-6 lg:grid-cols-3">
-        <div className="flex h-full">
-          <Card className="flex h-full w-full flex-col">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <MapPin className="h-5 w-5" />
-                Pedidos Disponibles ({availableOrders.length})
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="max-h-96 flex-1 space-y-3 overflow-y-auto">
-              <DropZone id="unassigned-orders" className="min-h-[200px]">
-                {loading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-6 w-6 animate-spin" />
-                      </div>
-                ) : (
-                  <div className="space-y-2">
-                    {availableOrders.map(order => (
-                      <DraggableOrderCard key={order.id} order={order} />
-                    ))}
-                    {availableOrders.length === 0 && (
-                      <div className="text-center text-muted-foreground py-8">
-                        No hay pedidos disponibles
-                  </div>
-                    )}
-                </div>
-                )}
-              </DropZone>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="flex h-full">
-          <Card className="flex h-full w-full flex-col">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Navigation className="h-5 w-5" />
-                Rutas Creadas ({routes.length})
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="max-h-96 flex-1 space-y-4 overflow-y-auto">
-              {loading ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin" />
-                      </div>
-              ) : (
-                <div className="space-y-3">
-                  {routes.map(route => (
-                    <DropZone key={route.id} id={`route-${route.id}`}>
-                      <DraggableRouteCard
-                        route={route}
-                        onAssignDriver={assignDriverToRoute}
-                        onUnassignDriver={unassignDriverFromRoute}
-                        onDeleteRoute={deleteRoute}
-                        onAddOrder={addOrderToRoute}
-                        drivers={drivers}
-                        canEdit={canEdit('routes')}
-                        canDelete={canDelete('routes')}
-                      />
-                    </DropZone>
-                  ))}
-                  {routes.length === 0 && (
-                    <div className="text-center text-muted-foreground py-8">
-                      No hay rutas creadas
-                    </div>
-                  )}
-                    </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="flex h-full">
-          <Card className="flex h-full w-full flex-col">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Truck className="h-5 w-5" />
-                Repartidores Disponibles
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="max-h-96 flex-1 space-y-3 overflow-y-auto">
-              {loading ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin" />
-                </div>
-              ) : (
-                <div className="space-y-2">
-              {drivers.map(driver => (
-                    <DraggableDriverCard key={driver.id} driver={driver} />
-                  ))}
-                  {drivers.length === 0 && (
-                    <div className="text-center text-muted-foreground py-8">
-                      No hay repartidores disponibles
-                    </div>
-                  )}
-                  </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-
       {/* Mapa de Mapbox desactivado */}
 
-      {/* AI Optimizer - Movido hasta abajo */}
-      {selectedCity && availableOrders.length > 0 && (
-        <div className="mt-6">
+      <div id="optimizacion-rutas" className="mt-6 scroll-mt-6">
+      {selectedCity && availableOrders.length > 0 ? (
           <AIRouteOptimizer
             orders={availableOrders.map(order => {
               // Priorizar ciudad del pedido, luego del cliente, luego del array cities
@@ -1285,89 +1224,98 @@ const RouteManagement = () => {
               }
             }}
           />
-        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">Elige ciudad y fecha con pedidos disponibles para usar la ruta inteligente.</p>
       )}
+      </div>
 
+      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.6fr)_340px]">
       {/* Listado de Rutas Planificadas */}
-      {routes.length > 0 && (
-        <Card className="mt-6">
+      {routes.length === 0 ? (
+        <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Navigation className="h-5 w-5" />
-              Rutas Planificadas - Detalle de Entregas
+              <Navigation className="h-5 w-5 text-primary" />
+              Rutas creadas (0)
             </CardTitle>
-            <CardDescription>
-              Listado completo de rutas planificadas con detalles de cada dirección a entregar y repartidor asignado
-            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="py-8 text-center text-sm text-muted-foreground">No hay rutas para esta fecha. Créala con Nueva ruta manual.</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Navigation className="h-5 w-5 text-primary" />
+                Rutas creadas ({routes.length})
+              </CardTitle>
+              <CardDescription>
+                Los cambios se guardan al momento
+              </CardDescription>
+            </div>
+            <Button onClick={() => void guardar()}>Guardar</Button>
           </CardHeader>
           <CardContent>
             <div className="space-y-6">
               {routes.map((route) => (
-                <div key={route.id} className="border rounded-lg p-4 space-y-4">
+                <DropZone key={route.id} id={`route-${route.id}`}>
+                <div id={`ruta-${route.id}`} className="space-y-4 rounded-lg border p-4">
                   {/* Información de la Ruta */}
-                  <div className="flex items-start justify-between">
-                    <div className="space-y-1 flex-1">
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge className="rounded-md bg-primary px-3 py-1 text-sm text-primary-foreground">{tituloEnCrear(route)}</Badge>
+                      <Badge className={claseEstadoRuta(route.estado)}>
+                        {route.estado === 'planificada' ? 'Planificada' :
+                         route.estado === 'en_progreso' ? 'En progreso' :
+                         route.estado === 'completada' ? 'Completada' : 'Cancelada'}
+                      </Badge>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <Select value={route.repartidor ? String(route.repartidor.id) : undefined} onValueChange={(value) => void assignDriverToRoute(String(route.id), Number(value), true)}>
+                        <SelectTrigger className="h-9 w-56"><SelectValue placeholder="Elige un repartidor" /></SelectTrigger>
+                        <SelectContent>
+                          {(route.repartidor && !drivers.some((driver) => driver.id === route.repartidor?.id) ? [route.repartidor, ...drivers] : drivers).map((driver) => (
+                            <SelectItem key={driver.id} value={String(driver.id)}>{driver.nombre_completo}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       <div className="flex items-center gap-2">
-                        <h3 className="text-lg font-semibold">{route.nombre_ruta}</h3>
-                        <Badge variant={
-                          route.estado === 'planificada' ? 'secondary' :
-                          route.estado === 'en_progreso' ? 'default' :
-                          route.estado === 'completada' ? 'default' : 'destructive'
-                        }>
-                          {route.estado === 'planificada' ? 'Planificada' :
-                           route.estado === 'en_progreso' ? 'En Progreso' :
-                           route.estado === 'completada' ? 'Completada' : 'Cancelada'}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                        <span className="flex items-center gap-1">
-                          <Calendar className="h-4 w-4" />
-                          {new Date(route.fecha_ruta).toLocaleDateString('es-ES', {
-                            weekday: 'long',
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric'
-                          })}
-                        </span>
-                        {route.repartidor && (
-                          <span className="flex items-center gap-1">
-                            <Truck className="h-4 w-4" />
-                            Repartidor: <strong className="text-foreground">{route.repartidor.nombre_completo}</strong>
-                            {route.repartidor.codigo_repartidor && (
-                              <span className="text-xs">({route.repartidor.codigo_repartidor})</span>
-                            )}
-                          </span>
-                        )}
-                        {route.total_pedidos > 0 && (
-                          <span className="flex items-center gap-1">
-                            <MapPin className="h-4 w-4" />
-                            {route.total_pedidos} {route.total_pedidos === 1 ? 'pedido' : 'pedidos'}
-                          </span>
+                        <Button size="sm" className="gap-2" onClick={() => setRutaModal(route.id)}>
+                          <Plus className="h-4 w-4" />
+                          Agregar pedidos
+                        </Button>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button variant="outline" size="icon" onClick={() => downloadRoutePDF(route)} aria-label="Descargar PDF">
+                              <Download className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Descargar PDF</TooltipContent>
+                        </Tooltip>
+                        {canDelete("routes") && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button variant="outline" size="icon" className="text-destructive" onClick={() => void deleteRoute(String(route.id))} aria-label="Eliminar ruta">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Eliminar ruta</TooltipContent>
+                          </Tooltip>
                         )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      {!route.repartidor && (
-                        <Badge variant="outline" className="text-warning">
-                          Sin repartidor asignado
-                        </Badge>
-                      )}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => downloadRoutePDF(route)}
-                        className="gap-2"
-                      >
-                        <Download className="h-4 w-4" />
-                        PDF
-                      </Button>
-                    </div>
+                    <p className={collapsedRoutes.has(route.id) ? "text-lg font-semibold text-foreground" : "text-sm text-muted-foreground"}>
+                      <MapPin className="mr-1 inline h-4 w-4" />
+                      {route.pedidos?.length || route.total_pedidos || 0} {(route.pedidos?.length || route.total_pedidos || 0) === 1 ? "pedido" : "pedidos"}
+                    </p>
                   </div>
 
                   {/* Listado de Pedidos/Entregas agrupados por fecha de envío estimada */}
                   {route.pedidos && route.pedidos.length > 0 ? (
                     <Collapsible
-                      open={expandedRoutes.has(route.id)}
+                      open={!collapsedRoutes.has(route.id)}
                       onOpenChange={() => toggleRouteExpanded(route.id)}
                     >
                       <CollapsibleTrigger asChild>
@@ -1380,7 +1328,7 @@ const RouteManagement = () => {
                           </h4>
                           <ChevronDown
                             className={`h-4 w-4 transition-transform ${
-                              expandedRoutes.has(route.id) ? 'transform rotate-180' : ''
+                              collapsedRoutes.has(route.id) ? '' : 'transform rotate-180'
                             }`}
                           />
                         </Button>
@@ -1445,8 +1393,9 @@ const RouteManagement = () => {
                                     <div className="flex-1 min-w-0">
                                       {routeOrder.pedido ? (
                                         <>
-                                          <div className="font-medium text-sm">
-                                            Pedido: {routeOrder.pedido.numero_pedido}
+                                          <div className="flex flex-wrap items-center gap-2">
+                                            <span className="font-medium text-sm">Pedido: {routeOrder.pedido.numero_pedido}</span>
+                                            <Badge className={claseEstadoEntrega(routeOrder.estado_entrega)}>{textoEstadoEntrega(routeOrder.estado_entrega)}</Badge>
                                           </div>
                                           <div className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
                                             <MapPin className="h-3 w-3 flex-shrink-0" />
@@ -1460,26 +1409,13 @@ const RouteManagement = () => {
                                               )}
                                             </div>
                                           )}
-                                          {routeOrder.pedido.total && (
-                                            <div className="text-xs font-medium mt-1">
-                                              Total: ${routeOrder.pedido.total.toLocaleString('es-CO')}
-                                            </div>
-                                          )}
                                           {/* Indicador de productos y paquetes */}
                                           {(routeOrder.pedido.productos?.length > 0 || routeOrder.pedido.paquetes?.length > 0) && (
-                                            <div className="text-xs text-muted-foreground mt-1 flex items-center gap-2">
-                                              {routeOrder.pedido.productos?.length > 0 && (
-                                                <span className="flex items-center gap-1">
-                                                  <PackageIcon className="h-3 w-3" />
-                                                  {routeOrder.pedido.productos.length} {routeOrder.pedido.productos.length === 1 ? 'producto' : 'productos'}
-                                                </span>
-                                              )}
-                                              {routeOrder.pedido.paquetes?.length > 0 && (
-                                                <span className="flex items-center gap-1">
-                                                  <PackageIcon className="h-3 w-3" />
-                                                  {routeOrder.pedido.paquetes.length} {routeOrder.pedido.paquetes.length === 1 ? 'paquete' : 'paquetes'}
-                                                </span>
-                                              )}
+                                            <div className="text-xs text-foreground mt-1">
+                                              {[
+                                                ...(routeOrder.pedido.productos || []).map((linea: { producto?: { nombre?: string }; cantidad?: number }) => `${linea.producto?.nombre || "Producto"} x${linea.cantidad}`),
+                                                ...(routeOrder.pedido.paquetes || []).map((linea: { paquete?: { nombre?: string }; cantidad?: number }) => `${linea.paquete?.nombre || "Paquete"} x${linea.cantidad}`),
+                                              ].join(" · ")}
                                             </div>
                                           )}
                                         </>
@@ -1489,18 +1425,22 @@ const RouteManagement = () => {
                                         </div>
                                       )}
                                     </div>
-                                    <Badge
-                                      variant={
-                                        routeOrder.estado_entrega === 'entregado' ? 'default' :
-                                        routeOrder.estado_entrega === 'en_camino' ? 'default' :
-                                        routeOrder.estado_entrega === 'fallido' ? 'destructive' : 'secondary'
-                                      }
-                                      className="text-xs"
-                                    >
-                                      {routeOrder.estado_entrega === 'pendiente' ? 'Pendiente' :
-                                       routeOrder.estado_entrega === 'en_camino' ? 'En Camino' :
-                                       routeOrder.estado_entrega === 'entregado' ? 'Entregado' : 'Fallido'}
-                                    </Badge>
+                                    <div className="flex items-start gap-2">
+                                      <div className="text-right">
+                                        <div className="text-sm font-semibold">${Number(routeOrder.pedido?.total || 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                                        <div className="text-xs text-muted-foreground">
+                                          {((routeOrder.pedido?.productos?.length || 0) + (routeOrder.pedido?.paquetes?.length || 0)) || 0} producto{((routeOrder.pedido?.productos?.length || 0) + (routeOrder.pedido?.paquetes?.length || 0)) === 1 ? "" : "s"}
+                                        </div>
+                                      </div>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button type="button" variant="outline" size="icon" className="h-8 w-8 text-destructive" aria-label="Quitar de la ruta" onClick={() => void removeOrderFromRoute(routeOrder.fkid_pedido, String(route.id), true)}>
+                                            <X className="h-4 w-4" />
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>Quitar de la ruta</TooltipContent>
+                                      </Tooltip>
+                                    </div>
                                   </div>
 
                                   {/* Detalle del Pedido - Productos y Paquetes */}
@@ -1519,20 +1459,14 @@ const RouteManagement = () => {
                                         });
                                       }}
                                     >
-                                      <CollapsibleTrigger asChild>
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          className="h-auto py-1 px-2 text-xs w-full justify-between"
-                                        >
-                                          <span className="text-xs">Ver detalle del pedido</span>
-                                          <ChevronDown
-                                            className={`h-3 w-3 transition-transform ${
-                                              expandedOrderDetails.has(routeOrder.id) ? 'transform rotate-180' : ''
-                                            }`}
-                                          />
-                                        </Button>
-                                      </CollapsibleTrigger>
+                                      <div className="flex flex-wrap items-center justify-end gap-1">
+                                        <CollapsibleTrigger asChild>
+                                          <Button variant="ghost" size="sm" className="h-auto px-2 text-xs text-primary">
+                                            Ver detalle del pedido
+                                            <ChevronDown className={`h-3 w-3 transition-transform ${expandedOrderDetails.has(routeOrder.id) ? "rotate-180" : ""}`} />
+                                          </Button>
+                                        </CollapsibleTrigger>
+                                      </div>
                                       <CollapsibleContent className="mt-2 space-y-2">
                                         {/* Productos */}
                                         {routeOrder.pedido.productos && routeOrder.pedido.productos.length > 0 ? (
@@ -1693,13 +1627,123 @@ const RouteManagement = () => {
                     </div>
                   )}
                 </div>
+                </DropZone>
               ))}
             </div>
           </CardContent>
         </Card>
       )}
+      <div className="space-y-6 xl:sticky xl:top-4">
+        <div className="flex h-full">
+          <Card className="flex h-full w-full flex-col">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <MapPin className="h-5 w-5" />
+                Pedidos Disponibles ({availableOrders.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="max-h-96 flex-1 space-y-3 overflow-y-auto">
+              <DropZone id="unassigned-orders" className="min-h-[200px]">
+                {loading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                      </div>
+                ) : (
+                  <div className="space-y-2">
+                    {availableOrders.map(order => (
+                      <DraggableOrderCard
+                        key={order.id}
+                        order={order}
+                        onAssign={() => {
+                          if (routes.length === 0) {
+                            toast({ title: "Planeación", description: "Crea una ruta antes de asignar el pedido.", variant: "destructive" });
+                            return;
+                          }
+                          setRutaModal(routes[0].id);
+                        }}
+                      />
+                    ))}
+                    {availableOrders.length === 0 && (
+                      <div className="text-center text-muted-foreground py-8">
+                        No hay pedidos disponibles
+                  </div>
+                    )}
+                </div>
+                )}
+              </DropZone>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="flex h-full">
+          <Card className="flex h-full w-full flex-col">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Truck className="h-5 w-5" />
+                Repartidores Disponibles
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="max-h-96 flex-1 space-y-3 overflow-y-auto">
+              {loading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin" />
+                </div>
+              ) : (
+                <div className="space-y-2">
+              {drivers.map(driver => (
+                    <DraggableDriverCard key={driver.id} driver={driver} />
+                  ))}
+                  {drivers.length === 0 && (
+                    <div className="text-center text-muted-foreground py-8">
+                      No hay repartidores disponibles
+                    </div>
+                  )}
+                  </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      </div>
+
       </div>
       
+      <AgregarPedidosRuta
+        open={rutaModal != null}
+        rutaNombre={routes.find((route) => route.id === rutaModal)?.nombre_ruta || ""}
+        ciudad={cities.find((city) => String(city.id) === selectedCity)?.nombre || ""}
+        orders={availableOrders}
+        rutas={routes.map((route) => ({ id: route.id, nombre: route.nombre_ruta }))}
+        rutaId={rutaModal || undefined}
+        onRuta={setRutaModal}
+        busy={asignando}
+        onOpenChange={(open) => { if (!open) setRutaModal(null); }}
+        onConfirm={(ids) => {
+          const route = routes.find((item) => item.id === rutaModal);
+          if (!route) return;
+          setAsignando(true);
+          const maximo = route.pedidos?.length ? Math.max(...route.pedidos.map((stop) => Number(stop.orden_entrega) || 0)) : 0;
+          void routesService.assignOrdersToRoute(route.id, {
+            pedidos: ids.map((id, index) => {
+              const order = availableOrders.find((item) => item.id === id);
+              return {
+                fkid_pedido: id,
+                orden_entrega: maximo + index + 1,
+                lat: order?.cliente?.lat || 0,
+                lng: order?.cliente?.lng || 0,
+                notas_entrega: "Asignado desde planeación de rutas",
+              };
+            }),
+          }).then(() => {
+            toast({ title: "Pedidos agregados a la ruta" });
+            setRutaModal(null);
+            loadRouteDataSilently();
+          }).catch((error) => {
+            toast({ title: "Planeación", description: error instanceof Error ? error.message : "No se pudieron agregar", variant: "destructive" });
+          }).finally(() => setAsignando(false));
+        }}
+      />
        <DragOverlay>
          {activeId && draggedItem ? (
            <div className="opacity-50">

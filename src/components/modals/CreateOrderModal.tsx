@@ -66,6 +66,7 @@ const EMPTY_ORDER_FORM = {
   direccion_entrega: "",
   fkid_ciudad: "",
   fecha_entrega_estimada: "",
+  horario_preferente: "",
   metodo_pago: "",
   notas: "",
   codigo_promocion: ""
@@ -396,6 +397,7 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
          direccion_entrega: formData.direccion_entrega,
          fkid_ciudad: parseInt(formData.fkid_ciudad),
          fecha_entrega_estimada: formData.fecha_entrega_estimada || undefined,
+         horario_preferente: formData.horario_preferente || undefined,
          metodo_pago: formData.metodo_pago as any,
          notas: formData.notas || undefined,
          codigo_promocion: formData.codigo_promocion || undefined,
@@ -619,6 +621,16 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
                     onChange={(e) => handleInputChange('fecha_entrega_estimada', e.target.value)}
                   />
                 </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="horario_preferente">A partir de las</Label>
+                <Input
+                  id="horario_preferente"
+                  type="time"
+                  value={formData.horario_preferente}
+                  onChange={(e) => handleInputChange('horario_preferente', e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">Antes de las 14:00 es Mañana. Desde las 14:00 es Tarde.</p>
               </div>
             </CardContent>
           </Card>

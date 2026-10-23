@@ -154,6 +154,7 @@ export interface AvailableOrder {
   estado: string;
   fecha_pedido?: string;
   fecha_entrega?: string;
+  horario_preferente?: string | null;
   cliente?: {
     id: number;
     nombre_completo: string;

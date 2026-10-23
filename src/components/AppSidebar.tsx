@@ -71,7 +71,15 @@ const menuSections: { label: string | null; items: MenuItem[] }[] = [
       { title: "Clientes", url: "/dashboard/customers", icon: UserCheck, permission: "customers" },
       { title: "Repartidores", url: "/dashboard/drivers", icon: Truck, permission: "drivers" },
       { title: "Pedidos", url: "/dashboard/orders", icon: Package2, permission: "orders" },
-      { title: "Planeación de Rutas", url: "/dashboard/routes", icon: Route, permission: "routes" },
+      {
+        title: "Planeación de Rutas",
+        icon: Route,
+        permission: "routes",
+        submenu: [
+          { title: "Crear ruta", url: "/dashboard/routes", permission: "routes" },
+          { title: "Rutas planificadas", url: "/dashboard/routes/planificadas", permission: "routes" },
+        ],
+      },
       { title: "Call Center", url: "/dashboard/call-center", icon: Headphones, permission: "callCenter" },
       { title: "Promociones", url: "/dashboard/promotions", icon: Tag, permission: "promotions" },
     ],

@@ -25,6 +25,7 @@ function ValidacionRedirect() {
   return <Navigate to={`/dashboard/call-center?tab=validacion&solicitud=${id ?? ""}`} replace />;
 }
 import RouteManagement from "./pages/RouteManagement";
+import RutasPlanificadas from "./pages/RutasPlanificadas";
 import Agents from "./pages/Agents";
 import Conversations from "./pages/Conversations";
 import ConversationDetail from "./pages/ConversationDetail";
@@ -77,6 +78,7 @@ const App = () => (
             <Route path="orders" element={<Orders />} />
             <Route path="call-center/validacion/:id" element={<ValidacionRedirect />} />
             <Route path="call-center" element={<CallCenter />} />
+            <Route path="routes/planificadas" element={<RutasPlanificadas />} />
             <Route path="routes" element={<RouteManagement />} />
             <Route path="promotions" element={<Promotions />} />
             <Route path="inventory" element={<Inventarios />} />

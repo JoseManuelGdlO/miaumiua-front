@@ -149,6 +149,8 @@ const ValidacionCarga = ({ solicitudId: solicitudIdProp, embedded = false, onBac
   }, [query, modalOpen]);
 
   const pedidos = (solicitud?.cargas || []).filter((linea) => !linea.es_extra);
+  const sumaCargada = pedidos.reduce((sum, linea) => sum + (Number(linea.cantidad) || 0), 0)
+    + extras.reduce((sum, linea) => sum + (Number(linea.cantidad) || 0), 0);
   const dinero = Number(solicitud?.dinero_esperado) || 0;
   const extrasCambiaron = firmaExtras(extras) !== firmaExtras(draftsFrom(solicitud?.cargas));
   const aprobarBloqueado = busy || extrasCambiaron || esperaReenvio;
@@ -282,11 +284,44 @@ const ValidacionCarga = ({ solicitudId: solicitudIdProp, embedded = false, onBac
         <div>
           <h1 className="text-2xl font-semibold">Validación de carga</h1>
           <p className="text-sm text-muted-foreground">
-            {solicitud.repartidor?.nombre_completo || "Repartidor"} · Dinero esperado ${formatMoney(dinero)} · {esperaReenvio ? "Esperando el reenvío del repartidor" : "En espera de aprobación"}
+            {solicitud.repartidor?.nombre_completo || "Repartidor"} · Dinero esperado ${formatMoney(dinero)} · Suma de productos cargados: {sumaCargada} · {esperaReenvio ? "Esperando el reenvío del repartidor" : "En espera de aprobación"}
           </p>
         </div>
         <Button variant="outline" onClick={leave}>Volver</Button>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Histórico de pedidos</CardTitle>
+          <CardDescription>Pedidos que arman la carga de hoy</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {(solicitud.pedidos || []).length === 0 ? (
+            <p className="text-sm text-muted-foreground">Esta carga no tiene pedidos en la ruta de hoy.</p>
+          ) : (
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Pedido</TableHead>
+                    <TableHead>Cliente</TableHead>
+                    <TableHead>Productos</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(solicitud.pedidos || []).map((row) => (
+                    <TableRow key={row.numero_pedido}>
+                      <TableCell>{row.numero_pedido}</TableCell>
+                      <TableCell>{row.cliente || "—"}</TableCell>
+                      <TableCell>{row.productos.map((linea) => `${linea.nombre} × ${linea.cantidad}`).join(", ") || "—"}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

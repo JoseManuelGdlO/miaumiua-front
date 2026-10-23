@@ -32,6 +32,7 @@ export type Solicitud = {
   efectivo_a_depositar?: number;
   comprobante_url?: string | null;
   motivo: string | null;
+  ayuda?: string | null;
   pedido_id: number | null;
   numero_pedido: string | null;
   repartidor: RepartidorRef;
@@ -42,6 +43,7 @@ export type Solicitud = {
   espera_reenvio?: boolean;
   ya_validada?: boolean;
   cargas?: CargaLinea[];
+  pedidos?: { numero_pedido: string; cliente: string; productos: { nombre: string; cantidad: number }[] }[];
   cliente?: string | null;
   telefono?: string | null;
   direccion?: string | null;
@@ -59,6 +61,7 @@ export type PedidoDia = {
   direccion: string | null;
   notas?: string | null;
   franja?: "manana" | "tarde";
+  horario_preferente?: string | null;
   orden_entrega?: number | null;
   repartidor: RepartidorRef;
   ciudad_id: number | null;
@@ -135,6 +138,10 @@ export const callCenterService = {
     body: JSON.stringify({ lineas }),
   }),
   buscarInventario: (q: string) => request<InventarioHit[]>(`/call-center/inventario?q=${encodeURIComponent(q)}`),
+  resolverAyuda: (id: number, accion: "ver_codigo" | "aprobar_codigo" | "autorizar_tercero") => request<{ codigo?: string; aprobado?: boolean; autorizado?: boolean }>(`/call-center/solicitudes/${id}/ayuda`, {
+    method: "POST",
+    body: JSON.stringify({ accion }),
+  }),
   atender: (id: number, nota?: string) => request<{ atendida: boolean }>(`/call-center/solicitudes/${id}/atender`, {
     method: 'POST',
     body: JSON.stringify(nota ? { nota } : {}),
