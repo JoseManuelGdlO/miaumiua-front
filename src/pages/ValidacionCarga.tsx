@@ -293,7 +293,7 @@ const ValidacionCarga = ({ solicitudId: solicitudIdProp, embedded = false, onBac
       <Card>
         <CardHeader>
           <CardTitle>Histórico de pedidos</CardTitle>
-          <CardDescription>Pedidos que arman la carga de hoy</CardDescription>
+          <CardDescription>{sumaCargada} productos · Dinero esperado ${formatMoney(dinero)}</CardDescription>
         </CardHeader>
         <CardContent>
           {(solicitud.pedidos || []).length === 0 ? (
@@ -425,7 +425,7 @@ const ValidacionCarga = ({ solicitudId: solicitudIdProp, embedded = false, onBac
               {accion === "guardar" ? <Loader2 className="animate-spin" /> : null}
               {accion === "guardar" ? "Guardando…" : "Guardar extra"}
             </Button>
-            <Button disabled={aprobarBloqueado} onClick={() => void aprobar()}>
+            <Button size="lg" className="h-12 px-8 text-base" disabled={aprobarBloqueado} onClick={() => void aprobar()}>
               {accion === "aprobar" ? <Loader2 className="animate-spin" /> : null}
               {accion === "aprobar" ? "Aprobando…" : "Aprobar carga"}
             </Button>

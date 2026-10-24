@@ -65,6 +65,7 @@ export type PedidoDia = {
   orden_entrega?: number | null;
   repartidor: RepartidorRef;
   ciudad_id: number | null;
+  total: number;
   comprobante_url: string | null;
 };
 
@@ -138,9 +139,9 @@ export const callCenterService = {
     body: JSON.stringify({ lineas }),
   }),
   buscarInventario: (q: string) => request<InventarioHit[]>(`/call-center/inventario?q=${encodeURIComponent(q)}`),
-  resolverAyuda: (id: number, accion: "ver_codigo" | "aprobar_codigo" | "autorizar_tercero") => request<{ codigo?: string; aprobado?: boolean; autorizado?: boolean }>(`/call-center/solicitudes/${id}/ayuda`, {
+  resolverAyuda: (id: number, accion: "ver_codigo" | "aprobar_codigo" | "autorizar_tercero", receptor?: string) => request<{ codigo?: string; aprobado?: boolean; autorizado?: boolean }>(`/call-center/solicitudes/${id}/ayuda`, {
     method: "POST",
-    body: JSON.stringify({ accion }),
+    body: JSON.stringify({ accion, ...(receptor ? { receptor } : {}) }),
   }),
   atender: (id: number, nota?: string) => request<{ atendida: boolean }>(`/call-center/solicitudes/${id}/atender`, {
     method: 'POST',
@@ -158,6 +159,11 @@ export const callCenterService = {
   }),
   liberarCierre: (id: number) => request<{ cerrada: boolean; cerrado_por_nombre: string | null }>(`/call-center/solicitudes/${id}/liberar-cierre`, {
     method: 'POST',
+  }),
+  listContactos: () => request<{ personas: { id: number; nombre: string; telefono: string; repartidor_ids: number[] }[]; repartidores: { id: number; nombre: string }[] }>('/call-center/contactos'),
+  guardarContacto: (usuarioId: number, telefono: string, repartidorIds: number[]) => request<{ guardado: boolean }>(`/call-center/contactos/${usuarioId}`, {
+    method: 'PUT',
+    body: JSON.stringify({ telefono, repartidor_ids: repartidorIds }),
   }),
   reagendar: (id: number, fecha: string, motivo: string) => request<{ id: number }>(`/call-center/pedidos/${id}/reagendar`, {
     method: 'POST',
