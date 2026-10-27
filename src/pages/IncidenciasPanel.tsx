@@ -29,8 +29,25 @@ export default function IncidenciasPanel({ pedidos, solicitudes, superAdmin, onC
   const [fecha, setFecha] = useState("");
   const [motivo, setMotivo] = useState("");
   const [busy, setBusy] = useState(false);
-  const problemas = solicitudes.filter((row) => row.tipo === "llamada_cliente" || row.tipo === "soporte");
-  const noEntregados = pedidos.filter((row) => row.estado === "no_entregado" || row.estado_entrega === "fallido");
+  const [q, setQ] = useState("");
+  const [estado, setEstado] = useState("todos");
+  const [dia, setDia] = useState("");
+  const texto = q.trim().toLowerCase();
+  const problemas = solicitudes.filter((row) => {
+    if (row.tipo !== "llamada_cliente" && row.tipo !== "soporte") return false;
+    if (estado === "no_entregado") return false;
+    if (estado === "soporte" && row.tipo !== "soporte") return false;
+    if (estado === "llamada" && row.tipo !== "llamada_cliente") return false;
+    if (dia && !String(row.fecha || "").includes(dia)) return false;
+    if (texto && !`${row.repartidor?.nombre_completo || ""} ${row.motivo || ""}`.toLowerCase().includes(texto)) return false;
+    return true;
+  });
+  const noEntregados = pedidos.filter((row) => {
+    if (row.estado !== "no_entregado" && row.estado_entrega !== "fallido") return false;
+    if (estado === "soporte" || estado === "llamada") return false;
+    if (texto && !`${row.repartidor?.nombre_completo || ""} ${row.numero_pedido || ""} ${row.cliente || ""}`.toLowerCase().includes(texto)) return false;
+    return true;
+  });
   const modificados = pedidos.filter((row) => row.modificado);
 
   const reagendar = async () => {
@@ -56,15 +73,28 @@ export default function IncidenciasPanel({ pedidos, solicitudes, superAdmin, onC
           <CardDescription>Llamadas, soporte y pedidos no entregados</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
+          <div className="flex flex-wrap gap-3">
+            <Input aria-label="Filtrar por repartidor" value={q} onChange={(event) => setQ(event.target.value)} placeholder="Filtrar por repartidor" className="w-56" />
+            <Input aria-label="Filtrar por fecha" type="date" value={dia} onChange={(event) => setDia(event.target.value)} className="w-56" />
+            <Select value={estado} onValueChange={setEstado}>
+              <SelectTrigger className="w-56" aria-label="Filtrar por estado"><SelectValue placeholder="Estado" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos</SelectItem>
+                <SelectItem value="soporte">Soporte</SelectItem>
+                <SelectItem value="llamada">Llamada</SelectItem>
+                <SelectItem value="no_entregado">No entregado</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           {problemas.length === 0 && noEntregados.length === 0 ? (
             <p className="text-muted-foreground">No hay problemas abiertos</p>
           ) : null}
           {problemas.map((row) => (
             <div key={row.id} className="flex items-start justify-between gap-3 rounded-md bg-muted px-3 py-2">
               <button type="button" className="text-left" onClick={() => { if (row.repartidor?.id) onAbrir(row.repartidor.id); }}>
-                <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">{row.tipo === "llamada_cliente" ? "Llamada" : "Soporte"}</span>
+                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${row.tipo === "llamada_cliente" ? "bg-sky-100 text-sky-900" : "bg-amber-100 text-amber-900"}`}>{row.tipo === "llamada_cliente" ? "Llamada" : "Incidencia"}</span>
                 <span className="mt-1 block font-semibold">{row.repartidor?.nombre_completo || "Sin repartidor"} · {row.numero_pedido || "Sin pedido"}</span>
-                <span className="mt-1 block text-muted-foreground">{row.motivo || "Sin motivo"}</span>
+                <span className="mt-1 block text-muted-foreground">{row.fecha} {row.hora} · {row.motivo || "Sin motivo"}</span>
               </button>
               {row.pedido_id ? <Button variant="outline" size="sm" onClick={() => { setPedidoId(row.pedido_id); setFecha(fechaMexico(1)); }}>Reagendar</Button> : null}
             </div>

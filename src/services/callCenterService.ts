@@ -38,6 +38,7 @@ export type Solicitud = {
   repartidor: RepartidorRef;
   fecha: string;
   hora: string;
+  espera_desde?: string;
   prioridad: string;
   dinero_esperado?: number;
   espera_reenvio?: boolean;
@@ -159,6 +160,10 @@ export const callCenterService = {
   }),
   liberarCierre: (id: number) => request<{ cerrada: boolean; cerrado_por_nombre: string | null }>(`/call-center/solicitudes/${id}/liberar-cierre`, {
     method: 'POST',
+  }),
+  responder: (repartidorId: number, texto: string) => request<{ enviado: boolean }>(`/call-center/repartidores/${repartidorId}/mensaje`, {
+    method: 'POST',
+    body: JSON.stringify({ texto }),
   }),
   cierreDirecto: (repartidorId: number) => request<{ cerrada: boolean; cerrado_por_nombre: string | null }>(`/call-center/repartidores/${repartidorId}/cierre-directo`, {
     method: 'POST',

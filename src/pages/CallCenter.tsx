@@ -200,6 +200,88 @@ function ActividadExtra({
   );
 }
 
+function Cuenta({ desde, minutos }: { desde: string; minutos: number }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const left = Math.max(0, Math.ceil((Date.parse(desde) + minutos * 60 * 1000 - now) / 1000));
+  const mm = Math.floor(left / 60);
+  const ss = String(left % 60).padStart(2, "0");
+  return (
+    <p className="text-center">
+      <span className="block text-sm text-muted-foreground">{left === 0 ? "Tiempo de atención cumplido" : "Tiempo de atención"}</span>
+      <span className="text-5xl font-black tabular-nums text-primary">{mm}:{ss}</span>
+    </p>
+  );
+}
+
+const CHIP: Record<string, string> = {
+  Llamada: "bg-sky-100 text-sky-900",
+  Incidencia: "bg-amber-100 text-amber-900",
+  Autorización: "bg-emerald-100 text-emerald-900",
+  "No completado": "bg-red-100 text-red-800",
+  Reagendado: "bg-primary/10 text-primary",
+};
+
+function chipDe(solicitud: Solicitud) {
+  if (solicitud.ayuda === "tercero" || solicitud.ayuda === "codigo") return "Autorización";
+  if (solicitud.tipo === "llamada_cliente") return "Llamada";
+  return "Incidencia";
+}
+
+function HistorialHoy({ aprobaciones, fallos }: { aprobaciones: Solicitud[]; fallos: PedidoDia[] }) {
+  const [abierto, setAbierto] = useState(false);
+  const eventos = [
+    ...aprobaciones.map((solicitud) => ({
+      id: `s-${solicitud.id}`,
+      pedido: solicitud.numero_pedido || "",
+      cuando: `${solicitud.fecha || ""} ${solicitud.hora || ""}`.trim(),
+      chip: chipDe(solicitud),
+      texto: solicitud.motivo || solicitud.numero_pedido || "Aviso",
+    })),
+    ...fallos.map((pedido) => ({
+      id: `p-${pedido.id}`,
+      pedido: pedido.numero_pedido || "",
+      cuando: "Hoy",
+      chip: String(pedido.notas || "").includes("Volvió a la cola") ? "Reagendado" : "No completado",
+      texto: `${pedido.numero_pedido} · ${pedido.cliente || "Sin cliente"}`,
+    })),
+  ];
+  let tono = 0;
+  let anterior = "";
+  const filas = eventos.map((evento) => {
+    if (evento.pedido !== anterior) {
+      if (anterior) tono = 1 - tono;
+      anterior = evento.pedido;
+    }
+    return { ...evento, claro: tono === 0 };
+  });
+  const hayMas = filas.length > 2;
+  const visibles = abierto ? filas : filas.slice(0, 2);
+  if (filas.length === 0) return <p>Sin incidencias hoy.</p>;
+  return (
+    <div className="space-y-2">
+      <div className="relative">
+        {visibles.map((evento) => (
+          <p key={evento.id} className={`flex flex-wrap items-center gap-2 rounded-md px-2 py-2 ${evento.claro ? "bg-background" : "bg-muted"}`}>
+            <span className="text-sm text-muted-foreground">{evento.cuando}</span>
+            <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${CHIP[evento.chip] || CHIP.Incidencia}`}>{evento.chip}</span>
+            <span>{evento.texto}</span>
+          </p>
+        ))}
+        {hayMas && !abierto ? <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-white to-transparent" /> : null}
+      </div>
+      {hayMas ? (
+        <button type="button" className="text-sm font-semibold text-primary" onClick={() => setAbierto((valor) => !valor)}>
+          {abierto ? "Ver menos" : `Ver las ${filas.length}`}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 function MonitorRepartidores({
   pedidos,
   solicitudes,
@@ -242,6 +324,7 @@ function MonitorRepartidores({
   const [q, setQ] = useState("");
   const [ciudad, setCiudad] = useState("all");
   const [elegido, setElegido] = useState<number | null>(abiertoId);
+  const [mensaje, setMensaje] = useState("");
   const [agentes, setAgentes] = useState<{ nombre: string; telefono: string; repartidor_ids: number[]; numeros?: { telefono: string; repartidor_ids: number[] }[] }[]>([]);
   const nombres = new Map<number, string>();
   for (const pedido of pedidos) {
@@ -359,11 +442,14 @@ function MonitorRepartidores({
                   {row.paradas.length > 0 ? (
                     <div className="space-y-2">
                       <p className="font-semibold">Ruta de hoy</p>
-                      {row.paradas.map((pedido) => (
-                        <p key={pedido.id}>
+                      {row.paradas.map((pedido) => {
+                        const esActual = row.actual?.id === pedido.id;
+                        return (
+                        <p key={pedido.id} className={esActual ? "font-semibold" : "text-muted-foreground"}>
                           {pedido.numero_pedido} · {pedido.cliente || "Sin cliente"} · <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-semibold">{ENTREGA[pedido.estado_entrega] || pedido.estado}</span>
                         </p>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : null}
                   {row.aprobaciones.map((solicitud) => (
@@ -373,6 +459,7 @@ function MonitorRepartidores({
                         {solicitud.numero_pedido ? ` · ${solicitud.numero_pedido}` : ""}
                       </p>
                       {solicitud.motivo ? <p>{solicitud.motivo}</p> : null}
+                      {solicitud.espera_desde ? <Cuenta desde={solicitud.espera_desde} minutos={solicitud.ayuda ? 15 : 5} /> : null}
                       {solicitud.ayuda === "codigo" ? (
                         codigoDe === solicitud.id && codigo ? <p className="text-2xl font-semibold tracking-widest">{codigo}</p> : (
                           <Button variant="outline" disabled={busy} onClick={() => onAyuda(solicitud.id, "ver_codigo")}>Ver código</Button>
@@ -440,9 +527,16 @@ function MonitorRepartidores({
                 </div>
                 <div className="space-y-2 rounded-xl bg-white p-4">
                   <p className="flex items-center gap-2 font-semibold"><AlertTriangle className="h-5 w-5 text-primary" />Incidencias del repartidor</p>
-                  {row.fallos.length === 0 ? <p>Sin pedidos no entregados hoy.</p> : row.fallos.map((pedido) => (
-                    <p key={pedido.id}>{pedido.numero_pedido} · {pedido.cliente || "Sin cliente"}</p>
-                  ))}
+                  <HistorialHoy aprobaciones={row.aprobaciones} fallos={row.fallos} />
+                </div>
+                <div className="space-y-2 rounded-xl bg-white p-4">
+                  <label className="block font-semibold" htmlFor={`respuesta-${id}`}>Escribir al repartidor</label>
+                  <Textarea id={`respuesta-${id}`} value={mensaje} onChange={(event) => setMensaje(event.target.value)} placeholder="NIP, autorización o una indicación" />
+                  <Button disabled={busy || mensaje.trim().length < 2} onClick={() => {
+                    const texto = mensaje.trim();
+                    void callCenterService.responder(id, texto).then(() => setMensaje("")).catch(onError);
+                  }}>Enviar</Button>
+                  <p className="text-sm text-muted-foreground">Llega si la app del repartidor está abierta.</p>
                 </div>
                 <ActividadExtra
                   driverId={id}
@@ -1093,7 +1187,7 @@ const CallCenter = () => {
             <TabsTrigger value="checkin" className="rounded-none border-b-4 border-transparent bg-transparent px-4 py-3 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"><TabAviso n={solicitudes.filter((row) => row.tipo === "check_in").length}><ClipboardCheck className="h-4 w-4" /> Validación de cargas</TabAviso></TabsTrigger>
             <TabsTrigger value="soporte" className="rounded-none border-b-4 border-transparent bg-transparent px-4 py-3 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"><TabAviso n={solicitudes.filter((row) => row.tipo === "soporte").length}><LifeBuoy className="h-4 w-4" /> Soporte en Ruta</TabAviso></TabsTrigger>
             <TabsTrigger value="checkout" className="rounded-none border-b-4 border-transparent bg-transparent px-4 py-3 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"><TabAviso n={solicitudes.filter((row) => row.tipo === "cierre_dia").length}><LogOut className="h-4 w-4" /> Check-out (Cierres)</TabAviso></TabsTrigger>
-            <TabsTrigger value="incidencias" className="rounded-none border-b-4 border-transparent bg-transparent px-4 py-3 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"><TabAviso n={pedidos.filter((row) => row.estado === "no_entregado" || row.estado_entrega === "fallido").length}><AlertTriangle className="h-4 w-4" /> Incidencias</TabAviso></TabsTrigger>
+            <TabsTrigger value="incidencias" className="rounded-none border-b-4 border-transparent bg-transparent px-4 py-3 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"><TabAviso n={solicitudes.filter((row) => row.tipo === "soporte" || row.tipo === "llamada_cliente").length + pedidos.filter((row) => row.estado === "no_entregado" || row.estado_entrega === "fallido").length}><AlertTriangle className="h-4 w-4" /> Incidencias</TabAviso></TabsTrigger>
           </TabsList>
         </div>
         <div className="rounded-xl bg-white p-6 shadow-sm">
@@ -1111,7 +1205,7 @@ const CallCenter = () => {
               <TableRow>
                 <TableHead>Tipo</TableHead>
                 <TableHead>Repartidor</TableHead>
-                <TableHead>Hora</TableHead>
+                <TableHead>Fecha</TableHead>
                 <TableHead>Pedido</TableHead>
               </TableRow>
             </TableHeader>
@@ -1124,7 +1218,7 @@ const CallCenter = () => {
                 </TableRow>
               ) : solicitudes.filter((row) => row.tipo !== "cierre_dia").map((row) => {
                 const fresco = avisosCola.some((aviso) => aviso.id === String(row.id));
-                const aqui = row.tipo === "llamada_cliente";
+                const aqui = row.tipo === "llamada_cliente" || row.tipo === "check_in";
                 return (
                 <TableRow
                   key={row.id}
@@ -1146,7 +1240,7 @@ const CallCenter = () => {
                     </span>
                   </TableCell>
                   <TableCell>{row.repartidor?.nombre_completo || "—"}</TableCell>
-                  <TableCell>{row.hora}</TableCell>
+                  <TableCell>{row.fecha} · {row.hora}</TableCell>
                   <TableCell>{row.numero_pedido || "—"}</TableCell>
                 </TableRow>
                 );
