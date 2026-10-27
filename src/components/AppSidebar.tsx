@@ -1,4 +1,4 @@
-import { useRef, useState, type ComponentType } from "react";
+import { useEffect, useRef, useState, type ComponentType } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
   Users,
@@ -47,6 +47,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { authService } from "@/services/authService";
+import { callCenterService } from "@/services/callCenterService";
 import miauMiauLogo from "/lovable-uploads/9f868334-2970-46f8-a783-9ab32ecc297b.png";
 
 type MenuItem = {
@@ -131,7 +132,29 @@ const menuSections: { label: string | null; items: MenuItem[] }[] = [
 
 export function AppSidebar() {
   const { state } = useSidebar();
-  const avisosCola = useNotificationStream()?.avisos.length ?? 0;
+  const avisosCola = useNotificationStream()?.avisos ?? [];
+  const [pendientesCall, setPendientesCall] = useState(0);
+  useEffect(() => {
+    if (!hasSectionAccess("callCenter")) return;
+    let vivo = true;
+    const cargar = () => {
+      Promise.all([
+        callCenterService.listSolicitudes(),
+        callCenterService.listPedidos({}),
+      ]).then(([solicitudes, pedidos]) => {
+        if (!vivo) return;
+        const avisos = solicitudes.filter((row) => row.tipo === "check_in" || row.tipo === "llamada_cliente" || row.tipo === "soporte" || row.tipo === "cierre_dia").length;
+        const incidencias = pedidos.filter((row) => row.estado === "no_entregado" || row.estado_entrega === "fallido").length;
+        setPendientesCall(avisos + incidencias);
+      }).catch(() => {});
+    };
+    cargar();
+    const timer = window.setInterval(cargar, 20000);
+    return () => {
+      vivo = false;
+      window.clearInterval(timer);
+    };
+  }, []);
   const location = useLocation();
   const currentPath = location.pathname;
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
@@ -150,6 +173,12 @@ export function AppSidebar() {
     flyoutTimer.current = window.setTimeout(() => setFlyout(null), 150);
   };
 
+  const destino = (url?: string) => {
+    if (!url) return "/dashboard";
+    const aviso = avisosCola.find((item) => item.ruta.startsWith(url));
+    return aviso?.ruta || url;
+  };
+  const tieneAviso = (url?: string) => Boolean(url && (avisosCola.some((item) => item.ruta.startsWith(url)) || (url === "/dashboard/call-center" && pendientesCall > 0)));
   const isActive = (path: string) => currentPath === path;
   const isGroupActive = (submenu: any[]) => 
     submenu.some(item => currentPath === item.url);
@@ -299,10 +328,11 @@ export function AppSidebar() {
                                   <SidebarMenuSubItem key={subItem.title}>
                                     <SidebarMenuSubButton asChild>
                                       <NavLink
-                                        to={subItem.url}
+                                        to={destino(subItem.url)}
                                         className={getNavClasses(isActive(subItem.url))}
                                       >
                                         <span className="text-sm">{subItem.title}</span>
+                                        {tieneAviso(subItem.url) ? <span className="ml-auto h-2 w-2 rounded-full bg-red-500" aria-label="Hay un aviso" /> : null}
                                       </NavLink>
                                     </SidebarMenuSubButton>
                                   </SidebarMenuSubItem>
@@ -316,15 +346,15 @@ export function AppSidebar() {
                     ) : (
                       <SidebarMenuButton asChild tooltip={item.title}>
                         <NavLink
-                          to={item.url ?? "/dashboard"}
+                          to={destino(item.url)}
                           className={`relative ${isCollapsed ? "mx-auto justify-center" : ""} ${getNavClasses(isActive(item.url ?? ""))}`}
                         >
                           <item.icon className="h-4 w-4 flex-shrink-0" />
                           {!isCollapsed && <span>{item.title}</span>}
-                          {item.url === "/dashboard/call-center" && avisosCola > 0 && (
+                          {tieneAviso(item.url) && (
                             <span
                               className={`${isCollapsed ? "absolute right-1.5 top-1.5" : "ml-auto"} h-2 w-2 shrink-0 rounded-full bg-red-500`}
-                              aria-label="Hay avisos en Call Center"
+                              aria-label="Hay avisos"
                             />
                           )}
                         </NavLink>

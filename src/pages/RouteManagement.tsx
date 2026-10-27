@@ -1467,7 +1467,7 @@ const RouteManagement = () => {
                                           </Button>
                                         </CollapsibleTrigger>
                                       </div>
-                                      <CollapsibleContent className="mt-2 space-y-2">
+                                      <CollapsibleContent className="mt-2 space-y-2 rounded-xl bg-pink-50 p-3">
                                         {/* Productos */}
                                         {routeOrder.pedido.productos && routeOrder.pedido.productos.length > 0 ? (
                                           <div className="bg-background/50 rounded-md p-2 border">

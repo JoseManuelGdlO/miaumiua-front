@@ -3,7 +3,7 @@ import { falloHttp } from '@/lib/api-error';
 import { authService } from '@/services/authService';
 import { pedidosPath, repartidoresPath } from '@/lib/call-center-rules.mjs';
 
-export type RepartidorRef = { id: number; nombre_completo: string } | null;
+export type RepartidorRef = { id: number; nombre_completo: string; telefono?: string | null } | null;
 
 export type CargaLinea = {
   id?: number | null;
@@ -160,10 +160,13 @@ export const callCenterService = {
   liberarCierre: (id: number) => request<{ cerrada: boolean; cerrado_por_nombre: string | null }>(`/call-center/solicitudes/${id}/liberar-cierre`, {
     method: 'POST',
   }),
-  listContactos: () => request<{ personas: { id: number; nombre: string; telefono: string; repartidor_ids: number[] }[]; repartidores: { id: number; nombre: string }[] }>('/call-center/contactos'),
-  guardarContacto: (usuarioId: number, telefono: string, repartidorIds: number[]) => request<{ guardado: boolean }>(`/call-center/contactos/${usuarioId}`, {
+  cierreDirecto: (repartidorId: number) => request<{ cerrada: boolean; cerrado_por_nombre: string | null }>(`/call-center/repartidores/${repartidorId}/cierre-directo`, {
+    method: 'POST',
+  }),
+  listContactos: () => request<{ personas: { id: number; nombre: string; telefono: string; repartidor_ids: number[]; numeros?: { telefono: string; repartidor_ids: number[] }[] }[]; repartidores: { id: number; nombre: string }[] }>('/call-center/contactos'),
+  guardarContacto: (usuarioId: number, numeros: { telefono: string; repartidor_ids: number[] }[]) => request<{ guardado: boolean }>(`/call-center/contactos/${usuarioId}`, {
     method: 'PUT',
-    body: JSON.stringify({ telefono, repartidor_ids: repartidorIds }),
+    body: JSON.stringify({ numeros }),
   }),
   reagendar: (id: number, fecha: string, motivo: string) => request<{ id: number }>(`/call-center/pedidos/${id}/reagendar`, {
     method: 'POST',

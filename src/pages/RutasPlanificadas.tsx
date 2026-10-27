@@ -64,6 +64,7 @@ const RutasPlanificadas = () => {
   const [cities, setCities] = useState<{ id: number; nombre: string }[]>([]);
   const [cityId, setCityId] = useState("all");
   const [date, setDate] = useState("");
+  const [abierto, setAbierto] = useState<number | null>(null);
   const [routes, setRoutes] = useState<Route[]>([]);
   const [drivers, setDrivers] = useState<{ id: number; nombre_completo: string; telefono?: string; tipo_vehiculo?: string }[]>([]);
 
@@ -205,15 +206,22 @@ const RutasPlanificadas = () => {
                         <div>
                           <p className="text-sm font-semibold">{stop.pedido?.cliente?.nombre_completo || "Cliente"} <span className="font-normal text-muted-foreground">{stop.pedido?.numero_pedido}</span></p>
                           {stop.pedido?.cliente?.telefono ? <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground"><Phone className="h-3 w-3" /> {stop.pedido.cliente.telefono}</p> : null}
-                          <p className="mt-1 flex items-center gap-1 text-sm text-muted-foreground"><MapPin className="h-3 w-3 shrink-0" /> {stop.pedido?.direccion_entrega || "Sin dirección"}</p>
                         </div>
                         <div className="text-right">
                           <p className="text-sm font-semibold">{dinero(Number(stop.pedido?.total || 0))}</p>
                           <Badge className={`mt-1 ${claseEstadoEntrega(stop.estado_entrega)}`}>{estadoDe(stop)}</Badge>
+                          <button type="button" className="mt-2 block text-sm text-primary" onClick={() => setAbierto((actual) => actual === stop.id ? null : stop.id)}>
+                            {abierto === stop.id ? "Ocultar detalle" : "Ver detalle"}
+                          </button>
                         </div>
                       </div>
-                      {productosDe(stop) ? <p className="mt-2 text-xs text-muted-foreground">{productosDe(stop)}</p> : null}
-                      {stop.notas_entrega ? <p className="mt-1 text-xs text-muted-foreground">Notas: {stop.notas_entrega}</p> : null}
+                      {abierto === stop.id ? (
+                        <div className="mt-3 space-y-2 rounded-xl bg-pink-50 p-3">
+                          <p className="flex items-center gap-1"><MapPin className="h-4 w-4 shrink-0" /> {stop.pedido?.direccion_entrega || "Sin dirección"}</p>
+                          {productosDe(stop) ? <p>{productosDe(stop)}</p> : null}
+                          {stop.notas_entrega ? <p>Notas: {stop.notas_entrega}</p> : null}
+                        </div>
+                      ) : null}
                     </div>
                   </article>
                 ))}

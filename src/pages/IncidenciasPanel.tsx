@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, CalendarClock, Pencil, Phone, Users } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { callCenterService, type PedidoDia, type Solicitud } from "@/services/callCenterService";
-import { authService } from "@/services/authService";
 
 function fechaMexico(delta: number) {
   const hoy = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Mexico_City" }).format(new Date());
@@ -30,7 +30,7 @@ export default function IncidenciasPanel({ pedidos, solicitudes, superAdmin, onC
   const [motivo, setMotivo] = useState("");
   const [busy, setBusy] = useState(false);
   const problemas = solicitudes.filter((row) => row.tipo === "llamada_cliente" || row.tipo === "soporte");
-  const noEntregados = pedidos.filter((row) => row.estado === "no_entregado");
+  const noEntregados = pedidos.filter((row) => row.estado === "no_entregado" || row.estado_entrega === "fallido");
   const modificados = pedidos.filter((row) => row.modificado);
 
   const reagendar = async () => {
@@ -117,7 +117,7 @@ export default function IncidenciasPanel({ pedidos, solicitudes, superAdmin, onC
         </CardContent>
       </Card>
 
-      <ContactosIncidencia onError={onError} />
+      <ContactosIncidencia superAdmin={superAdmin} onError={onError} />
     </div>
   );
 }
@@ -126,21 +126,30 @@ function iniciales(nombre: string) {
   return nombre.split(/\s+/).filter(Boolean).slice(0, 2).map((parte) => parte[0]?.toUpperCase() || "").join("");
 }
 
-function ContactosIncidencia({ onError }: { onError: (error: unknown) => void }) {
-  const yo = Number(authService.getUserData()?.id) || null;
-  const [personas, setPersonas] = useState<{ id: number; nombre: string; telefono: string; repartidor_ids: number[] }[]>([]);
+type LineaContacto = { telefono: string; repartidor_ids: number[] };
+type PersonaContacto = { id: number; nombre: string; telefono: string; repartidor_ids: number[]; numeros: LineaContacto[] };
+
+function conNumeros(persona: { id: number; nombre: string; telefono: string; repartidor_ids: number[]; numeros?: LineaContacto[] }): PersonaContacto {
+  const numeros = persona.numeros?.length ? persona.numeros : [{ telefono: persona.telefono, repartidor_ids: persona.repartidor_ids }];
+  return { ...persona, numeros, repartidor_ids: numeros.flatMap((linea) => linea.repartidor_ids) };
+}
+
+function ContactosIncidencia({ superAdmin, onError }: { superAdmin: boolean; onError: (error: unknown) => void }) {
+  const [personas, setPersonas] = useState<PersonaContacto[]>([]);
   const [repartidores, setRepartidores] = useState<{ id: number; nombre: string }[]>([]);
   const [guardando, setGuardando] = useState(false);
-  const [listo, setListo] = useState(false);
+  const [quitarDe, setQuitarDe] = useState<{ personaId: number; index: number; repartidorId: number; nombre: string } | null>(null);
+  const [listoId, setListoId] = useState<number | null>(null);
   const [busqueda, setBusqueda] = useState("");
   const [filtro, setFiltro] = useState<"todos" | "asignados" | "sin">("todos");
+  const [editando, setEditando] = useState<string | null>(null);
   const [picker, setPicker] = useState("");
 
   useEffect(() => {
     let vivo = true;
     callCenterService.listContactos().then((data) => {
       if (!vivo) return;
-      setPersonas(data.personas);
+      setPersonas(data.personas.map(conNumeros));
       setRepartidores(data.repartidores);
     }).catch(onError);
     return () => { vivo = false; };
@@ -154,19 +163,22 @@ function ContactosIncidencia({ onError }: { onError: (error: unknown) => void })
     return true;
   });
   const ocupados = new Set(personas.flatMap((persona) => persona.repartidor_ids));
-  const mia = personas.find((persona) => persona.id === yo);
+  const [personaEdit, lineaEdit] = (editando || "").split(":").map(Number);
+  const base = personas.find((persona) => persona.id === personaEdit);
+  const lineaBase = base?.numeros[lineaEdit];
   const sugeridos = repartidores.filter((repartidor) => {
-    if (!mia || mia.repartidor_ids.includes(repartidor.id)) return false;
+    if (!lineaBase || lineaBase.repartidor_ids.includes(repartidor.id)) return false;
     if (picker.trim() && !repartidor.nombre.toLowerCase().includes(picker.trim().toLowerCase())) return false;
     return true;
   }).slice(0, 8);
 
-  const guardar = async () => {
-    if (!mia) return;
+  const guardar = async (personaId: number) => {
+    const persona = personas.find((row) => row.id === personaId);
+    if (!persona) return;
     setGuardando(true);
     try {
-      await callCenterService.guardarContacto(mia.id, mia.telefono, mia.repartidor_ids);
-      setListo(true);
+      await callCenterService.guardarContacto(persona.id, persona.numeros);
+      setListoId(persona.id);
     } catch (error) {
       onError(error);
     } finally {
@@ -174,19 +186,30 @@ function ContactosIncidencia({ onError }: { onError: (error: unknown) => void })
     }
   };
 
-  const quitar = (repartidorId: number) => {
-    setListo(false);
-    setPersonas((lista) => lista.map((persona) => persona.id === yo
-      ? { ...persona, repartidor_ids: persona.repartidor_ids.filter((id) => id !== repartidorId) }
-      : persona));
+  const cambiarLinea = (personaId: number, index: number, patch: Partial<LineaContacto>) => {
+    setListoId(null);
+    setPersonas((lista) => lista.map((persona) => {
+      if (persona.id !== personaId) return persona;
+      const numeros = persona.numeros.map((linea, i) => i === index ? { ...linea, ...patch } : linea);
+      if (index >= persona.numeros.length) numeros.push({ telefono: "", repartidor_ids: [], ...patch });
+      return { ...persona, numeros, telefono: numeros[0]?.telefono || "", repartidor_ids: numeros.flatMap((linea) => linea.repartidor_ids) };
+    }));
   };
 
-  const agregar = (repartidorId: number) => {
-    setListo(false);
+  const quitar = (personaId: number, index: number, repartidorId: number) => {
+    const persona = personas.find((row) => row.id === personaId);
+    cambiarLinea(personaId, index, { repartidor_ids: (persona?.numeros[index]?.repartidor_ids || []).filter((id) => id !== repartidorId) });
+  };
+
+  const agregar = (personaId: number, index: number, repartidorId: number) => {
     setPicker("");
     setPersonas((lista) => lista.map((persona) => {
-      if (persona.id === yo) return { ...persona, repartidor_ids: [...persona.repartidor_ids, repartidorId] };
-      return { ...persona, repartidor_ids: persona.repartidor_ids.filter((id) => id !== repartidorId) };
+      const numeros = persona.numeros.map((linea, i) => {
+        const ids = linea.repartidor_ids.filter((id) => id !== repartidorId);
+        if (persona.id === personaId && i === index) return { ...linea, repartidor_ids: [...ids, repartidorId] };
+        return { ...linea, repartidor_ids: ids };
+      });
+      return { ...persona, numeros, repartidor_ids: numeros.flatMap((linea) => linea.repartidor_ids) };
     }));
   };
 
@@ -194,7 +217,7 @@ function ContactosIncidencia({ onError }: { onError: (error: unknown) => void })
     <section className="space-y-4 rounded-xl bg-muted/40 p-4" data-ui>
       <div>
         <h2 className="flex items-center gap-2 text-2xl font-semibold tracking-tight"><Users className="h-5 w-5 text-primary" />Contactos de Soporte y Asignación</h2>
-        <p className="mt-1">Asigna repartidores a cada agente de Call Center. Un repartidor solo puede tener un agente asignado a la vez.</p>
+        <p className="mt-1">Un agente puede tener varios números. Cada número lleva su grupo de repartidores. Solo un super admin los cambia.</p>
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <Input aria-label="Buscar agente" value={busqueda} placeholder="Buscar agente" onChange={(event) => setBusqueda(event.target.value)} className="max-w-sm" />
@@ -210,59 +233,84 @@ function ContactosIncidencia({ onError }: { onError: (error: unknown) => void })
       </div>
       {visibles.length === 0 ? <p>Nadie coincide con esa búsqueda.</p> : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {visibles.map((persona, index) => {
-            const propio = persona.id === yo;
-            return (
+          {visibles.map((persona, index) => (
               <div key={persona.id} className={`space-y-3 rounded-xl p-4 ${index % 2 === 0 ? "bg-white" : "bg-pink-50"}`}>
                 <div className="flex items-center gap-3">
                   <span className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">{iniciales(persona.nombre)}</span>
                   <div>
                     <p className="text-lg font-semibold">{persona.nombre}</p>
-                    <p className="text-sm text-muted-foreground">{propio ? "Tu contacto" : "Solo lectura"}</p>
+                    <p className="text-sm text-muted-foreground">{superAdmin ? "Editable" : "Solo lectura"}</p>
                   </div>
                 </div>
-                <label className="block" htmlFor={`tel-${persona.id}`}>Teléfono de contacto directo</label>
-                <div className="relative">
-                  <Phone className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    id={`tel-${persona.id}`}
-                    value={persona.telefono}
-                    readOnly={!propio}
-                    className="pl-9"
-                    onChange={(event) => {
-                      setListo(false);
-                      setPersonas((lista) => lista.map((row) => row.id === persona.id ? { ...row, telefono: event.target.value } : row));
-                    }}
-                  />
-                </div>
-                <p>Repartidores asignados · {persona.repartidor_ids.length}</p>
-                <div className="flex flex-wrap gap-2">
-                  {persona.repartidor_ids.length === 0 ? <p className="text-sm text-muted-foreground">Ningún repartidor</p> : persona.repartidor_ids.map((id) => (
-                    <span key={id} className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-sm font-medium text-primary">
-                      {repartidores.find((row) => row.id === id)?.nombre || `Repartidor ${id}`}
-                      {propio ? <button type="button" aria-label={`Quitar ${repartidores.find((row) => row.id === id)?.nombre || id}`} onClick={() => quitar(id)}>×</button> : null}
-                    </span>
-                  ))}
-                </div>
-                {propio ? (
-                  <>
-                    <Input aria-label="Buscar repartidor" value={picker} placeholder="Buscar y asignar repartidor" onChange={(event) => setPicker(event.target.value)} />
-                    {picker.trim() ? sugeridos.map((repartidor) => (
-                      <button key={repartidor.id} type="button" className="block w-full bg-background px-3 py-2 text-left" onClick={() => agregar(repartidor.id)}>
-                        {repartidor.nombre}{ocupados.has(repartidor.id) ? " · pasa a tu lista" : ""}
-                      </button>
-                    )) : null}
-                    <Button disabled={guardando || persona.telefono.trim().length < 8} onClick={() => void guardar()}>
+                {persona.numeros.map((linea, lineaIndex) => (
+                  <div key={`${persona.id}-${lineaIndex}`} className="space-y-2">
+                    <label className="block" htmlFor={`tel-${persona.id}-${lineaIndex}`}>Teléfono {lineaIndex + 1}</label>
+                    <div className="relative">
+                      <Phone className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        id={`tel-${persona.id}-${lineaIndex}`}
+                        value={linea.telefono}
+                        readOnly={!superAdmin}
+                        className="pl-9"
+                        onChange={(event) => cambiarLinea(persona.id, lineaIndex, { telefono: event.target.value })}
+                      />
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {linea.repartidor_ids.length === 0 ? <p className="text-sm text-muted-foreground">Ningún repartidor</p> : linea.repartidor_ids.map((id) => (
+                        <span key={id} className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-sm font-medium text-primary">
+                          {repartidores.find((row) => row.id === id)?.nombre || `Repartidor ${id}`}
+                          {superAdmin ? <button type="button" aria-label={`Quitar ${repartidores.find((row) => row.id === id)?.nombre || id}`} onClick={() => setQuitarDe({ personaId: persona.id, index: lineaIndex, repartidorId: id, nombre: repartidores.find((row) => row.id === id)?.nombre || `Repartidor ${id}` })}>×</button> : null}
+                        </span>
+                      ))}
+                    </div>
+                    {superAdmin ? (
+                      <>
+                        <Input
+                          aria-label={`Asignar repartidor al teléfono ${lineaIndex + 1} de ${persona.nombre}`}
+                          value={editando === `${persona.id}:${lineaIndex}` ? picker : ""}
+                          placeholder="Buscar y asignar repartidor"
+                          onChange={(event) => {
+                            setEditando(`${persona.id}:${lineaIndex}`);
+                            setPicker(event.target.value);
+                          }}
+                        />
+                        {editando === `${persona.id}:${lineaIndex}` && picker.trim() ? sugeridos.map((repartidor) => (
+                          <button key={repartidor.id} type="button" className="block w-full bg-background px-3 py-2 text-left" onClick={() => agregar(persona.id, lineaIndex, repartidor.id)}>
+                            {repartidor.nombre}{ocupados.has(repartidor.id) ? " · pasa a este número" : ""}
+                          </button>
+                        )) : null}
+                      </>
+                    ) : null}
+                  </div>
+                ))}
+                {superAdmin ? (
+                  <div className="flex flex-col gap-6 pt-2">
+                    <Button variant="outline" onClick={() => cambiarLinea(persona.id, persona.numeros.length, { telefono: "", repartidor_ids: [] })}>Otro número</Button>
+                    <Button disabled={guardando || persona.numeros.some((linea) => linea.telefono.trim().length < 8)} onClick={() => void guardar(persona.id)}>
                       {guardando ? "Guardando…" : "Guardar contacto"}
                     </Button>
-                    {listo ? <p>Contacto guardado. La app usará este número.</p> : null}
-                  </>
-                ) : <p>Solo esa persona puede cambiar su número y sus repartidores.</p>}
+                    {listoId === persona.id ? <p>Contacto guardado. La app usará estos números.</p> : null}
+                  </div>
+                ) : <p>Solo un super admin puede cambiar números y repartidores.</p>}
               </div>
-            );
-          })}
+          ))}
         </div>
       )}
+      <AlertDialog open={quitarDe != null} onOpenChange={(open) => { if (!open) setQuitarDe(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Estás seguro de que deseas eliminar a {quitarDe?.nombre || "este repartidor"} del contacto?</AlertDialogTitle>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => {
+              const elegido = quitarDe;
+              setQuitarDe(null);
+              if (elegido) quitar(elegido.personaId, elegido.index, elegido.repartidorId);
+            }}>Eliminar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </section>
   );
 }
