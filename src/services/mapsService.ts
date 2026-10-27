@@ -15,6 +15,7 @@ interface GeocodeResponse {
     lat: number;
     lng: number;
     formatted_address?: string;
+    aproximado?: boolean;
   };
 }
 

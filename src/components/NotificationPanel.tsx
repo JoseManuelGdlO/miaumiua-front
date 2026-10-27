@@ -156,6 +156,7 @@ const NotificationPanel = () => {
   };
 
   const removeNotification = async (id: string) => {
+    if (!window.confirm("¿Estás seguro de que deseas eliminar esta notificación?")) return;
     setDeletingId(id);
     try {
       await notificationsService.deleteNotification(parseInt(id));

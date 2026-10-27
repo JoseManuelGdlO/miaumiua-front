@@ -420,6 +420,7 @@ const RouteManagement = () => {
   };
 
   const deleteRoute = async (routeId: string) => {
+    if (!window.confirm("¿Estás seguro de que deseas eliminar esta ruta?")) return;
     try {
       const response = await routesService.deleteRoute(parseInt(routeId));
       

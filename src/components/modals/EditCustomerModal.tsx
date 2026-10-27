@@ -253,6 +253,7 @@ const EditCustomerModal = ({ open, onOpenChange, cliente, onClienteUpdated }: Ed
 
     // If it's an existing pet, delete from API
     if (pet.id) {
+      if (!window.confirm(`¿Estás seguro de que deseas eliminar a ${pet.nombre || "esta mascota"}?`)) return;
       try {
         await petsService.deletePet(pet.id);
         setPets(pets.filter((_, i) => i !== index));

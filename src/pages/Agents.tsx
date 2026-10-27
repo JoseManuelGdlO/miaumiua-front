@@ -188,6 +188,7 @@ export default function Agents() {
   };
 
   const deleteAgent = async (agentId: number) => {
+    if (!window.confirm("¿Estás seguro de que deseas eliminar este agente?")) return;
     try {
       const response = await agentsService.deleteAgent(agentId);
       if (response.success) {
