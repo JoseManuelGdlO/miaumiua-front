@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { config } from "@/config/environment";
 import { authService } from "@/services/authService";
-import { esAvisoDeCola, notificationsService, type BackendNotification } from "@/services/notificationsService";
+import { esAvisoDeCola, notificationsService, resolveNotificationNavigationPath, type BackendNotification } from "@/services/notificationsService";
 
 export type NotificationStreamEvent =
   | { type: "notification"; payload: BackendNotification }
@@ -9,7 +9,15 @@ export type NotificationStreamEvent =
 
 type Listener = (event: NotificationStreamEvent) => void;
 
-export type ColaAviso = { id: string; origen: string };
+export type ColaAviso = { id: string; origen: string; ruta: string };
+
+function rutaDeAviso(tipo: string | undefined, id: string | number) {
+  if (tipo === "check_in") return `/dashboard/call-center?tab=checkin&solicitud=${id}`;
+  if (tipo === "cierre_dia") return "/dashboard/call-center?tab=checkout";
+  if (tipo === "soporte") return `/dashboard/call-center?tab=soporte&aviso=${id}`;
+  if (tipo === "llamada_cliente") return `/dashboard/call-center?tab=despacho&aviso=${id}`;
+  return "";
+}
 
 type NotificationStreamContextValue = {
   subscribe: (listener: Listener) => () => void;
@@ -23,7 +31,7 @@ function avisoDe(payload: BackendNotification): ColaAviso | null {
   const origen = datos.tipo;
   if (!esAvisoDeCola(origen) || !origen) return null;
   if (payload.leida || datos.estado_solicitud === "cancelada" || datos.archivada === true) return null;
-  return { id: String(payload.id), origen };
+  return { id: String(payload.id), origen, ruta: rutaDeAviso(origen, payload.id) };
 }
 
 const NotificationStreamContext = createContext<NotificationStreamContextValue | null>(null);
@@ -41,9 +49,11 @@ export function NotificationStreamProvider({ children }: { children: ReactNode }
 
   const refreshAvisos = useCallback(() => {
     void notificationsService.getMappedRecentNotifications(20).then((rows) => {
-      setAvisos(rows.flatMap((row) => (
-        !row.read && esAvisoDeCola(row.tipo) && row.tipo ? [{ id: row.id, origen: row.tipo }] : []
-      )));
+      setAvisos(rows.flatMap((row) => {
+        const ruta = resolveNotificationNavigationPath(row) || "";
+        if (row.read || !ruta.startsWith("/dashboard")) return [];
+        return [{ id: row.id, origen: row.tipo || "", ruta }];
+      }));
     }).catch(() => {});
   }, []);
 

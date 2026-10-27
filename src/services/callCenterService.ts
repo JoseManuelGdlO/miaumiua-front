@@ -3,7 +3,7 @@ import { falloHttp } from '@/lib/api-error';
 import { authService } from '@/services/authService';
 import { pedidosPath, repartidoresPath } from '@/lib/call-center-rules.mjs';
 
-export type RepartidorRef = { id: number; nombre_completo: string } | null;
+export type RepartidorRef = { id: number; nombre_completo: string; telefono?: string | null } | null;
 
 export type CargaLinea = {
   id?: number | null;
@@ -32,16 +32,19 @@ export type Solicitud = {
   efectivo_a_depositar?: number;
   comprobante_url?: string | null;
   motivo: string | null;
+  ayuda?: string | null;
   pedido_id: number | null;
   numero_pedido: string | null;
   repartidor: RepartidorRef;
   fecha: string;
   hora: string;
+  espera_desde?: string;
   prioridad: string;
   dinero_esperado?: number;
   espera_reenvio?: boolean;
   ya_validada?: boolean;
   cargas?: CargaLinea[];
+  pedidos?: { numero_pedido: string; cliente: string; productos: { nombre: string; cantidad: number }[] }[];
   cliente?: string | null;
   telefono?: string | null;
   direccion?: string | null;
@@ -59,9 +62,11 @@ export type PedidoDia = {
   direccion: string | null;
   notas?: string | null;
   franja?: "manana" | "tarde";
+  horario_preferente?: string | null;
   orden_entrega?: number | null;
   repartidor: RepartidorRef;
   ciudad_id: number | null;
+  total: number;
   comprobante_url: string | null;
 };
 
@@ -135,6 +140,10 @@ export const callCenterService = {
     body: JSON.stringify({ lineas }),
   }),
   buscarInventario: (q: string) => request<InventarioHit[]>(`/call-center/inventario?q=${encodeURIComponent(q)}`),
+  resolverAyuda: (id: number, accion: "ver_codigo" | "aprobar_codigo" | "autorizar_tercero", receptor?: string) => request<{ codigo?: string; aprobado?: boolean; autorizado?: boolean }>(`/call-center/solicitudes/${id}/ayuda`, {
+    method: "POST",
+    body: JSON.stringify({ accion, ...(receptor ? { receptor } : {}) }),
+  }),
   atender: (id: number, nota?: string) => request<{ atendida: boolean }>(`/call-center/solicitudes/${id}/atender`, {
     method: 'POST',
     body: JSON.stringify(nota ? { nota } : {}),
@@ -151,6 +160,18 @@ export const callCenterService = {
   }),
   liberarCierre: (id: number) => request<{ cerrada: boolean; cerrado_por_nombre: string | null }>(`/call-center/solicitudes/${id}/liberar-cierre`, {
     method: 'POST',
+  }),
+  responder: (repartidorId: number, texto: string) => request<{ enviado: boolean }>(`/call-center/repartidores/${repartidorId}/mensaje`, {
+    method: 'POST',
+    body: JSON.stringify({ texto }),
+  }),
+  cierreDirecto: (repartidorId: number) => request<{ cerrada: boolean; cerrado_por_nombre: string | null }>(`/call-center/repartidores/${repartidorId}/cierre-directo`, {
+    method: 'POST',
+  }),
+  listContactos: () => request<{ personas: { id: number; nombre: string; telefono: string; repartidor_ids: number[]; numeros?: { telefono: string; repartidor_ids: number[] }[] }[]; repartidores: { id: number; nombre: string }[] }>('/call-center/contactos'),
+  guardarContacto: (usuarioId: number, numeros: { telefono: string; repartidor_ids: number[] }[]) => request<{ guardado: boolean }>(`/call-center/contactos/${usuarioId}`, {
+    method: 'PUT',
+    body: JSON.stringify({ numeros }),
   }),
   reagendar: (id: number, fecha: string, motivo: string) => request<{ id: number }>(`/call-center/pedidos/${id}/reagendar`, {
     method: 'POST',

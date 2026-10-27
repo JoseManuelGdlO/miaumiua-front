@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { Loader2, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -42,6 +42,7 @@ const Historial = () => {
   const [rows, setRows] = useState<Cambio[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [abierto, setAbierto] = useState<number | null>(null);
 
   useEffect(() => {
     if (!esAdmin()) {
@@ -108,13 +109,24 @@ const Historial = () => {
                 ) : rows.length === 0 ? (
                   <TableRow><TableCell colSpan={5} className="py-8 text-center text-muted-foreground">Todavía no hay cambios registrados</TableCell></TableRow>
                 ) : rows.map((row) => (
-                  <TableRow key={row.id}>
-                    <TableCell>{row.creado_en ? new Date(row.creado_en).toLocaleString("es-MX") : "—"}</TableCell>
-                    <TableCell>{row.usuario?.nombre || "—"}</TableCell>
-                    <TableCell>{row.usuario?.rol ? <RoleBadge roleName={row.usuario.rol} /> : "—"}</TableCell>
-                    <TableCell>{row.accion}</TableCell>
-                    <TableCell>{row.detalle}</TableCell>
-                  </TableRow>
+                  <Fragment key={row.id}>
+                    <TableRow className="cursor-pointer" onClick={() => setAbierto((actual) => actual === row.id ? null : row.id)}>
+                      <TableCell>{row.creado_en ? new Date(row.creado_en).toLocaleString("es-MX") : "—"}</TableCell>
+                      <TableCell>{row.usuario?.nombre || "—"}</TableCell>
+                      <TableCell>{row.usuario?.rol ? <RoleBadge roleName={row.usuario.rol} /> : "—"}</TableCell>
+                      <TableCell>{row.accion}</TableCell>
+                      <TableCell>{row.detalle}</TableCell>
+                    </TableRow>
+                    {abierto === row.id ? (
+                      <TableRow key={`${row.id}-detalle`}>
+                        <TableCell colSpan={5} className="bg-pink-50">
+                          <p>Usuario: {row.usuario?.nombre || "—"}{row.usuario?.correo ? ` · ${row.usuario.correo}` : ""}</p>
+                          <p>Entidad: {row.entidad}{row.entidad_id ? ` ${row.entidad_id}` : ""}</p>
+                          {row.contexto ? <pre className="mt-2 whitespace-pre-wrap text-sm">{row.contexto}</pre> : <p className="mt-2">Este cambio no guardó IP ni cuerpo.</p>}
+                        </TableCell>
+                      </TableRow>
+                    ) : null}
+                  </Fragment>
                 ))}
               </TableBody>
             </Table>

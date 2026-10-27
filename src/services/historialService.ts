@@ -8,6 +8,7 @@ export type Cambio = {
   entidad: string;
   entidad_id: string | null;
   detalle: string;
+  contexto: string | null;
   creado_en: string;
   usuario: { id: number; nombre: string; correo: string; rol: string | null } | null;
 };

@@ -58,7 +58,7 @@ async function geocodeAddress(
   ciudad?: string,
   colonia?: string,
   codigo_postal?: string
-): Promise<Coordinates | null> {
+): Promise<(Coordinates & { aproximado?: boolean }) | null> {
   const trimmedAddress = address?.trim();
   if (!trimmedAddress) {
     return null;
@@ -73,7 +73,7 @@ async function geocodeAddress(
     );
     
     if (response.success && response.data) {
-      return { lat: response.data.lat, lng: response.data.lng };
+      return { lat: response.data.lat, lng: response.data.lng, aproximado: response.data.aproximado };
     }
     return null;
   } catch (error) {
@@ -351,13 +351,14 @@ const AIRouteOptimizer: React.FC<AIRouteOptimizerProps> = ({
       );
 
       if (!warehouseCoords) {
-        throw new Error('No se pudo geocodificar la dirección de la bodega');
+        throw new Error(`No se pudo ubicar la bodega ni la ciudad (${cityInfo.direccion_operaciones}, ${cityInfo.nombre}). Revisa ese dato en Ciudades.`);
       }
 
       console.log('Coordenadas de bodega:', warehouseCoords);
 
       // Paso 1: Geocodificar direcciones de pedidos para obtener coordenadas
       const ordersWithCoordinates: Order[] = [];
+      let aproximados = warehouseCoords.aproximado ? 1 : 0;
       
       for (const order of orders) {
         let coords = order.coordinates;
@@ -373,6 +374,7 @@ const AIRouteOptimizer: React.FC<AIRouteOptimizerProps> = ({
           );
           if (geocoded) {
             coords = geocoded;
+            if (geocoded.aproximado) aproximados += 1;
           } else {
             console.warn(
               `No se pudo geocodificar: ${order.address}, ciudad: ${order.ciudad || ''}, colonia: ${
@@ -470,7 +472,8 @@ const AIRouteOptimizer: React.FC<AIRouteOptimizerProps> = ({
       const summary =
         `Se optimizaron ${totalOrdersOptimized} pedidos usando ${driversToUse} repartidor(es). ` +
         `Recomendación de IA: ${comparison.recommendation}. ` +
-        `Motivo: ${comparison.reason}`;
+        `Motivo: ${comparison.reason}` +
+        (aproximados > 0 ? ` ${aproximados} dirección(es) no tenían calle en el mapa y se ubicaron en la ciudad.` : '');
 
       setLastOptimization({
         routes: optimizedRoutes,

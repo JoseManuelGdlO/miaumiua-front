@@ -145,7 +145,7 @@ export interface Notification {
 }
 
 export const checkInValidationPath = (id: string | number): string =>
-  `/dashboard/call-center?tab=validacion&solicitud=${id}`;
+  `/dashboard/call-center?tab=checkin&solicitud=${id}`;
 
 export const colaSolicitudPath = (id: string | number): string =>
   `/dashboard/call-center?tab=operacion&aviso=${id}`;
@@ -167,6 +167,18 @@ export const getConversationNavigationPath = (conversacionId: string | number): 
 export const resolveNotificationNavigationPath = (notification: Notification): string | undefined => {
   if (notification.tipo === 'check_in') {
     return checkInValidationPath(notification.id);
+  }
+
+  if (notification.tipo === 'cierre_dia') {
+    return '/dashboard/call-center?tab=checkout';
+  }
+
+  if (notification.tipo === 'soporte') {
+    return `/dashboard/call-center?tab=soporte&aviso=${notification.id}`;
+  }
+
+  if (notification.tipo === 'llamada_cliente') {
+    return `/dashboard/call-center?tab=despacho&aviso=${notification.id}`;
   }
 
   if (esAvisoDeCola(notification.tipo)) {

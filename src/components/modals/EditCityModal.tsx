@@ -262,6 +262,7 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
 
   const handleDeletePoint = async (point: DraftPointOfSale) => {
     if (!city || !point.id) return;
+    if (!window.confirm(`¿Estás seguro de que deseas eliminar ${point.nombre || "este punto de venta"}?`)) return;
 
     try {
       setLoadingPoints(true);
