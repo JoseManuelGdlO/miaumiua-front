@@ -386,6 +386,16 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
       }
     }
 
+    const horaElegida = (formData.fecha_entrega_estimada.split('T')[1] || '').slice(0, 5);
+    if (horaElegida) {
+      const [hh, mm] = horaElegida.split(':').map(Number);
+      const minutos = hh * 60 + mm;
+      if (minutos < 9 * 60 || minutos > 21 * 60) {
+        toast({ title: 'Horario', description: 'La entrega solo puede ser entre las 9:00 y las 21:00', variant: 'destructive' });
+        return;
+      }
+    }
+
     try {
       setLoading(true);
       setPendingStripeOrderId(null);
@@ -397,7 +407,7 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
          direccion_entrega: formData.direccion_entrega,
          fkid_ciudad: parseInt(formData.fkid_ciudad),
          fecha_entrega_estimada: formData.fecha_entrega_estimada || undefined,
-         horario_preferente: formData.horario_preferente || undefined,
+         horario_preferente: (formData.fecha_entrega_estimada.split('T')[1] || '').slice(0, 5) || undefined,
          metodo_pago: formData.metodo_pago as any,
          notas: formData.notas || undefined,
          codigo_promocion: formData.codigo_promocion || undefined,
@@ -613,24 +623,15 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="fecha_entrega_estimada">Fecha de Entrega Estimada</Label>
+                  <Label htmlFor="fecha_entrega_estimada">Fecha y hora de entrega</Label>
                   <Input
                     id="fecha_entrega_estimada"
                     type="datetime-local"
                     value={formData.fecha_entrega_estimada}
                     onChange={(e) => handleInputChange('fecha_entrega_estimada', e.target.value)}
                   />
+                  <p className="text-xs text-muted-foreground">De 9:00 a 21:00. Antes de las 14:00 queda en Mañana. Desde las 14:00 queda en Tarde.</p>
                 </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="horario_preferente">A partir de las</Label>
-                <Input
-                  id="horario_preferente"
-                  type="time"
-                  value={formData.horario_preferente}
-                  onChange={(e) => handleInputChange('horario_preferente', e.target.value)}
-                />
-                <p className="text-xs text-muted-foreground">Antes de las 14:00 es Mañana. Desde las 14:00 es Tarde.</p>
               </div>
             </CardContent>
           </Card>

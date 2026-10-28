@@ -2,6 +2,7 @@ import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } fr
 import { useSearchParams } from "react-router-dom";
 import { AlertTriangle, ChevronDown, ClipboardCheck, Download, Headphones, History, Inbox, LifeBuoy, Loader2, LogOut, Package, Phone, Receipt, Truck, Users, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -436,6 +437,7 @@ function MonitorRepartidores({
                       <p>{row.actual.cliente || "Sin cliente"}</p>
                       {row.actual.telefono ? <a className="inline-flex items-center gap-2 text-primary" href={`tel:${row.actual.telefono}`}><Phone className="h-4 w-4" />{row.actual.telefono}</a> : <p>Sin teléfono</p>}
                       <p>{row.actual.direccion || "Sin dirección"}{row.actual.horario_preferente ? ` · a partir de ${row.actual.horario_preferente}` : ""}</p>
+                      {row.actual.metodo_pago ? <p>Método de pago: {row.actual.metodo_pago}</p> : null}
                       {row.actual.total > 0 ? <p>Monto a cobrar en entrega: ${formatMoney(row.actual.total)} MXN</p> : null}
                     </>
                   ) : <p>Sin pedido pendiente. No tiene entregas activas ahora.</p>}
@@ -444,9 +446,10 @@ function MonitorRepartidores({
                       <p className="font-semibold">Ruta de hoy</p>
                       {row.paradas.map((pedido) => {
                         const esActual = row.actual?.id === pedido.id;
+                        const entregado = pedido.estado_entrega === "entregado" || pedido.estado === "entregado";
                         return (
-                        <p key={pedido.id} className={esActual ? "font-semibold" : "text-muted-foreground"}>
-                          {pedido.numero_pedido} · {pedido.cliente || "Sin cliente"} · <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-semibold">{ENTREGA[pedido.estado_entrega] || pedido.estado}</span>
+                        <p key={pedido.id} className={entregado ? "opacity-60" : esActual ? "font-semibold" : "text-muted-foreground"}>
+                          {pedido.numero_pedido} · {pedido.cliente || "Sin cliente"} · <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${entregado ? "bg-emerald-100 text-emerald-800" : "bg-pink-100 text-pink-900"}`}>{entregado ? "Entregado" : esActual ? "En curso" : "Pendiente"}</span>
                         </p>
                         );
                       })}
@@ -754,6 +757,10 @@ const CallCenter = () => {
   const [pedidos, setPedidos] = useState<PedidoDia[]>([]);
   const [velocidades, setVelocidades] = useState<VelocidadDia[]>([]);
   const [comprobantes, setComprobantes] = useState<ComprobantePago[]>([]);
+  const [comprobantesHistorico, setComprobantesHistorico] = useState<ComprobantePago[] | null>(null);
+  const [filtroPago, setFiltroPago] = useState("all");
+  const [filtroCobro, setFiltroCobro] = useState("");
+  const [notaCobro, setNotaCobro] = useState<Record<number, string>>({});
   const [depositos, setDepositos] = useState<DepositoRuta[]>([]);
   const [cities, setCities] = useState<City[]>([]);
   const [ciudadId, setCiudadId] = useState<string>("all");
@@ -1323,7 +1330,10 @@ const CallCenter = () => {
                   <TableCell>{row.cliente || "—"}</TableCell>
                   <TableCell>{row.telefono ? <a href={`tel:${row.telefono}`}>{row.telefono}</a> : "—"}</TableCell>
                   <TableCell>{row.direccion || "—"}</TableCell>
-                  <TableCell>{row.estado_entrega === "fallido" ? <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">Reagendado</span> : <OrderStatus estado={row.estado} modificado={row.modificado} />}</TableCell>
+                  <TableCell>
+                    {row.estado_entrega === "fallido" ? <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">Reagendado</span> : <OrderStatus estado={row.estado} modificado={row.modificado} />}
+                    {row.metodo_pago ? <p>{row.metodo_pago}</p> : null}
+                  </TableCell>
                   <TableCell>
                     <div className="flex min-w-36 flex-col gap-1.5">
                       <div role="group" aria-label={`Horario del pedido ${row.numero_pedido}`} className="flex rounded-md bg-muted p-0.5">
@@ -1404,19 +1414,48 @@ const CallCenter = () => {
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2"><Receipt className="h-5 w-5 text-primary" />Comprobantes de hoy</CardTitle>
-          <CardDescription>Cobros de hoy. Si la transferencia no tiene foto, súbela aquí.</CardDescription>
+          <CardTitle className="flex items-center gap-2"><Receipt className="h-5 w-5 text-primary" />{comprobantesHistorico ? "Histórico de comprobantes" : "Comprobantes de hoy"}</CardTitle>
+          <CardDescription>Cobros y fotos. El comentario queda en la parada de esa entrega.</CardDescription>
         </CardHeader>
-        <CardContent>
-          {comprobantes.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No hay comprobantes de hoy.</p>
-          ) : (
+        <CardContent className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => {
+              if (comprobantesHistorico) {
+                setComprobantesHistorico(null);
+                return;
+              }
+              void callCenterService.listarComprobantes({ historico: true }).then(setComprobantesHistorico).catch(notify);
+            }}>{comprobantesHistorico ? "Solo hoy" : "Ver histórico"}</Button>
+            <Select value={filtroPago} onValueChange={setFiltroPago}>
+              <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los métodos</SelectItem>
+                <SelectItem value="efectivo">Efectivo</SelectItem>
+                <SelectItem value="transferencia">Transferencia</SelectItem>
+                <SelectItem value="mixto">Mixto</SelectItem>
+                <SelectItem value="tarjeta">Tarjeta</SelectItem>
+              </SelectContent>
+            </Select>
+            <Input value={filtroCobro} onChange={(event) => setFiltroCobro(event.target.value)} placeholder="Repartidor o ciudad" className="w-56" />
+          </div>
+          {(() => {
+            const fuente = comprobantesHistorico || comprobantes;
+            const q = filtroCobro.trim().toLowerCase();
+            const visibles = fuente.filter((row) => {
+              if (filtroPago !== "all" && row.metodo !== filtroPago) return false;
+              if (!q) return true;
+              return `${row.repartidor || ""} ${row.ciudad || ""}`.toLowerCase().includes(q);
+            });
+            if (visibles.length === 0) return <p className="text-sm text-muted-foreground">No hay comprobantes con ese filtro.</p>;
+            return (
             <div className="space-y-3">
-              {comprobantes.map((row) => (
-                <div key={row.pedido_id} className="flex items-center justify-between gap-3 text-sm">
+              {visibles.map((row) => (
+                <div key={`${row.fecha || "hoy"}-${row.pedido_id}`} className="space-y-2 text-sm">
+                  <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="font-medium">{row.numero_pedido}</p>
-                    <p className="text-muted-foreground">{row.repartidor || "—"} · {row.metodo}</p>
+                    <p className="font-medium">{row.numero_pedido}{row.fecha ? ` · ${String(row.fecha).slice(0, 10)}` : ""}</p>
+                    <p className="text-muted-foreground">{row.repartidor || "—"}{row.ciudad ? ` · ${row.ciudad}` : ""} · {row.metodo}</p>
+                    {row.nota ? <p>{row.nota}</p> : null}
                   </div>
                   {row.comprobante_url ? (
                     <button
@@ -1445,10 +1484,26 @@ const CallCenter = () => {
                       />
                     </label>
                   ) : "—"}
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      value={notaCobro[row.pedido_id] || ""}
+                      onChange={(event) => setNotaCobro((prev) => ({ ...prev, [row.pedido_id]: event.target.value }))}
+                      placeholder="Comentario de este comprobante"
+                    />
+                    <Button variant="outline" onClick={() => {
+                      const texto = (notaCobro[row.pedido_id] || "").trim();
+                      if (texto.length < 2) return;
+                      void callCenterService.anotarComprobante(row.pedido_id, texto)
+                        .then(() => loadLists())
+                        .catch(notify);
+                    }}>Guardar</Button>
+                  </div>
                 </div>
               ))}
             </div>
-          )}
+            );
+          })()}
         </CardContent>
       </Card>
 
