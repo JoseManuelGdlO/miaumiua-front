@@ -90,7 +90,7 @@ export default function IncidenciasPanel({ pedidos, solicitudes, superAdmin, onC
             <p className="text-muted-foreground">No hay problemas abiertos</p>
           ) : null}
           {problemas.map((row) => (
-            <div key={row.id} className="flex items-start justify-between gap-3 rounded-md bg-muted px-3 py-2">
+            <div key={row.id} className="aviso-borde flex items-start justify-between gap-3 rounded-md bg-background px-3 py-2">
               <button type="button" className="text-left" onClick={() => { if (row.repartidor?.id) onAbrir(row.repartidor.id); }}>
                 <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${row.tipo === "llamada_cliente" ? "bg-sky-100 text-sky-900" : "bg-amber-100 text-amber-900"}`}>{row.tipo === "llamada_cliente" ? "Llamada" : "Incidencia"}</span>
                 <span className="mt-1 block font-semibold">{row.repartidor?.nombre_completo || "Sin repartidor"} · {row.numero_pedido || "Sin pedido"}</span>
@@ -100,7 +100,7 @@ export default function IncidenciasPanel({ pedidos, solicitudes, superAdmin, onC
             </div>
           ))}
           {noEntregados.map((row) => (
-            <div key={row.id} data-aviso="1" className="flex items-start justify-between gap-3 rounded-md bg-red-50 px-3 py-2">
+            <div key={row.id} data-aviso="1" className="aviso-borde flex items-start justify-between gap-3 rounded-md bg-background px-3 py-2">
               <button type="button" className="text-left" onClick={() => { if (row.repartidor?.id) onAbrir(row.repartidor.id); }}>
                 <span className="inline-flex items-center gap-2">
                   <span className="h-2 w-2 rounded-full bg-red-500" aria-hidden />

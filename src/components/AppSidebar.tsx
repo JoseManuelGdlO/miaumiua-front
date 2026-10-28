@@ -347,7 +347,7 @@ export function AppSidebar() {
                       <SidebarMenuButton asChild tooltip={item.title}>
                         <NavLink
                           to={destino(item.url)}
-                          className={`relative ${isCollapsed ? "mx-auto justify-center" : ""} ${getNavClasses(isActive(item.url ?? ""))}`}
+                          className={`relative ${isCollapsed ? "mx-auto justify-center" : ""} ${getNavClasses(isActive(item.url ?? ""))} ${item.url === "/dashboard/call-center" && tieneAviso(item.url) ? "aviso-borde" : ""}`}
                         >
                           <item.icon className="h-4 w-4 flex-shrink-0" />
                           {!isCollapsed && <span>{item.title}</span>}

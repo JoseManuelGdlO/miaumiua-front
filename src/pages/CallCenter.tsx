@@ -101,11 +101,11 @@ const TAB_ALIAS: Record<string, string> = {
   incidencias: "incidencias",
 };
 
-function TabAviso({ n, children }: { n: number; children: ReactNode }) {
+function TabAviso({ n, rojo = false, children }: { n: number; rojo?: boolean; children: ReactNode }) {
   return (
     <span className="inline-flex items-center gap-2">
       {children}
-      {n > 0 ? <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-xs font-semibold text-white">{n}</span> : null}
+      {n > 0 ? <span className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-xs font-semibold text-white ${rojo ? "bg-red-600" : "bg-primary"}`}>{n}</span> : null}
     </span>
   );
 }
@@ -396,7 +396,7 @@ function MonitorRepartidores({
         const [id, nombre] = activo;
         const row = ficha(id, nombre);
         return (
-          <div data-aviso={row.pideAtencion ? "1" : undefined} className={`overflow-hidden rounded-xl border-t-4 bg-white ${row.pideAtencion ? "border-red-500" : "border-primary"}`}>
+          <div data-aviso={row.pideAtencion ? "1" : undefined} className={`overflow-hidden rounded-xl border-t-4 bg-white ${row.pideAtencion ? "aviso-borde border-primary" : "border-primary"}`}>
             <div className="flex items-center justify-between gap-3 px-4 py-4">
               <div className="flex items-center gap-3">
                 <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">{iniciales(nombre)}</span>
@@ -562,7 +562,7 @@ function MonitorRepartidores({
                   type="button"
                   data-aviso={row.pideAtencion ? "1" : undefined}
                   onClick={() => setElegido(id)}
-                  className={`flex items-center justify-between gap-3 rounded-xl px-3 py-3 text-left ${row.pideAtencion ? "bg-red-50" : "bg-muted/40"}`}
+                  className={`flex items-center justify-between gap-3 rounded-xl px-3 py-3 text-left ${row.pideAtencion ? "aviso-borde bg-white" : "bg-muted/40"}`}
                 >
                   <span className="flex items-center gap-3">
                     <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">{iniciales(nombre)}</span>
@@ -665,7 +665,8 @@ function CheckoutDia({
             </div>
             <div className="space-y-3 bg-muted/40 p-4">
               {cierres.length === 0 ? <p>Este repartidor no ha enviado el cierre de hoy.</p> : cierres.map((row) => (
-                <div key={row.id} data-aviso="1" className="space-y-3 rounded-xl bg-pink-50 p-4">
+                <div key={row.id} data-aviso="1" className="aviso-rojo space-y-3 rounded-xl bg-white p-4">
+                  <p><span className="rounded-full bg-red-600 px-2 py-0.5 text-xs font-semibold text-white">Check-out pendiente</span></p>
                   <p className="font-semibold">Efectivo a depositar ${formatMoney(row.efectivo_a_depositar || 0)}</p>
                   {row.comprobante_url ? (
                     <img src={receiptSrc(row.comprobante_url)} alt={`Comprobante de ${nombre}`} className="max-h-64 w-full rounded-md object-contain" />
@@ -694,7 +695,7 @@ function CheckoutDia({
                 type="button"
                 data-aviso={pendiente ? "1" : undefined}
                 onClick={() => setElegido(id)}
-                className={`flex items-center justify-between gap-3 rounded-xl px-3 py-3 text-left ${pendiente ? "bg-red-50" : "bg-muted/40"}`}
+                className={`flex items-center justify-between gap-3 rounded-xl px-3 py-3 text-left ${pendiente ? "aviso-rojo bg-white" : "bg-muted/40"}`}
               >
                 <span className="flex items-center gap-3">
                   <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">{iniciales(nombre)}</span>
@@ -1093,6 +1094,18 @@ const CallCenter = () => {
     }
   };
 
+  const aCola = async (id: number) => {
+    const manana = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const fecha = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Mexico_City" }).format(manana);
+    try {
+      await callCenterService.reagendar(id, fecha, "A la cola de planeación");
+      toast({ title: "Pedido en la cola de planeación" });
+      await loadLists();
+    } catch (error) {
+      notify(error);
+    }
+  };
+
   const cerrarSinCodigo = async () => {
     if (!reassignFor || busy || motivoCierre.trim().length < 5) return;
     setBusy(true);
@@ -1184,9 +1197,9 @@ const CallCenter = () => {
         <div className="overflow-hidden rounded-xl bg-white shadow-sm">
           <TabsList className="flex h-auto w-full justify-start gap-0 overflow-x-auto rounded-none border-b bg-transparent p-0">
             <TabsTrigger value="despacho" className="rounded-none border-b-4 border-transparent bg-transparent px-4 py-3 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"><TabAviso n={solicitudes.filter((row) => row.tipo === "llamada_cliente").length}><Package className="h-4 w-4" /> Operación</TabAviso></TabsTrigger>
-            <TabsTrigger value="checkin" className="rounded-none border-b-4 border-transparent bg-transparent px-4 py-3 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"><TabAviso n={solicitudes.filter((row) => row.tipo === "check_in").length}><ClipboardCheck className="h-4 w-4" /> Validación de cargas</TabAviso></TabsTrigger>
+            <TabsTrigger value="checkin" className="rounded-none border-b-4 border-transparent bg-transparent px-4 py-3 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"><TabAviso rojo n={solicitudes.filter((row) => row.tipo === "check_in").length}><ClipboardCheck className="h-4 w-4" /> Validación de cargas</TabAviso></TabsTrigger>
             <TabsTrigger value="soporte" className="rounded-none border-b-4 border-transparent bg-transparent px-4 py-3 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"><TabAviso n={solicitudes.filter((row) => row.tipo === "soporte").length}><LifeBuoy className="h-4 w-4" /> Soporte en Ruta</TabAviso></TabsTrigger>
-            <TabsTrigger value="checkout" className="rounded-none border-b-4 border-transparent bg-transparent px-4 py-3 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"><TabAviso n={solicitudes.filter((row) => row.tipo === "cierre_dia").length}><LogOut className="h-4 w-4" /> Check-out (Cierres)</TabAviso></TabsTrigger>
+            <TabsTrigger value="checkout" className="rounded-none border-b-4 border-transparent bg-transparent px-4 py-3 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"><TabAviso rojo n={solicitudes.filter((row) => row.tipo === "cierre_dia").length}><LogOut className="h-4 w-4" /> Check-out (Cierres)</TabAviso></TabsTrigger>
             <TabsTrigger value="incidencias" className="rounded-none border-b-4 border-transparent bg-transparent px-4 py-3 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"><TabAviso n={solicitudes.filter((row) => row.tipo === "soporte" || row.tipo === "llamada_cliente").length + pedidos.filter((row) => row.estado === "no_entregado" || row.estado_entrega === "fallido").length}><AlertTriangle className="h-4 w-4" /> Incidencias</TabAviso></TabsTrigger>
           </TabsList>
         </div>
@@ -1218,11 +1231,11 @@ const CallCenter = () => {
                 </TableRow>
               ) : solicitudes.filter((row) => row.tipo !== "cierre_dia").map((row) => {
                 const fresco = avisosCola.some((aviso) => aviso.id === String(row.id));
-                const aqui = row.tipo === "llamada_cliente" || row.tipo === "check_in";
+                const rojo = row.tipo === "check_in";
                 return (
                 <TableRow
                   key={row.id}
-                  data-aviso={aqui ? "1" : undefined}
+                  data-aviso={rojo || fresco || row.tipo === "soporte" || row.tipo === "llamada_cliente" ? "1" : undefined}
                   onClick={() => {
                     stream?.dismissAviso(String(row.id));
                     if (row.tipo === "check_in") {
@@ -1231,11 +1244,11 @@ const CallCenter = () => {
                     }
                     void openSolicitud(row.id);
                   }}
-                  className={fresco || aqui ? "cursor-pointer bg-red-50" : "cursor-pointer"}
+                  className={`cursor-pointer ${rojo ? "aviso-rojo" : (fresco || row.tipo === "soporte" || row.tipo === "llamada_cliente") ? "aviso-borde" : ""}`}
                 >
                   <TableCell>
                     <span className="inline-flex items-center gap-2">
-                      {(fresco || aqui) && <span className="h-2 w-2 rounded-full bg-red-500" aria-hidden />}
+                      {row.tipo === "check_in" ? <span className="rounded-full bg-red-600 px-2 py-0.5 text-xs font-semibold text-white">Pendiente</span> : null}
                       {TIPO[row.tipo] || row.tipo}
                     </span>
                   </TableCell>
@@ -1298,19 +1311,19 @@ const CallCenter = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {pedidos.length === 0 ? (
+              {pedidos.filter((row) => row.estado !== "entregado" && row.estado_entrega !== "entregado").length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={9} className="py-8 text-center text-muted-foreground">
                     No hay pedidos para los filtros seleccionados
                   </TableCell>
                 </TableRow>
-              ) : pedidos.map((row) => (
+              ) : pedidos.filter((row) => row.estado !== "entregado" && row.estado_entrega !== "entregado").map((row) => (
                 <TableRow key={row.ruta_pedido_id}>
                   <TableCell>{row.numero_pedido}</TableCell>
                   <TableCell>{row.cliente || "—"}</TableCell>
                   <TableCell>{row.telefono ? <a href={`tel:${row.telefono}`}>{row.telefono}</a> : "—"}</TableCell>
                   <TableCell>{row.direccion || "—"}</TableCell>
-                  <TableCell><OrderStatus estado={row.estado} modificado={row.modificado} /></TableCell>
+                  <TableCell>{row.estado_entrega === "fallido" ? <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">Reagendado</span> : <OrderStatus estado={row.estado} modificado={row.modificado} />}</TableCell>
                   <TableCell>
                     <div className="flex min-w-36 flex-col gap-1.5">
                       <div role="group" aria-label={`Horario del pedido ${row.numero_pedido}`} className="flex rounded-md bg-muted p-0.5">
@@ -1368,6 +1381,7 @@ const CallCenter = () => {
                         {trabajando === `liberar:${row.id}` ? <Loader2 className="animate-spin" /> : null}
                         {trabajando === `liberar:${row.id}` ? "Liberando…" : "Liberar siguiente"}
                       </Button>
+                      {row.estado_entrega === "fallido" ? <Button variant="outline" size="sm" onClick={() => void aCola(row.id)}>A la cola</Button> : null}
                       {statusOptions(row.estado).length > 0 || canReassign(row.estado) ? (
                         <Button
                           variant="outline"
@@ -1679,7 +1693,7 @@ const CallCenter = () => {
                         </TableCell>
                       </TableRow>
                     ) : pendientes.map((row) => (
-                      <TableRow key={row.id} data-aviso="1" className={cargaId === row.id ? "bg-primary/10" : "bg-red-50"}>
+                      <TableRow key={row.id} data-aviso="1" className="aviso-rojo">
                         <TableCell>
                           <span className="inline-flex items-center gap-2">
                             <span className="h-2 w-2 rounded-full bg-red-500" aria-hidden />
