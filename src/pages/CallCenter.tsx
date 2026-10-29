@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useNotificationStream } from "@/hooks/useNotificationStream";
@@ -1446,13 +1447,18 @@ const CallCenter = () => {
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => {
-              if (comprobantesHistorico) {
-                setComprobantesHistorico(null);
-                return;
-              }
-              void callCenterService.listarComprobantes({ historico: true }).then(setComprobantesHistorico).catch(notify);
-            }}>{comprobantesHistorico ? "Solo hoy" : "Ver histórico"}</Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button onClick={() => {
+                  if (comprobantesHistorico) {
+                    setComprobantesHistorico(null);
+                    return;
+                  }
+                  void callCenterService.listarComprobantes({ historico: true }).then(setComprobantesHistorico).catch(notify);
+                }}>{comprobantesHistorico ? "Solo hoy" : "Ver histórico"}</Button>
+              </TooltipTrigger>
+              <TooltipContent>{comprobantesHistorico ? "Vuelve a los comprobantes de hoy." : "Muestra todos los comprobantes, no solo los de hoy."}</TooltipContent>
+            </Tooltip>
             <Select value={filtroPago} onValueChange={setFiltroPago}>
               <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
               <SelectContent>

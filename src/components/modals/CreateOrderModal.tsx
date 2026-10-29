@@ -393,19 +393,12 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
       }
     }
 
-    const ahora = new Intl.DateTimeFormat("en-GB", { timeZone: "America/Mexico_City", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date());
-    const minutosAhora = Number(ahora.find((part) => part.type === "hour")?.value) * 60 + Number(ahora.find((part) => part.type === "minute")?.value);
-    if (minutosAhora < 9 * 60 + 30 || minutosAhora > 17 * 60) {
-      toast({ title: "Horario", description: "Los pedidos solo se crean entre las 9:30 y las 17:00", variant: "destructive" });
-      return;
-    }
-
     const horaElegida = (formData.fecha_entrega_estimada.split('T')[1] || '').slice(0, 5);
     if (horaElegida) {
       const [hh, mm] = horaElegida.split(':').map(Number);
       const minutos = hh * 60 + mm;
-      if (minutos < 9 * 60 || minutos > 21 * 60) {
-        toast({ title: 'Horario', description: 'La entrega solo puede ser entre las 9:00 y las 21:00', variant: 'destructive' });
+      if (minutos < 9 * 60 + 30 || minutos > 17 * 60) {
+        toast({ title: 'Horario', description: 'La entrega solo puede ser entre las 9:30 y las 17:00', variant: 'destructive' });
         return;
       }
     }
@@ -651,7 +644,7 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
                     value={formData.fecha_entrega_estimada}
                     onChange={(e) => handleInputChange('fecha_entrega_estimada', e.target.value)}
                   />
-                  <p className="text-xs text-muted-foreground">De 9:00 a 21:00. Antes de las 14:00 queda en Mañana. Desde las 14:00 queda en Tarde.</p>
+                  <p className="text-xs text-muted-foreground">De 9:30 a 17:00. Antes de las 14:00 queda en Mañana. Desde las 14:00 queda en Tarde.</p>
                 </div>
               </div>
             </CardContent>
@@ -1076,11 +1069,7 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
             >
               Cancelar
             </Button>
-            <Button type="submit" disabled={loading || stripeRetryLoading || (() => {
-              const partes = new Intl.DateTimeFormat("en-GB", { timeZone: "America/Mexico_City", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date());
-              const minutos = Number(partes.find((part) => part.type === "hour")?.value) * 60 + Number(partes.find((part) => part.type === "minute")?.value);
-              return minutos < 9 * 60 + 30 || minutos > 17 * 60;
-            })()}>
+            <Button type="submit" disabled={loading || stripeRetryLoading}>
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Crear Pedido
             </Button>
