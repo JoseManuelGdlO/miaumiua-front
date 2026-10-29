@@ -393,6 +393,13 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
       }
     }
 
+    const ahora = new Intl.DateTimeFormat("en-GB", { timeZone: "America/Mexico_City", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date());
+    const minutosAhora = Number(ahora.find((part) => part.type === "hour")?.value) * 60 + Number(ahora.find((part) => part.type === "minute")?.value);
+    if (minutosAhora < 9 * 60 + 30 || minutosAhora > 17 * 60) {
+      toast({ title: "Horario", description: "Los pedidos solo se crean entre las 9:30 y las 17:00", variant: "destructive" });
+      return;
+    }
+
     const horaElegida = (formData.fecha_entrega_estimada.split('T')[1] || '').slice(0, 5);
     if (horaElegida) {
       const [hh, mm] = horaElegida.split(':').map(Number);
@@ -1069,7 +1076,11 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
             >
               Cancelar
             </Button>
-            <Button type="submit" disabled={loading || stripeRetryLoading}>
+            <Button type="submit" disabled={loading || stripeRetryLoading || (() => {
+              const partes = new Intl.DateTimeFormat("en-GB", { timeZone: "America/Mexico_City", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date());
+              const minutos = Number(partes.find((part) => part.type === "hour")?.value) * 60 + Number(partes.find((part) => part.type === "minute")?.value);
+              return minutos < 9 * 60 + 30 || minutos > 17 * 60;
+            })()}>
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Crear Pedido
             </Button>
