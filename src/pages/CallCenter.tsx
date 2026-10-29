@@ -326,6 +326,7 @@ function MonitorRepartidores({
   const [ciudad, setCiudad] = useState("all");
   const [elegido, setElegido] = useState<number | null>(abiertoId);
   const [mensaje, setMensaje] = useState("");
+  const [nuevaDireccion, setNuevaDireccion] = useState("");
   const [agentes, setAgentes] = useState<{ nombre: string; telefono: string; repartidor_ids: number[]; numeros?: { telefono: string; repartidor_ids: number[] }[] }[]>([]);
   const nombres = new Map<number, string>();
   for (const pedido of pedidos) {
@@ -437,7 +438,15 @@ function MonitorRepartidores({
                       <p>{row.actual.cliente || "Sin cliente"}</p>
                       {row.actual.telefono ? <a className="inline-flex items-center gap-2 text-primary" href={`tel:${row.actual.telefono}`}><Phone className="h-4 w-4" />{row.actual.telefono}</a> : <p>Sin teléfono</p>}
                       <p>{row.actual.direccion || "Sin dirección"}{row.actual.horario_preferente ? ` · a partir de ${row.actual.horario_preferente}` : ""}</p>
-                      {row.actual.metodo_pago ? <p>Método de pago: {row.actual.metodo_pago}</p> : null}
+                      <div className="flex gap-2">
+                        <Input value={nuevaDireccion} onChange={(event) => setNuevaDireccion(event.target.value)} placeholder="Nueva dirección de entrega" />
+                        <Button variant="outline" disabled={busy || nuevaDireccion.trim().length < 10} onClick={() => {
+                          void callCenterService.cambiarDireccion(row.actual!.id, nuevaDireccion.trim())
+                            .then(() => { setNuevaDireccion(""); onChanged(); })
+                            .catch(onError);
+                        }}>Cambiar</Button>
+                      </div>
+                      {row.actual.metodo_pago ? <p>Método de pago registrado: {row.actual.metodo_pago}{row.actual.modificado ? ". El cobro en campo no coincide." : ""}</p> : null}
                       {row.actual.total > 0 ? <p>Monto a cobrar en entrega: ${formatMoney(row.actual.total)} MXN</p> : null}
                     </>
                   ) : <p>Sin pedido pendiente. No tiene entregas activas ahora.</p>}
@@ -446,11 +455,27 @@ function MonitorRepartidores({
                       <p className="font-semibold">Ruta de hoy</p>
                       {row.paradas.map((pedido) => {
                         const esActual = row.actual?.id === pedido.id;
-                        const entregado = pedido.estado_entrega === "entregado" || pedido.estado === "entregado";
+                        const cerrado = pedido.estado_entrega === "entregado" || pedido.estado === "entregado" || pedido.estado_entrega === "fallido" || pedido.estado === "no_entregado";
+                        const siguiente = !cerrado && !esActual && row.paradas.find((item) => item.estado_entrega !== "entregado" && item.estado !== "entregado" && item.estado_entrega !== "fallido" && item.estado !== "no_entregado" && item.id !== row.actual?.id)?.id === pedido.id;
+                        const tono = cerrado ? "bg-gray-100 opacity-60" : esActual ? "bg-pink-100" : siguiente ? "bg-white" : "bg-white";
+                        const chip = cerrado
+                          ? "bg-gray-200 text-gray-700"
+                          : esActual
+                            ? "bg-pink-200 text-pink-950"
+                            : "bg-muted text-foreground";
+                        const etiqueta = pedido.estado_entrega === "entregado" || pedido.estado === "entregado"
+                          ? "Entregado"
+                          : pedido.estado_entrega === "fallido" || pedido.estado === "no_entregado"
+                            ? "Fallido"
+                            : esActual
+                              ? "En curso"
+                              : "Siguiente";
                         return (
-                        <p key={pedido.id} className={entregado ? "opacity-60" : esActual ? "font-semibold" : "text-muted-foreground"}>
-                          {pedido.numero_pedido} · {pedido.cliente || "Sin cliente"} · <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${entregado ? "bg-emerald-100 text-emerald-800" : "bg-pink-100 text-pink-900"}`}>{entregado ? "Entregado" : esActual ? "En curso" : "Pendiente"}</span>
-                        </p>
+                        <div key={pedido.id} className={`rounded-xl px-3 py-3 ${tono}`}>
+                          <p className="font-semibold">{pedido.numero_pedido}</p>
+                          <p>{pedido.cliente || "Sin cliente"}</p>
+                          <span className={`mt-2 inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${chip}`}>{etiqueta}</span>
+                        </div>
                         );
                       })}
                     </div>
@@ -995,6 +1020,8 @@ const CallCenter = () => {
     try {
       const result = await callCenterService.liberarCierre(id);
       toast({ title: "Día completado", description: result.cerrado_por_nombre || undefined });
+      setSolicitudes((rows) => rows.filter((row) => row.id !== id && !(row.tipo === "cierre_dia" && row.repartidor?.id === solicitudes.find((item) => item.id === id)?.repartidor?.id)));
+      stream?.dismissAviso(String(id));
       if (detail?.id === id) dismissDetail();
       await afterAction();
     } catch (error) {
@@ -1332,7 +1359,7 @@ const CallCenter = () => {
                   <TableCell>{row.direccion || "—"}</TableCell>
                   <TableCell>
                     {row.estado_entrega === "fallido" ? <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">Reagendado</span> : <OrderStatus estado={row.estado} modificado={row.modificado} />}
-                    {row.metodo_pago ? <p>{row.metodo_pago}</p> : null}
+                    {row.metodo_pago ? <p>Registrado: {row.metodo_pago}{row.modificado ? ". Cobro distinto." : ""}</p> : null}
                   </TableCell>
                   <TableCell>
                     <div className="flex min-w-36 flex-col gap-1.5">

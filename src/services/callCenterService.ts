@@ -181,6 +181,10 @@ export const callCenterService = {
     method: 'POST',
     body: JSON.stringify({ fecha, motivo }),
   }),
+  cambiarDireccion: (id: number, direccion: string) => request<{ direccion_entrega: string }>(`/call-center/pedidos/${id}/direccion`, {
+    method: 'POST',
+    body: JSON.stringify({ direccion }),
+  }),
   cambiarFranja: (id: number, franja: "manana" | "tarde", alcance?: "ruta") => request<{ franja: string }>(`/call-center/pedidos/${id}/franja`, {
     method: 'POST',
     body: JSON.stringify(alcance ? { franja, alcance } : { franja }),

@@ -75,6 +75,7 @@ const EMPTY_ORDER_FORM = {
 const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderModalProps) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [direcciones, setDirecciones] = useState<string[]>([]);
   /** Pedido creado con tarjeta pero falló la generación del link Stripe: permite reintentar sin recrear el pedido */
   const [pendingStripeOrderId, setPendingStripeOrderId] = useState<number | null>(null);
   const [stripeRetryLoading, setStripeRetryLoading] = useState(false);
@@ -234,6 +235,11 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
         fkid_ciudad: cliente.fkid_ciudad.toString(),
         direccion_entrega: cliente.direccion_entrega || ""
       }));
+      void ordersService.getOrdersByClient(cliente.id).then((response) => {
+        const previas = (response.data?.pedidos || []).map((row) => row.direccion_entrega).filter(Boolean);
+        const unicas = [...new Set([cliente.direccion_entrega || "", ...previas].map((row) => row.trim()).filter((row) => row.length >= 10))];
+        setDirecciones(unicas);
+      }).catch(() => setDirecciones(cliente.direccion_entrega ? [cliente.direccion_entrega] : []));
     } else {
       setSelectedCliente(null);
       setFormData(prev => ({
@@ -244,6 +250,7 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
         fkid_ciudad: "",
         direccion_entrega: ""
       }));
+      setDirecciones([]);
     }
   };
 
@@ -384,6 +391,13 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
         });
         return;
       }
+    }
+
+    const ahora = new Intl.DateTimeFormat("en-GB", { timeZone: "America/Mexico_City", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date());
+    const minutosAhora = Number(ahora.find((part) => part.type === "hour")?.value) * 60 + Number(ahora.find((part) => part.type === "minute")?.value);
+    if (minutosAhora < 9 * 60 + 30 || minutosAhora > 17 * 60) {
+      toast({ title: "Horario", description: "Los pedidos solo se crean entre las 9:30 y las 17:00", variant: "destructive" });
+      return;
     }
 
     const horaElegida = (formData.fecha_entrega_estimada.split('T')[1] || '').slice(0, 5);
@@ -595,7 +609,14 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="direccion_entrega">Dirección de Entrega *</Label>
+                  <Label htmlFor="direccion_entrega">Dirección de Entrega *</Label>
+                  {direcciones.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {direcciones.map((direccion) => (
+                        <button key={direccion} type="button" className="rounded-md bg-muted px-2 py-1 text-left text-sm" onClick={() => handleInputChange("direccion_entrega", direccion)}>{direccion}</button>
+                      ))}
+                    </div>
+                  ) : null}
                 <Textarea
                   id="direccion_entrega"
                   value={formData.direccion_entrega}
@@ -1055,7 +1076,11 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
             >
               Cancelar
             </Button>
-            <Button type="submit" disabled={loading || stripeRetryLoading}>
+            <Button type="submit" disabled={loading || stripeRetryLoading || (() => {
+              const partes = new Intl.DateTimeFormat("en-GB", { timeZone: "America/Mexico_City", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date());
+              const minutos = Number(partes.find((part) => part.type === "hour")?.value) * 60 + Number(partes.find((part) => part.type === "minute")?.value);
+              return minutos < 9 * 60 + 30 || minutos > 17 * 60;
+            })()}>
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Crear Pedido
             </Button>
