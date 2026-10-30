@@ -38,6 +38,7 @@ export type Solicitud = {
   repartidor: RepartidorRef;
   fecha: string;
   hora: string;
+  de_hoy?: boolean;
   espera_desde?: string;
   prioridad: string;
   dinero_esperado?: number;

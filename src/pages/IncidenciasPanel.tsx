@@ -90,7 +90,7 @@ export default function IncidenciasPanel({ pedidos, solicitudes, superAdmin, onC
             <p className="text-muted-foreground">No hay problemas abiertos</p>
           ) : null}
           {problemas.map((row) => (
-            <div key={row.id} className="aviso-borde flex items-start justify-between gap-3 rounded-md bg-background px-3 py-2">
+            <div key={row.id} className={`${row.de_hoy === false ? "" : "aviso-borde "}flex items-start justify-between gap-3 rounded-md bg-background px-3 py-2`}>
               <button type="button" className="text-left" onClick={() => { if (row.repartidor?.id) onAbrir(row.repartidor.id); }}>
                 <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${row.tipo === "llamada_cliente" ? "bg-sky-100 text-sky-900" : "bg-amber-100 text-amber-900"}`}>{row.tipo === "llamada_cliente" ? "Llamada" : "Incidencia"}</span>
                 <span className="mt-1 block font-semibold">{row.repartidor?.nombre_completo || "Sin repartidor"} · {row.numero_pedido || "Sin pedido"}</span>

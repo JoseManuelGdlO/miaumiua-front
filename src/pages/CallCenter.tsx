@@ -438,7 +438,7 @@ function MonitorRepartidores({
                       <p className="text-lg font-semibold">{row.actual.numero_pedido}</p>
                       <p>{row.actual.cliente || "Sin cliente"}</p>
                       {row.actual.telefono ? <a className="inline-flex items-center gap-2 text-primary" href={`tel:${row.actual.telefono}`}><Phone className="h-4 w-4" />{row.actual.telefono}</a> : <p>Sin teléfono</p>}
-                      <p>{row.actual.direccion || "Sin dirección"}{row.actual.horario_preferente ? ` · a partir de ${row.actual.horario_preferente}` : ""}</p>
+                      <p>{row.actual.direccion || "Sin dirección"} · {row.actual.franja === "tarde" ? "Tarde · 12:00 PM – 5:00 PM" : "Mañana · 9:30 AM – 12:00 PM"}</p>
                       <div className="flex gap-2">
                         <Input value={nuevaDireccion} onChange={(event) => setNuevaDireccion(event.target.value)} placeholder="Nueva dirección de entrega" />
                         <Button variant="outline" disabled={busy || nuevaDireccion.trim().length < 10} onClick={() => {
@@ -454,11 +454,12 @@ function MonitorRepartidores({
                   {row.paradas.length > 0 ? (
                     <div className="space-y-2">
                       <p className="font-semibold">Ruta de hoy</p>
-                      {row.paradas.map((pedido) => {
+                      {[...row.paradas].sort((a, b) => (a.orden_entrega ?? 0) - (b.orden_entrega ?? 0)).map((pedido) => {
                         const esActual = row.actual?.id === pedido.id;
                         const cerrado = pedido.estado_entrega === "entregado" || pedido.estado === "entregado" || pedido.estado_entrega === "fallido" || pedido.estado === "no_entregado";
-                        const siguiente = !cerrado && !esActual && row.paradas.find((item) => item.estado_entrega !== "entregado" && item.estado !== "entregado" && item.estado_entrega !== "fallido" && item.estado !== "no_entregado" && item.id !== row.actual?.id)?.id === pedido.id;
-                        const tono = cerrado ? "bg-gray-100 opacity-60" : esActual ? "bg-pink-100" : siguiente ? "bg-white" : "bg-white";
+                        const siguienteId = [...row.paradas].sort((a, b) => (a.orden_entrega ?? 0) - (b.orden_entrega ?? 0)).find((item) => item.estado_entrega !== "entregado" && item.estado !== "entregado" && item.estado_entrega !== "fallido" && item.estado !== "no_entregado" && item.id !== row.actual?.id)?.id;
+                        const siguiente = !cerrado && !esActual && siguienteId === pedido.id;
+                        const tono = cerrado ? "bg-gray-100 text-gray-400" : esActual ? "border-2 border-pink-400 bg-pink-100" : "bg-white";
                         const chip = cerrado
                           ? "bg-gray-200 text-gray-700"
                           : esActual
@@ -470,7 +471,9 @@ function MonitorRepartidores({
                             ? "Fallido"
                             : esActual
                               ? "En curso"
-                              : "Siguiente";
+                              : siguiente
+                              ? "Siguiente"
+                              : "En la ruta";
                         return (
                         <div key={pedido.id} className={`rounded-xl px-3 py-3 ${tono}`}>
                           <p className="font-semibold">{pedido.numero_pedido}</p>
@@ -1231,8 +1234,8 @@ const CallCenter = () => {
       <Tabs value={tab} onValueChange={onTab}>
         <div className="overflow-hidden rounded-xl bg-white shadow-sm">
           <TabsList className="flex h-auto w-full justify-start gap-0 overflow-x-auto rounded-none border-b bg-transparent p-0">
-            <TabsTrigger value="despacho" className="rounded-none border-b-4 border-transparent bg-transparent px-4 py-3 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"><TabAviso n={solicitudes.filter((row) => row.tipo === "llamada_cliente").length}><Package className="h-4 w-4" /> Operación</TabAviso></TabsTrigger>
             <TabsTrigger value="checkin" className="rounded-none border-b-4 border-transparent bg-transparent px-4 py-3 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"><TabAviso rojo n={solicitudes.filter((row) => row.tipo === "check_in").length}><ClipboardCheck className="h-4 w-4" /> Validación de cargas</TabAviso></TabsTrigger>
+            <TabsTrigger value="despacho" className="rounded-none border-b-4 border-transparent bg-transparent px-4 py-3 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"><TabAviso n={solicitudes.filter((row) => row.tipo === "llamada_cliente").length}><Package className="h-4 w-4" /> Operación</TabAviso></TabsTrigger>
             <TabsTrigger value="soporte" className="rounded-none border-b-4 border-transparent bg-transparent px-4 py-3 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"><TabAviso n={solicitudes.filter((row) => row.tipo === "soporte").length}><LifeBuoy className="h-4 w-4" /> Soporte en Ruta</TabAviso></TabsTrigger>
             <TabsTrigger value="checkout" className="rounded-none border-b-4 border-transparent bg-transparent px-4 py-3 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"><TabAviso rojo n={solicitudes.filter((row) => row.tipo === "cierre_dia").length}><LogOut className="h-4 w-4" /> Check-out (Cierres)</TabAviso></TabsTrigger>
             <TabsTrigger value="incidencias" className="rounded-none border-b-4 border-transparent bg-transparent px-4 py-3 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"><TabAviso n={solicitudes.filter((row) => row.tipo === "soporte" || row.tipo === "llamada_cliente").length + pedidos.filter((row) => row.estado === "no_entregado" || row.estado_entrega === "fallido").length}><AlertTriangle className="h-4 w-4" /> Incidencias</TabAviso></TabsTrigger>
@@ -1266,11 +1269,13 @@ const CallCenter = () => {
                 </TableRow>
               ) : solicitudes.filter((row) => row.tipo !== "cierre_dia").map((row) => {
                 const fresco = avisosCola.some((aviso) => aviso.id === String(row.id));
+                const historico = row.de_hoy === false && (row.tipo === "llamada_cliente" || row.tipo === "soporte");
                 const rojo = row.tipo === "check_in";
+                const alerta = !historico && (fresco || row.tipo === "soporte" || row.tipo === "llamada_cliente");
                 return (
                 <TableRow
                   key={row.id}
-                  data-aviso={rojo || fresco || row.tipo === "soporte" || row.tipo === "llamada_cliente" ? "1" : undefined}
+                  data-aviso={rojo || alerta ? "1" : undefined}
                   onClick={() => {
                     stream?.dismissAviso(String(row.id));
                     if (row.tipo === "check_in") {
@@ -1279,7 +1284,7 @@ const CallCenter = () => {
                     }
                     void openSolicitud(row.id);
                   }}
-                  className={`cursor-pointer ${rojo ? "aviso-rojo" : (fresco || row.tipo === "soporte" || row.tipo === "llamada_cliente") ? "aviso-borde" : ""}`}
+                  className={`cursor-pointer ${rojo ? "aviso-rojo" : alerta ? "aviso-borde" : ""}`}
                 >
                   <TableCell>
                     <span className="inline-flex items-center gap-2">
@@ -1326,7 +1331,7 @@ const CallCenter = () => {
             pasos={[
               { titulo: "Horario", texto: "Mañana o Tarde elige cuándo la ve. El botón rosa es el actual. Aplicar a la ruta copia ese horario a toda la ruta." },
               { titulo: "Orden", texto: "Subir y Bajar cambian el lugar de la parada en la ruta." },
-              { titulo: "Liberar", texto: "Liberar siguiente es el paso que la muestra en la app. Hasta entonces el repartidor no la ve." },
+              { titulo: "Liberar", texto: "Al cerrar una entrega, la app abre sola la siguiente parada. Liberar siguiente sigue disponible si hay que adelantarla." },
               { titulo: "Cambiar", texto: "Cambiar sirve para el estado del pedido o para pasarlo a otro repartidor." },
             ]}
           />
@@ -1387,9 +1392,7 @@ const CallCenter = () => {
                       >
                         Aplicar a la ruta
                       </Button>
-                      {row.horario_preferente ? (
-                        <p className="text-[11px] text-muted-foreground">A partir de las {row.horario_preferente.slice(0, 5)}</p>
-                      ) : null}
+                      <p className="text-sm">{row.franja === "tarde" ? "Tarde · 12:00 PM – 5:00 PM" : "Mañana · 9:30 AM – 12:00 PM"}</p>
                     </div>
                   </TableCell>
                   <TableCell>
