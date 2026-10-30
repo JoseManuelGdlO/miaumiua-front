@@ -75,6 +75,7 @@ const EMPTY_ORDER_FORM = {
 const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderModalProps) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [direcciones, setDirecciones] = useState<string[]>([]);
   /** Pedido creado con tarjeta pero falló la generación del link Stripe: permite reintentar sin recrear el pedido */
   const [pendingStripeOrderId, setPendingStripeOrderId] = useState<number | null>(null);
   const [stripeRetryLoading, setStripeRetryLoading] = useState(false);
@@ -234,6 +235,11 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
         fkid_ciudad: cliente.fkid_ciudad.toString(),
         direccion_entrega: cliente.direccion_entrega || ""
       }));
+      void ordersService.getOrdersByClient(cliente.id).then((response) => {
+        const previas = (response.data?.pedidos || []).map((row) => row.direccion_entrega).filter(Boolean);
+        const unicas = [...new Set([cliente.direccion_entrega || "", ...previas].map((row) => row.trim()).filter((row) => row.length >= 10))];
+        setDirecciones(unicas);
+      }).catch(() => setDirecciones(cliente.direccion_entrega ? [cliente.direccion_entrega] : []));
     } else {
       setSelectedCliente(null);
       setFormData(prev => ({
@@ -244,6 +250,7 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
         fkid_ciudad: "",
         direccion_entrega: ""
       }));
+      setDirecciones([]);
     }
   };
 
@@ -386,6 +393,16 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
       }
     }
 
+    const horaElegida = (formData.fecha_entrega_estimada.split('T')[1] || '').slice(0, 5);
+    if (horaElegida) {
+      const [hh, mm] = horaElegida.split(':').map(Number);
+      const minutos = hh * 60 + mm;
+      if (minutos < 9 * 60 + 30 || minutos > 17 * 60) {
+        toast({ title: 'Horario', description: 'La entrega solo puede ser entre las 9:30 y las 17:00', variant: 'destructive' });
+        return;
+      }
+    }
+
     try {
       setLoading(true);
       setPendingStripeOrderId(null);
@@ -397,7 +414,7 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
          direccion_entrega: formData.direccion_entrega,
          fkid_ciudad: parseInt(formData.fkid_ciudad),
          fecha_entrega_estimada: formData.fecha_entrega_estimada || undefined,
-         horario_preferente: formData.horario_preferente || undefined,
+         horario_preferente: (formData.fecha_entrega_estimada.split('T')[1] || '').slice(0, 5) || undefined,
          metodo_pago: formData.metodo_pago as any,
          notas: formData.notas || undefined,
          codigo_promocion: formData.codigo_promocion || undefined,
@@ -585,7 +602,14 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="direccion_entrega">Dirección de Entrega *</Label>
+                  <Label htmlFor="direccion_entrega">Dirección de Entrega *</Label>
+                  {direcciones.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {direcciones.map((direccion) => (
+                        <button key={direccion} type="button" className="rounded-md bg-muted px-2 py-1 text-left text-sm" onClick={() => handleInputChange("direccion_entrega", direccion)}>{direccion}</button>
+                      ))}
+                    </div>
+                  ) : null}
                 <Textarea
                   id="direccion_entrega"
                   value={formData.direccion_entrega}
@@ -613,24 +637,15 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="fecha_entrega_estimada">Fecha de Entrega Estimada</Label>
+                  <Label htmlFor="fecha_entrega_estimada">Fecha y hora de entrega</Label>
                   <Input
                     id="fecha_entrega_estimada"
                     type="datetime-local"
                     value={formData.fecha_entrega_estimada}
                     onChange={(e) => handleInputChange('fecha_entrega_estimada', e.target.value)}
                   />
+                  <p className="text-xs text-muted-foreground">De 9:30 a 17:00. Antes de las 14:00 queda en Mañana. Desde las 14:00 queda en Tarde.</p>
                 </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="horario_preferente">A partir de las</Label>
-                <Input
-                  id="horario_preferente"
-                  type="time"
-                  value={formData.horario_preferente}
-                  onChange={(e) => handleInputChange('horario_preferente', e.target.value)}
-                />
-                <p className="text-xs text-muted-foreground">Antes de las 14:00 es Mañana. Desde las 14:00 es Tarde.</p>
               </div>
             </CardContent>
           </Card>

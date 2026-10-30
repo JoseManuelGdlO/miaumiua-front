@@ -38,6 +38,7 @@ export type Solicitud = {
   repartidor: RepartidorRef;
   fecha: string;
   hora: string;
+  de_hoy?: boolean;
   espera_desde?: string;
   prioridad: string;
   dinero_esperado?: number;
@@ -63,6 +64,7 @@ export type PedidoDia = {
   notas?: string | null;
   franja?: "manana" | "tarde";
   horario_preferente?: string | null;
+  metodo_pago?: string | null;
   orden_entrega?: number | null;
   repartidor: RepartidorRef;
   ciudad_id: number | null;
@@ -76,7 +78,10 @@ export type ComprobantePago = {
   pedido_id: number;
   numero_pedido: string;
   repartidor: string | null;
+  ciudad?: string | null;
   metodo: string;
+  nota?: string | null;
+  fecha?: string | null;
   comprobante_url: string | null;
   puede_subir: boolean;
 };
@@ -177,6 +182,10 @@ export const callCenterService = {
     method: 'POST',
     body: JSON.stringify({ fecha, motivo }),
   }),
+  cambiarDireccion: (id: number, direccion: string) => request<{ direccion_entrega: string }>(`/call-center/pedidos/${id}/direccion`, {
+    method: 'POST',
+    body: JSON.stringify({ direccion }),
+  }),
   cambiarFranja: (id: number, franja: "manana" | "tarde", alcance?: "ruta") => request<{ franja: string }>(`/call-center/pedidos/${id}/franja`, {
     method: 'POST',
     body: JSON.stringify(alcance ? { franja, alcance } : { franja }),
@@ -185,7 +194,11 @@ export const callCenterService = {
     method: 'POST',
   }),
   listarVelocidad: () => request<VelocidadDia[]>('/call-center/velocidad'),
-  listarComprobantes: () => request<ComprobantePago[]>('/call-center/comprobantes'),
+  listarComprobantes: (query?: { historico?: boolean }) => request<ComprobantePago[]>(`/call-center/comprobantes${query?.historico ? '?historico=1' : ''}`),
+  anotarComprobante: (id: number, comentario: string) => request<{ guardado: boolean }>(`/call-center/pedidos/${id}/comprobante-nota`, {
+    method: 'POST',
+    body: JSON.stringify({ comentario }),
+  }),
   subirComprobante: (id: number, file: File) => {
     const body = new FormData();
     body.append('comprobante', file);

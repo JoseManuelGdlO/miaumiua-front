@@ -2,6 +2,7 @@ import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } fr
 import { useSearchParams } from "react-router-dom";
 import { AlertTriangle, ChevronDown, ClipboardCheck, Download, Headphones, History, Inbox, LifeBuoy, Loader2, LogOut, Package, Phone, Receipt, Truck, Users, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useNotificationStream } from "@/hooks/useNotificationStream";
@@ -101,11 +103,11 @@ const TAB_ALIAS: Record<string, string> = {
   incidencias: "incidencias",
 };
 
-function TabAviso({ n, children }: { n: number; children: ReactNode }) {
+function TabAviso({ n, rojo = false, children }: { n: number; rojo?: boolean; children: ReactNode }) {
   return (
     <span className="inline-flex items-center gap-2">
       {children}
-      {n > 0 ? <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-xs font-semibold text-white">{n}</span> : null}
+      {n > 0 ? <span className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-xs font-semibold text-white ${rojo ? "bg-red-600" : "bg-primary"}`}>{n}</span> : null}
     </span>
   );
 }
@@ -325,6 +327,7 @@ function MonitorRepartidores({
   const [ciudad, setCiudad] = useState("all");
   const [elegido, setElegido] = useState<number | null>(abiertoId);
   const [mensaje, setMensaje] = useState("");
+  const [nuevaDireccion, setNuevaDireccion] = useState("");
   const [agentes, setAgentes] = useState<{ nombre: string; telefono: string; repartidor_ids: number[]; numeros?: { telefono: string; repartidor_ids: number[] }[] }[]>([]);
   const nombres = new Map<number, string>();
   for (const pedido of pedidos) {
@@ -396,7 +399,7 @@ function MonitorRepartidores({
         const [id, nombre] = activo;
         const row = ficha(id, nombre);
         return (
-          <div data-aviso={row.pideAtencion ? "1" : undefined} className={`overflow-hidden rounded-xl border-t-4 bg-white ${row.pideAtencion ? "border-red-500" : "border-primary"}`}>
+          <div data-aviso={row.pideAtencion ? "1" : undefined} className={`overflow-hidden rounded-xl border-t-4 bg-white ${row.pideAtencion ? "aviso-borde border-primary" : "border-primary"}`}>
             <div className="flex items-center justify-between gap-3 px-4 py-4">
               <div className="flex items-center gap-3">
                 <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">{iniciales(nombre)}</span>
@@ -435,19 +438,48 @@ function MonitorRepartidores({
                       <p className="text-lg font-semibold">{row.actual.numero_pedido}</p>
                       <p>{row.actual.cliente || "Sin cliente"}</p>
                       {row.actual.telefono ? <a className="inline-flex items-center gap-2 text-primary" href={`tel:${row.actual.telefono}`}><Phone className="h-4 w-4" />{row.actual.telefono}</a> : <p>Sin teléfono</p>}
-                      <p>{row.actual.direccion || "Sin dirección"}{row.actual.horario_preferente ? ` · a partir de ${row.actual.horario_preferente}` : ""}</p>
+                      <p>{row.actual.direccion || "Sin dirección"} · {row.actual.franja === "tarde" ? "Tarde · 12:00 PM – 5:00 PM" : "Mañana · 9:30 AM – 12:00 PM"}</p>
+                      <div className="flex gap-2">
+                        <Input value={nuevaDireccion} onChange={(event) => setNuevaDireccion(event.target.value)} placeholder="Nueva dirección de entrega" />
+                        <Button variant="outline" disabled={busy || nuevaDireccion.trim().length < 10} onClick={() => {
+                          void callCenterService.cambiarDireccion(row.actual!.id, nuevaDireccion.trim())
+                            .then(() => { setNuevaDireccion(""); onChanged(); })
+                            .catch(onError);
+                        }}>Cambiar</Button>
+                      </div>
+                      {row.actual.metodo_pago ? <p>Método de pago registrado: {row.actual.metodo_pago}{row.actual.modificado ? ". El cobro en campo no coincide." : ""}</p> : null}
                       {row.actual.total > 0 ? <p>Monto a cobrar en entrega: ${formatMoney(row.actual.total)} MXN</p> : null}
                     </>
                   ) : <p>Sin pedido pendiente. No tiene entregas activas ahora.</p>}
                   {row.paradas.length > 0 ? (
                     <div className="space-y-2">
                       <p className="font-semibold">Ruta de hoy</p>
-                      {row.paradas.map((pedido) => {
+                      {[...row.paradas].sort((a, b) => (a.orden_entrega ?? 0) - (b.orden_entrega ?? 0)).map((pedido) => {
                         const esActual = row.actual?.id === pedido.id;
+                        const cerrado = pedido.estado_entrega === "entregado" || pedido.estado === "entregado" || pedido.estado_entrega === "fallido" || pedido.estado === "no_entregado";
+                        const siguienteId = [...row.paradas].sort((a, b) => (a.orden_entrega ?? 0) - (b.orden_entrega ?? 0)).find((item) => item.estado_entrega !== "entregado" && item.estado !== "entregado" && item.estado_entrega !== "fallido" && item.estado !== "no_entregado" && item.id !== row.actual?.id)?.id;
+                        const siguiente = !cerrado && !esActual && siguienteId === pedido.id;
+                        const tono = cerrado ? "bg-gray-100 text-gray-400" : esActual ? "border-2 border-pink-400 bg-pink-100" : "bg-white";
+                        const chip = cerrado
+                          ? "bg-gray-200 text-gray-700"
+                          : esActual
+                            ? "bg-pink-200 text-pink-950"
+                            : "bg-muted text-foreground";
+                        const etiqueta = pedido.estado_entrega === "entregado" || pedido.estado === "entregado"
+                          ? "Entregado"
+                          : pedido.estado_entrega === "fallido" || pedido.estado === "no_entregado"
+                            ? "Fallido"
+                            : esActual
+                              ? "En curso"
+                              : siguiente
+                              ? "Siguiente"
+                              : "En la ruta";
                         return (
-                        <p key={pedido.id} className={esActual ? "font-semibold" : "text-muted-foreground"}>
-                          {pedido.numero_pedido} · {pedido.cliente || "Sin cliente"} · <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-semibold">{ENTREGA[pedido.estado_entrega] || pedido.estado}</span>
-                        </p>
+                        <div key={pedido.id} className={`rounded-xl px-3 py-3 ${tono}`}>
+                          <p className="font-semibold">{pedido.numero_pedido}</p>
+                          <p>{pedido.cliente || "Sin cliente"}</p>
+                          <span className={`mt-2 inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${chip}`}>{etiqueta}</span>
+                        </div>
                         );
                       })}
                     </div>
@@ -562,7 +594,7 @@ function MonitorRepartidores({
                   type="button"
                   data-aviso={row.pideAtencion ? "1" : undefined}
                   onClick={() => setElegido(id)}
-                  className={`flex items-center justify-between gap-3 rounded-xl px-3 py-3 text-left ${row.pideAtencion ? "bg-red-50" : "bg-muted/40"}`}
+                  className={`flex items-center justify-between gap-3 rounded-xl px-3 py-3 text-left ${row.pideAtencion ? "aviso-borde bg-white" : "bg-muted/40"}`}
                 >
                   <span className="flex items-center gap-3">
                     <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">{iniciales(nombre)}</span>
@@ -665,7 +697,8 @@ function CheckoutDia({
             </div>
             <div className="space-y-3 bg-muted/40 p-4">
               {cierres.length === 0 ? <p>Este repartidor no ha enviado el cierre de hoy.</p> : cierres.map((row) => (
-                <div key={row.id} data-aviso="1" className="space-y-3 rounded-xl bg-pink-50 p-4">
+                <div key={row.id} data-aviso="1" className="aviso-rojo space-y-3 rounded-xl bg-white p-4">
+                  <p><span className="rounded-full bg-red-600 px-2 py-0.5 text-xs font-semibold text-white">Check-out pendiente</span></p>
                   <p className="font-semibold">Efectivo a depositar ${formatMoney(row.efectivo_a_depositar || 0)}</p>
                   {row.comprobante_url ? (
                     <img src={receiptSrc(row.comprobante_url)} alt={`Comprobante de ${nombre}`} className="max-h-64 w-full rounded-md object-contain" />
@@ -694,7 +727,7 @@ function CheckoutDia({
                 type="button"
                 data-aviso={pendiente ? "1" : undefined}
                 onClick={() => setElegido(id)}
-                className={`flex items-center justify-between gap-3 rounded-xl px-3 py-3 text-left ${pendiente ? "bg-red-50" : "bg-muted/40"}`}
+                className={`flex items-center justify-between gap-3 rounded-xl px-3 py-3 text-left ${pendiente ? "aviso-rojo bg-white" : "bg-muted/40"}`}
               >
                 <span className="flex items-center gap-3">
                   <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">{iniciales(nombre)}</span>
@@ -753,6 +786,10 @@ const CallCenter = () => {
   const [pedidos, setPedidos] = useState<PedidoDia[]>([]);
   const [velocidades, setVelocidades] = useState<VelocidadDia[]>([]);
   const [comprobantes, setComprobantes] = useState<ComprobantePago[]>([]);
+  const [comprobantesHistorico, setComprobantesHistorico] = useState<ComprobantePago[] | null>(null);
+  const [filtroPago, setFiltroPago] = useState("all");
+  const [filtroCobro, setFiltroCobro] = useState("");
+  const [notaCobro, setNotaCobro] = useState<Record<number, string>>({});
   const [depositos, setDepositos] = useState<DepositoRuta[]>([]);
   const [cities, setCities] = useState<City[]>([]);
   const [ciudadId, setCiudadId] = useState<string>("all");
@@ -987,6 +1024,8 @@ const CallCenter = () => {
     try {
       const result = await callCenterService.liberarCierre(id);
       toast({ title: "Día completado", description: result.cerrado_por_nombre || undefined });
+      setSolicitudes((rows) => rows.filter((row) => row.id !== id && !(row.tipo === "cierre_dia" && row.repartidor?.id === solicitudes.find((item) => item.id === id)?.repartidor?.id)));
+      stream?.dismissAviso(String(id));
       if (detail?.id === id) dismissDetail();
       await afterAction();
     } catch (error) {
@@ -1093,6 +1132,18 @@ const CallCenter = () => {
     }
   };
 
+  const aCola = async (id: number) => {
+    const manana = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const fecha = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Mexico_City" }).format(manana);
+    try {
+      await callCenterService.reagendar(id, fecha, "A la cola de planeación");
+      toast({ title: "Pedido en la cola de planeación" });
+      await loadLists();
+    } catch (error) {
+      notify(error);
+    }
+  };
+
   const cerrarSinCodigo = async () => {
     if (!reassignFor || busy || motivoCierre.trim().length < 5) return;
     setBusy(true);
@@ -1183,10 +1234,10 @@ const CallCenter = () => {
       <Tabs value={tab} onValueChange={onTab}>
         <div className="overflow-hidden rounded-xl bg-white shadow-sm">
           <TabsList className="flex h-auto w-full justify-start gap-0 overflow-x-auto rounded-none border-b bg-transparent p-0">
+            <TabsTrigger value="checkin" className="rounded-none border-b-4 border-transparent bg-transparent px-4 py-3 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"><TabAviso rojo n={solicitudes.filter((row) => row.tipo === "check_in").length}><ClipboardCheck className="h-4 w-4" /> Validación de cargas</TabAviso></TabsTrigger>
             <TabsTrigger value="despacho" className="rounded-none border-b-4 border-transparent bg-transparent px-4 py-3 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"><TabAviso n={solicitudes.filter((row) => row.tipo === "llamada_cliente").length}><Package className="h-4 w-4" /> Operación</TabAviso></TabsTrigger>
-            <TabsTrigger value="checkin" className="rounded-none border-b-4 border-transparent bg-transparent px-4 py-3 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"><TabAviso n={solicitudes.filter((row) => row.tipo === "check_in").length}><ClipboardCheck className="h-4 w-4" /> Validación de cargas</TabAviso></TabsTrigger>
             <TabsTrigger value="soporte" className="rounded-none border-b-4 border-transparent bg-transparent px-4 py-3 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"><TabAviso n={solicitudes.filter((row) => row.tipo === "soporte").length}><LifeBuoy className="h-4 w-4" /> Soporte en Ruta</TabAviso></TabsTrigger>
-            <TabsTrigger value="checkout" className="rounded-none border-b-4 border-transparent bg-transparent px-4 py-3 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"><TabAviso n={solicitudes.filter((row) => row.tipo === "cierre_dia").length}><LogOut className="h-4 w-4" /> Check-out (Cierres)</TabAviso></TabsTrigger>
+            <TabsTrigger value="checkout" className="rounded-none border-b-4 border-transparent bg-transparent px-4 py-3 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"><TabAviso rojo n={solicitudes.filter((row) => row.tipo === "cierre_dia").length}><LogOut className="h-4 w-4" /> Check-out (Cierres)</TabAviso></TabsTrigger>
             <TabsTrigger value="incidencias" className="rounded-none border-b-4 border-transparent bg-transparent px-4 py-3 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"><TabAviso n={solicitudes.filter((row) => row.tipo === "soporte" || row.tipo === "llamada_cliente").length + pedidos.filter((row) => row.estado === "no_entregado" || row.estado_entrega === "fallido").length}><AlertTriangle className="h-4 w-4" /> Incidencias</TabAviso></TabsTrigger>
           </TabsList>
         </div>
@@ -1218,11 +1269,13 @@ const CallCenter = () => {
                 </TableRow>
               ) : solicitudes.filter((row) => row.tipo !== "cierre_dia").map((row) => {
                 const fresco = avisosCola.some((aviso) => aviso.id === String(row.id));
-                const aqui = row.tipo === "llamada_cliente" || row.tipo === "check_in";
+                const historico = row.de_hoy === false && (row.tipo === "llamada_cliente" || row.tipo === "soporte");
+                const rojo = row.tipo === "check_in";
+                const alerta = !historico && (fresco || row.tipo === "soporte" || row.tipo === "llamada_cliente");
                 return (
                 <TableRow
                   key={row.id}
-                  data-aviso={aqui ? "1" : undefined}
+                  data-aviso={rojo || alerta ? "1" : undefined}
                   onClick={() => {
                     stream?.dismissAviso(String(row.id));
                     if (row.tipo === "check_in") {
@@ -1231,11 +1284,11 @@ const CallCenter = () => {
                     }
                     void openSolicitud(row.id);
                   }}
-                  className={fresco || aqui ? "cursor-pointer bg-red-50" : "cursor-pointer"}
+                  className={`cursor-pointer ${rojo ? "aviso-rojo" : alerta ? "aviso-borde" : ""}`}
                 >
                   <TableCell>
                     <span className="inline-flex items-center gap-2">
-                      {(fresco || aqui) && <span className="h-2 w-2 rounded-full bg-red-500" aria-hidden />}
+                      {row.tipo === "check_in" ? <span className="rounded-full bg-red-600 px-2 py-0.5 text-xs font-semibold text-white">Pendiente</span> : null}
                       {TIPO[row.tipo] || row.tipo}
                     </span>
                   </TableCell>
@@ -1278,7 +1331,7 @@ const CallCenter = () => {
             pasos={[
               { titulo: "Horario", texto: "Mañana o Tarde elige cuándo la ve. El botón rosa es el actual. Aplicar a la ruta copia ese horario a toda la ruta." },
               { titulo: "Orden", texto: "Subir y Bajar cambian el lugar de la parada en la ruta." },
-              { titulo: "Liberar", texto: "Liberar siguiente es el paso que la muestra en la app. Hasta entonces el repartidor no la ve." },
+              { titulo: "Liberar", texto: "Al cerrar una entrega, la app abre sola la siguiente parada. Liberar siguiente sigue disponible si hay que adelantarla." },
               { titulo: "Cambiar", texto: "Cambiar sirve para el estado del pedido o para pasarlo a otro repartidor." },
             ]}
           />
@@ -1298,19 +1351,22 @@ const CallCenter = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {pedidos.length === 0 ? (
+              {pedidos.filter((row) => row.estado !== "entregado" && row.estado_entrega !== "entregado").length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={9} className="py-8 text-center text-muted-foreground">
                     No hay pedidos para los filtros seleccionados
                   </TableCell>
                 </TableRow>
-              ) : pedidos.map((row) => (
+              ) : pedidos.filter((row) => row.estado !== "entregado" && row.estado_entrega !== "entregado").map((row) => (
                 <TableRow key={row.ruta_pedido_id}>
                   <TableCell>{row.numero_pedido}</TableCell>
                   <TableCell>{row.cliente || "—"}</TableCell>
                   <TableCell>{row.telefono ? <a href={`tel:${row.telefono}`}>{row.telefono}</a> : "—"}</TableCell>
                   <TableCell>{row.direccion || "—"}</TableCell>
-                  <TableCell><OrderStatus estado={row.estado} modificado={row.modificado} /></TableCell>
+                  <TableCell>
+                    {row.estado_entrega === "fallido" ? <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">Reagendado</span> : <OrderStatus estado={row.estado} modificado={row.modificado} />}
+                    {row.metodo_pago ? <p>Registrado: {row.metodo_pago}{row.modificado ? ". Cobro distinto." : ""}</p> : null}
+                  </TableCell>
                   <TableCell>
                     <div className="flex min-w-36 flex-col gap-1.5">
                       <div role="group" aria-label={`Horario del pedido ${row.numero_pedido}`} className="flex rounded-md bg-muted p-0.5">
@@ -1336,9 +1392,7 @@ const CallCenter = () => {
                       >
                         Aplicar a la ruta
                       </Button>
-                      {row.horario_preferente ? (
-                        <p className="text-[11px] text-muted-foreground">A partir de las {row.horario_preferente.slice(0, 5)}</p>
-                      ) : null}
+                      <p className="text-sm">{row.franja === "tarde" ? "Tarde · 12:00 PM – 5:00 PM" : "Mañana · 9:30 AM – 12:00 PM"}</p>
                     </div>
                   </TableCell>
                   <TableCell>
@@ -1368,6 +1422,7 @@ const CallCenter = () => {
                         {trabajando === `liberar:${row.id}` ? <Loader2 className="animate-spin" /> : null}
                         {trabajando === `liberar:${row.id}` ? "Liberando…" : "Liberar siguiente"}
                       </Button>
+                      {row.estado_entrega === "fallido" ? <Button variant="outline" size="sm" onClick={() => void aCola(row.id)}>A la cola</Button> : null}
                       {statusOptions(row.estado).length > 0 || canReassign(row.estado) ? (
                         <Button
                           variant="outline"
@@ -1390,19 +1445,53 @@ const CallCenter = () => {
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2"><Receipt className="h-5 w-5 text-primary" />Comprobantes de hoy</CardTitle>
-          <CardDescription>Cobros de hoy. Si la transferencia no tiene foto, súbela aquí.</CardDescription>
+          <CardTitle className="flex items-center gap-2"><Receipt className="h-5 w-5 text-primary" />{comprobantesHistorico ? "Histórico de comprobantes" : "Comprobantes de hoy"}</CardTitle>
+          <CardDescription>Cobros y fotos. El comentario queda en la parada de esa entrega.</CardDescription>
         </CardHeader>
-        <CardContent>
-          {comprobantes.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No hay comprobantes de hoy.</p>
-          ) : (
+        <CardContent className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button onClick={() => {
+                  if (comprobantesHistorico) {
+                    setComprobantesHistorico(null);
+                    return;
+                  }
+                  void callCenterService.listarComprobantes({ historico: true }).then(setComprobantesHistorico).catch(notify);
+                }}>{comprobantesHistorico ? "Solo hoy" : "Ver histórico"}</Button>
+              </TooltipTrigger>
+              <TooltipContent>{comprobantesHistorico ? "Vuelve a los comprobantes de hoy." : "Muestra todos los comprobantes, no solo los de hoy."}</TooltipContent>
+            </Tooltip>
+            <Select value={filtroPago} onValueChange={setFiltroPago}>
+              <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los métodos</SelectItem>
+                <SelectItem value="efectivo">Efectivo</SelectItem>
+                <SelectItem value="transferencia">Transferencia</SelectItem>
+                <SelectItem value="mixto">Mixto</SelectItem>
+                <SelectItem value="tarjeta">Tarjeta</SelectItem>
+              </SelectContent>
+            </Select>
+            <Input value={filtroCobro} onChange={(event) => setFiltroCobro(event.target.value)} placeholder="Repartidor o ciudad" className="w-56" />
+          </div>
+          {(() => {
+            const fuente = comprobantesHistorico || comprobantes;
+            const q = filtroCobro.trim().toLowerCase();
+            const visibles = fuente.filter((row) => {
+              if (filtroPago !== "all" && row.metodo !== filtroPago) return false;
+              if (!q) return true;
+              return `${row.repartidor || ""} ${row.ciudad || ""}`.toLowerCase().includes(q);
+            });
+            if (visibles.length === 0) return <p className="text-sm text-muted-foreground">No hay comprobantes con ese filtro.</p>;
+            return (
             <div className="space-y-3">
-              {comprobantes.map((row) => (
-                <div key={row.pedido_id} className="flex items-center justify-between gap-3 text-sm">
+              {visibles.map((row) => (
+                <div key={`${row.fecha || "hoy"}-${row.pedido_id}`} className="space-y-2 text-sm">
+                  <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="font-medium">{row.numero_pedido}</p>
-                    <p className="text-muted-foreground">{row.repartidor || "—"} · {row.metodo}</p>
+                    <p className="font-medium">{row.numero_pedido}{row.fecha ? ` · ${String(row.fecha).slice(0, 10)}` : ""}</p>
+                    <p className="text-muted-foreground">{row.repartidor || "—"}{row.ciudad ? ` · ${row.ciudad}` : ""} · {row.metodo}</p>
+                    {row.nota ? <p>{row.nota}</p> : null}
                   </div>
                   {row.comprobante_url ? (
                     <button
@@ -1431,10 +1520,26 @@ const CallCenter = () => {
                       />
                     </label>
                   ) : "—"}
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      value={notaCobro[row.pedido_id] || ""}
+                      onChange={(event) => setNotaCobro((prev) => ({ ...prev, [row.pedido_id]: event.target.value }))}
+                      placeholder="Comentario de este comprobante"
+                    />
+                    <Button variant="outline" onClick={() => {
+                      const texto = (notaCobro[row.pedido_id] || "").trim();
+                      if (texto.length < 2) return;
+                      void callCenterService.anotarComprobante(row.pedido_id, texto)
+                        .then(() => loadLists())
+                        .catch(notify);
+                    }}>Guardar</Button>
+                  </div>
                 </div>
               ))}
             </div>
-          )}
+            );
+          })()}
         </CardContent>
       </Card>
 
@@ -1679,7 +1784,7 @@ const CallCenter = () => {
                         </TableCell>
                       </TableRow>
                     ) : pendientes.map((row) => (
-                      <TableRow key={row.id} data-aviso="1" className={cargaId === row.id ? "bg-primary/10" : "bg-red-50"}>
+                      <TableRow key={row.id} data-aviso="1" className="aviso-rojo">
                         <TableCell>
                           <span className="inline-flex items-center gap-2">
                             <span className="h-2 w-2 rounded-full bg-red-500" aria-hidden />
