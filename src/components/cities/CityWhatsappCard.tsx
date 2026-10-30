@@ -104,6 +104,11 @@ const CityWhatsappCard = ({ cityId, initial, canEdit }: CityWhatsappCardProps) =
 
   const isConnected = Boolean(whatsapp?.connected);
   const canRegenerate = canEdit && !isConnected;
+  const inviteStatus = whatsapp?.inviteStatus;
+  const showInviteDetails =
+    Boolean(whatsapp?.inviteUrl) &&
+    inviteStatus !== "expired" &&
+    inviteStatus !== "none";
 
   return (
     <div className="space-y-3 rounded-md border p-4">
@@ -124,7 +129,7 @@ const CityWhatsappCard = ({ cityId, initial, canEdit }: CityWhatsappCardProps) =
         )}
       </div>
 
-      {canEdit && !loading && !isConnected && whatsapp?.inviteUrl && (
+      {canEdit && !loading && !isConnected && showInviteDetails && (
         <div className="space-y-2">
           <div className="break-all rounded-md bg-muted p-3 text-sm">{whatsapp.inviteUrl}</div>
           {whatsapp.expiresAt && (

@@ -360,8 +360,15 @@ const CreateCityModal = ({ open, onOpenChange, onCityCreated }: CreateCityModalP
     { value: 6, label: "Sábado" }
   ];
 
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      resetForm();
+    }
+    onOpenChange(nextOpen);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Nueva Ciudad</DialogTitle>
