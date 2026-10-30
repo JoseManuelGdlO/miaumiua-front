@@ -21,7 +21,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { citiesService, HORARIO_POR_DIA_DEFAULT, type HorarioPorDia } from "@/services/citiesService";
 import { formatHour24To12, parseHour12To24 } from "@/utils/businessHoursTime";
-import { Loader2 } from "lucide-react";
+import { Copy, Loader2 } from "lucide-react";
 
 interface CreateCityModalProps {
   open: boolean;
@@ -33,6 +33,7 @@ const CreateCityModal = ({ open, onOpenChange, onCityCreated }: CreateCityModalP
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [savingPoints, setSavingPoints] = useState(false);
+  const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     nombre: "",
     departamento: "",
@@ -66,6 +67,7 @@ const CreateCityModal = ({ open, onOpenChange, onCityCreated }: CreateCityModalP
 
   // Reset form cuando se abre el modal
   const resetForm = () => {
+    setInviteUrl(null);
     setFormData({
       nombre: "",
       departamento: "",
@@ -242,8 +244,13 @@ const CreateCityModal = ({ open, onOpenChange, onCityCreated }: CreateCityModalP
           description: `${formData.nombre} ha sido registrada exitosamente`,
         });
         onCityCreated();
-        resetForm();
-        onOpenChange(false);
+        const createdInviteUrl = response.data.whatsapp?.inviteUrl;
+        if (createdInviteUrl) {
+          setInviteUrl(createdInviteUrl);
+        } else {
+          resetForm();
+          onOpenChange(false);
+        }
       }
     } catch (error) {
       console.error('Error al crear ciudad:', error);
@@ -263,6 +270,20 @@ const CreateCityModal = ({ open, onOpenChange, onCityCreated }: CreateCityModalP
       ...prev,
       [field]: value
     }));
+  };
+
+  const handleCopyInviteUrl = async () => {
+    if (!inviteUrl) return;
+    try {
+      await navigator.clipboard.writeText(inviteUrl);
+      toast({ title: "Link copiado" });
+    } catch {
+      toast({
+        title: "Error",
+        description: "No se pudo copiar el link",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleHorarioChange = (diaKey: string, field: 'inicio' | 'fin', value: number) => {
@@ -349,6 +370,29 @@ const CreateCityModal = ({ open, onOpenChange, onCityCreated }: CreateCityModalP
           </DialogDescription>
         </DialogHeader>
 
+        {inviteUrl ? (
+          <div className="space-y-4">
+            <div className="space-y-2 rounded-md border p-4">
+              <Label>Link para vincular WhatsApp</Label>
+              <div className="break-all rounded-md bg-muted p-3 text-sm">{inviteUrl}</div>
+              <Button type="button" variant="outline" onClick={handleCopyInviteUrl}>
+                <Copy className="mr-2 h-4 w-4" />
+                Copiar
+              </Button>
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                onClick={() => {
+                  resetForm();
+                  onOpenChange(false);
+                }}
+              >
+                Listo
+              </Button>
+            </DialogFooter>
+          </div>
+        ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -636,6 +680,7 @@ const CreateCityModal = ({ open, onOpenChange, onCityCreated }: CreateCityModalP
             </Button>
           </DialogFooter>
         </form>
+        )}
       </DialogContent>
     </Dialog>
   );

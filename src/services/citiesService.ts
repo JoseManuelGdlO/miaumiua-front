@@ -20,6 +20,15 @@ export const HORARIO_POR_DIA_DEFAULT: HorarioPorDia = {
 };
 
 // Tipos para las ciudades
+export interface CityWhatsapp {
+  connected: boolean;
+  inviteStatus: 'pending' | 'expired' | 'used' | 'connected' | 'none';
+  displayPhone: string | null;
+  coexistenceEnabled: boolean;
+  expiresAt: string | null;
+  inviteUrl?: string;
+}
+
 export interface City {
   id: number;
   nombre: string;
@@ -43,6 +52,7 @@ export interface City {
   baja_logica: boolean;
   created_at: string;
   updated_at: string;
+  whatsapp?: CityWhatsapp;
 }
 
 export interface PointOfSale {
@@ -126,6 +136,7 @@ export interface CityResponse {
   success: boolean;
   data: {
     city: City;
+    whatsapp?: CityWhatsapp;
   };
   message?: string;
 }
@@ -266,6 +277,22 @@ class CitiesService {
   async restoreCity(id: number): Promise<CityResponse> {
     return this.makeRequest<CityResponse>(`${this.baseUrl}/${id}/restore`, {
       method: 'PATCH',
+    });
+  }
+
+  async getCityWhatsapp(id: number) {
+    return this.makeRequest<{ success: boolean; data: { whatsapp: CityWhatsapp } }>(`${this.baseUrl}/${id}/whatsapp`);
+  }
+
+  async regenerateCityWhatsapp(id: number) {
+    return this.makeRequest<{ success: boolean; data: { whatsapp: CityWhatsapp } }>(`${this.baseUrl}/${id}/whatsapp/invite`, {
+      method: 'POST',
+    });
+  }
+
+  async disconnectCityWhatsapp(id: number) {
+    return this.makeRequest<{ success: boolean; data: { whatsapp: CityWhatsapp } }>(`${this.baseUrl}/${id}/whatsapp/disconnect`, {
+      method: 'POST',
     });
   }
 

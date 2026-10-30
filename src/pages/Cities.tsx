@@ -160,6 +160,25 @@ const Cities = () => {
     return new Date(dateString).toLocaleDateString('es-ES');
   };
 
+  const getWhatsappStatus = (city: City) => {
+    const whatsapp = city.whatsapp;
+
+    if (whatsapp?.connected) {
+      return (
+        <div className="text-sm">
+          <div className="font-medium">{whatsapp.displayPhone || "WhatsApp conectado"}</div>
+          {whatsapp.coexistenceEnabled && (
+            <div className="text-muted-foreground">coexistencia activa</div>
+          )}
+        </div>
+      );
+    }
+
+    if (whatsapp?.inviteStatus === "expired") return "Link vencido";
+    if (!whatsapp || whatsapp.inviteStatus === "none") return "Sin link";
+    return "Pendiente de vincular";
+  };
+
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
       <div className="flex items-center justify-between">
@@ -218,6 +237,7 @@ const Cities = () => {
                   <TableHead>Manager</TableHead>
                   <TableHead>Contacto</TableHead>
                   <TableHead>Estado</TableHead>
+                  <TableHead>WhatsApp</TableHead>
                   <TableHead>Creado</TableHead>
                   <TableHead>Acciones</TableHead>
                 </TableRow>
@@ -225,7 +245,7 @@ const Cities = () => {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8">
+                    <TableCell colSpan={8} className="text-center py-8">
                       <div className="flex items-center justify-center space-x-2">
                         <Loader2 className="h-4 w-4 animate-spin" />
                         <span>Cargando ciudades...</span>
@@ -234,7 +254,7 @@ const Cities = () => {
                   </TableRow>
                 ) : cities.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                       No se encontraron ciudades
                     </TableCell>
                   </TableRow>
@@ -278,6 +298,9 @@ const Cities = () => {
                       </TableCell>
                       <TableCell>
                         {getStatusBadge(city)}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {getWhatsappStatus(city)}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {formatDate(city.created_at)}

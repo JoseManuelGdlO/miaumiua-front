@@ -22,6 +22,8 @@ import { useToast } from "@/hooks/use-toast";
 import { citiesService, City, HORARIO_POR_DIA_DEFAULT, type HorarioPorDia, type PointOfSale } from "@/services/citiesService";
 import { formatHour24To12, parseHour12To24 } from "@/utils/businessHoursTime";
 import { Loader2 } from "lucide-react";
+import CityWhatsappCard from "@/components/cities/CityWhatsappCard";
+import { canEdit } from "@/utils/permissions";
 
 interface EditCityModalProps {
   open: boolean;
@@ -496,6 +498,10 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
             Modifica la información de la ciudad de operación
           </DialogDescription>
         </DialogHeader>
+
+        {city && (
+          <CityWhatsappCard cityId={city.id} initial={city.whatsapp} canEdit={canEdit("cities")} />
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
