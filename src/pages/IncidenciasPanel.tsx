@@ -47,7 +47,31 @@ export default function IncidenciasPanel({ pedidos, solicitudes, superAdmin, onC
     if (estado === "soporte" || estado === "llamada") return false;
     if (texto && !`${row.repartidor?.nombre_completo || ""} ${row.numero_pedido || ""} ${row.cliente || ""}`.toLowerCase().includes(texto)) return false;
     return true;
-  });
+  }).sort((a, b) => Number(Boolean(a.fecha_propuesta)) - Number(Boolean(b.fecha_propuesta)));
+
+  const marcarLlamada = async (id: number) => {
+    setBusy(true);
+    try {
+      await callCenterService.atender(id);
+      onChanged();
+    } catch (error) {
+      onError(error);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const liberar = async (id: number) => {
+    setBusy(true);
+    try {
+      await callCenterService.liberarIntento(id);
+      onChanged();
+    } catch (error) {
+      onError(error);
+    } finally {
+      setBusy(false);
+    }
+  };
   const modificados = pedidos.filter((row) => row.modificado);
 
   const reagendar = async () => {
@@ -94,9 +118,14 @@ export default function IncidenciasPanel({ pedidos, solicitudes, superAdmin, onC
               <button type="button" className="text-left" onClick={() => { if (row.repartidor?.id) onAbrir(row.repartidor.id); }}>
                 <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${row.tipo === "llamada_cliente" ? "bg-sky-100 text-sky-900" : "bg-amber-100 text-amber-900"}`}>{row.tipo === "llamada_cliente" ? "Llamada" : "Incidencia"}</span>
                 <span className="mt-1 block font-semibold">{row.repartidor?.nombre_completo || "Sin repartidor"} · {row.numero_pedido || "Sin pedido"}</span>
-                <span className="mt-1 block text-muted-foreground">{row.fecha} {row.hora} · {row.motivo || "Sin motivo"}</span>
+                <span className="mt-1 block text-muted-foreground">{row.fecha} {row.hora} · {row.nota || row.motivo || "Sin motivo"}</span>
               </button>
-              {row.pedido_id ? <Button variant="outline" size="sm" onClick={() => { setPedidoId(row.pedido_id); setFecha(fechaMexico(1)); }}>Reagendar</Button> : null}
+              <div className="flex flex-col gap-2">
+                {row.tipo === "llamada_cliente" && !row.llamada_atendida ? <Button size="sm" disabled={busy} onClick={() => void marcarLlamada(row.id)}>Ya llamé al cliente</Button> : null}
+                {row.tipo === "llamada_cliente" && row.llamada_atendida ? <Button size="sm" disabled={busy} onClick={() => void liberar(row.id)}>Liberar intento</Button> : null}
+                {(row.motivo === "averia" || row.motivo === "clima") && row.repartidor?.id ? <Button variant="outline" size="sm" onClick={() => onAbrir(row.repartidor.id)}>Elegir clientes</Button> : null}
+                {row.pedido_id && row.motivo !== "averia" && row.motivo !== "clima" ? <Button variant="outline" size="sm" onClick={() => { setPedidoId(row.pedido_id); setFecha(row.fecha_propuesta || fechaMexico(1)); setMotivo(row.fecha_propuesta ? "Cliente por WhatsApp" : ""); }}>Reagendar</Button> : null}
+              </div>
             </div>
           ))}
           {noEntregados.map((row) => (
@@ -107,9 +136,9 @@ export default function IncidenciasPanel({ pedidos, solicitudes, superAdmin, onC
                   <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">No entregado</span>
                 </span>
                 <span className="mt-1 block font-semibold">{row.numero_pedido} · {row.cliente || "Sin cliente"}</span>
-                <span className="mt-1 block text-muted-foreground">{row.repartidor?.nombre_completo || "Sin repartidor"}{row.notas ? ` · ${row.notas}` : ""}</span>
+                <span className="mt-1 block text-muted-foreground">{row.repartidor?.nombre_completo || "Sin repartidor"}{row.fecha_propuesta ? ` · Propone ${row.fecha_propuesta}` : " · Sin fecha confirmada"}</span>
               </button>
-              <Button variant="outline" size="sm" onClick={() => { setPedidoId(row.id); setFecha(fechaMexico(1)); }}>Reagendar</Button>
+              <Button variant="outline" size="sm" onClick={() => { setPedidoId(row.id); setFecha(row.fecha_propuesta || fechaMexico(1)); if (row.fecha_propuesta) setMotivo("Cliente por WhatsApp"); }}>Reagendar</Button>
             </div>
           ))}
         </CardContent>
@@ -134,7 +163,7 @@ export default function IncidenciasPanel({ pedidos, solicitudes, superAdmin, onC
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><CalendarClock className="h-5 w-5 text-primary" />Reagendar</CardTitle>
-          <CardDescription>El pedido sale de la ruta de hoy y queda para el día siguiente</CardDescription>
+          <CardDescription>El pedido sale de la ruta de hoy y queda en la fecha elegida. No se mueve solo.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <p>{pedidoId == null ? "Elige un pedido de las listas." : `Pedido #${pedidoId}`}</p>
