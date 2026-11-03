@@ -651,7 +651,7 @@ function MonitorRepartidores({
                       <span className="block text-sm text-muted-foreground">{row.paradas.length} pedidos en ruta</span>
                     </span>
                   </span>
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${row.enRuta ? "bg-amber-100 text-amber-900" : "bg-emerald-100 text-emerald-800"}`}>{row.enRuta ? "En ruta" : "Libre"}</span>
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${row.cierres.length > 0 ? "bg-zinc-200 text-zinc-600" : row.enRuta ? "bg-amber-100 text-amber-900" : "bg-emerald-100 text-emerald-800"}`}>{row.cierres.length > 0 ? "Terminó" : row.enRuta ? "En ruta" : "Libre"}</span>
                 </button>
               );
             })}
@@ -665,6 +665,7 @@ function MonitorRepartidores({
 function CheckoutDia({
   pedidos,
   solicitudes,
+  depositos,
   cities,
   busy,
   puede,
@@ -673,6 +674,7 @@ function CheckoutDia({
 }: {
   pedidos: PedidoDia[];
   solicitudes: Solicitud[];
+  depositos: DepositoRuta[];
   cities: { id: number; nombre: string }[];
   busy: boolean;
   puede: boolean;
@@ -734,6 +736,8 @@ function CheckoutDia({
       {activo ? (() => {
         const [id, nombre] = activo;
         const cierres = cierresDe(id);
+        const enviado = depositos.find((row) => row.repartidor_id === id || row.repartidor === nombre);
+        const jornadaCerrada = enviado?.estado === "cerrada" || (Boolean(enviado) && cierres.length === 0);
         return (
           <div className="space-y-4 overflow-hidden rounded-xl border-t-4 border-primary bg-white">
             <div className="flex items-center justify-between gap-3 px-4 py-4">
@@ -744,7 +748,15 @@ function CheckoutDia({
               <Button variant="outline" onClick={() => setElegido(null)}>Cerrar</Button>
             </div>
             <div className="space-y-3 bg-muted/40 p-4">
-              {cierres.length === 0 ? <p>Este repartidor no ha enviado el cierre de hoy.</p> : cierres.map((row) => (
+              {cierres.length === 0 && enviado ? (
+                <div className="space-y-3 rounded-xl bg-white p-4">
+                  <p className="font-semibold">{jornadaCerrada ? "El cierre ya se envió y la jornada está cerrada." : "El cierre ya se envió."}</p>
+                  <p>Efectivo a depositar ${formatMoney(enviado.efectivo_a_depositar || 0)}</p>
+                  {enviado.comprobante_url ? (
+                    <img src={receiptSrc(enviado.comprobante_url)} alt={`Comprobante de ${nombre}`} className="max-h-64 w-full rounded-md object-contain" />
+                  ) : null}
+                </div>
+              ) : cierres.length === 0 ? <p>Este repartidor no ha enviado el cierre de hoy.</p> : cierres.map((row) => (
                 <div key={row.id} data-aviso="1" className="aviso-rojo space-y-3 rounded-xl bg-white p-4">
                   <p><span className="rounded-full bg-red-600 px-2 py-0.5 text-xs font-semibold text-white">Check-out pendiente</span></p>
                   <p className="font-semibold">Efectivo a depositar ${formatMoney(row.efectivo_a_depositar || 0)}</p>
@@ -758,9 +770,9 @@ function CheckoutDia({
                   ) : <p>Solo un super admin puede aprobar el check-out.</p>}
                 </div>
               ))}
-              {puede ? (
+              {puede && !jornadaCerrada ? (
                 <Button disabled={busy} onClick={() => setConfirmar(id)}>Cerrar jornada</Button>
-              ) : <p>Solo un super admin puede cerrar la jornada sin el cierre del repartidor.</p>}
+              ) : !jornadaCerrada ? <p>Solo un super admin puede cerrar la jornada sin el cierre del repartidor.</p> : null}
             </div>
           </div>
         );
@@ -1779,6 +1791,7 @@ const CallCenter = () => {
           <CheckoutDia
             pedidos={pedidos}
             solicitudes={solicitudes}
+            depositos={depositos}
             cities={cities}
             busy={busy}
             puede={puedeAutorizarExcepcion()}

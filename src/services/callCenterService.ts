@@ -95,7 +95,9 @@ export type ComprobantePago = {
 
 export type DepositoRuta = {
   jornada_id: number;
+  repartidor_id?: number | null;
   repartidor: string | null;
+  estado?: string | null;
   efectivo_a_depositar: number;
   comprobante_url: string | null;
 };
