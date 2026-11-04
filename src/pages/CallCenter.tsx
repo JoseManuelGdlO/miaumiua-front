@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { AlertTriangle, ChevronDown, ClipboardCheck, Download, Headphones, History, Inbox, LifeBuoy, Loader2, LogOut, Package, Phone, Receipt, Truck, Users, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,6 +34,7 @@ import { config } from "@/config/environment";
 import { FlujoPasos } from "@/components/FlujoPasos";
 import { vistaDeError } from "@/lib/api-error";
 import { authService } from "@/services/authService";
+import { conversationsService } from "@/services/conversationsService";
 
 const TIPO: Record<string, string> = {
   check_in: "Check-in",
@@ -306,6 +307,16 @@ function AvisoFalla({ paradas, motivo, repartidorId, onChanged, onError }: { par
   );
 }
 
+function abrirChat(telefono: string | null | undefined, onError: (error: unknown) => void, navigate: ReturnType<typeof useNavigate>) {
+  const digits = String(telefono || "").replace(/\D/g, "");
+  if (digits.length < 5) return;
+  void conversationsService.getConversations({ search: digits, limit: 5 }).then((res) => {
+    const rows = res?.data?.conversaciones || [];
+    if (rows.length === 1) navigate(`/dashboard/conversations/${rows[0].id}`);
+    else navigate(`/dashboard/conversations?search=${encodeURIComponent(digits)}`);
+  }).catch(onError);
+}
+
 function MonitorRepartidores({
   pedidos,
   solicitudes,
@@ -341,6 +352,7 @@ function MonitorRepartidores({
   onChanged: () => void;
   onReceipt: (url: string, numero: string) => void;
 }) {
+  const navigate = useNavigate();
   const [q, setQ] = useState("");
   const [ciudad, setCiudad] = useState("all");
   const [elegido, setElegido] = useState<number | null>(abiertoId);
@@ -516,6 +528,28 @@ function MonitorRepartidores({
                             <Button className="mt-2" disabled={busy} onClick={() => {
                               void callCenterService.enviarCodigo(pedido.id).then(() => onChanged()).catch(onError);
                             }}>Enviar código al cliente</Button>
+                          ) : null}
+                          {pedido.telefono ? (
+                            <Button variant="outline" className="mt-2" onClick={() => abrirChat(pedido.telefono, onError, navigate)}>Ver chat</Button>
+                          ) : null}
+                          {puede && !pedido.comprobante_url ? (
+                            <Button variant="outline" className="mt-2" asChild disabled={busy}>
+                              <label>
+                                {pedido.metodo_pago === "transferencia" || pedido.metodo_pago === "mixto" ? "Subir comprobante" : "Pasar a transferencia"}
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  className="hidden"
+                                  disabled={busy}
+                                  onChange={(event) => {
+                                    const file = event.target.files?.[0];
+                                    event.target.value = "";
+                                    if (!file) return;
+                                    void callCenterService.subirComprobante(pedido.id, file).then(() => onChanged()).catch(onError);
+                                  }}
+                                />
+                              </label>
+                            </Button>
                           ) : null}
                         </div>
                         );

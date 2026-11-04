@@ -11,7 +11,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTr
 import { MessageCircle, Search, Filter, MoreVertical, AlertTriangle, XCircle, Info, Tag, X, Flag } from "lucide-react";
 import { canChangeConversationStatus } from "@/utils/permissions";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import ErrorDetailsModal from "@/components/ErrorDetailsModal";
 import { vistaDeError } from "@/lib/api-error";
 import AssignFlagsModal from "@/components/modals/AssignFlagsModal";
@@ -106,8 +106,10 @@ const mapConversationFromApi = (c: any) => {
 };
 
 const Conversations = () => {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [listFilter, setListFilter] = useState<ConversationListFilter>("all");
+  const [searchParams] = useSearchParams();
+  const searchFromUrl = searchParams.get("search") || "";
+  const [searchTerm, setSearchTerm] = useState(searchFromUrl);
+  const [listFilter, setListFilter] = useState<ConversationListFilter>(searchFromUrl ? "activa" : "all");
   const [selectedFlags, setSelectedFlags] = useState<number[]>([]);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [assignFlagsModalOpen, setAssignFlagsModalOpen] = useState(false);
@@ -163,6 +165,13 @@ const Conversations = () => {
   useEffect(() => {
     loadConversations();
   }, [loadConversations]);
+
+  useEffect(() => {
+    if (!searchFromUrl) return;
+    setSearchTerm(searchFromUrl);
+    setListFilter("activa");
+    setPage(1);
+  }, [searchFromUrl]);
 
   const handleListFilterChange = (value: ConversationListFilter) => {
     setListFilter(value);
@@ -517,6 +526,15 @@ const Conversations = () => {
             {conversations.map((conversation) => (
               <div
                 key={conversation.id}
+                role="link"
+                tabIndex={0}
+                onClick={() => navigate(`/dashboard/conversations/${conversation.id}`)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    navigate(`/dashboard/conversations/${conversation.id}`);
+                  }
+                }}
                 className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer overflow-hidden"
               >
                 <div className="flex items-center space-x-4 flex-1 min-w-0">
@@ -625,11 +643,11 @@ const Conversations = () => {
                     
                     <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" className="h-8 w-8 p-0">
+                      <Button variant="ghost" className="h-8 w-8 p-0" onClick={(event) => event.stopPropagation()}>
                         <MoreVertical className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
+                    <DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}>
                       <DropdownMenuItem onClick={() => navigate(`/dashboard/conversations/${conversation.id}`)}>Ver conversación</DropdownMenuItem>
                       <DropdownMenuItem
                         onClick={(e) => {
