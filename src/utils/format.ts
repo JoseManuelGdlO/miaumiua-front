@@ -9,8 +9,9 @@ const countFormatter = new Intl.NumberFormat("es-MX", {
   maximumFractionDigits: 0,
 });
 
-export function formatMoney(amount: number) {
-  return moneyFormatter.format(Number.isFinite(amount) ? amount : 0);
+export function formatMoney(amount: number | string | null | undefined) {
+  const value = Number(amount);
+  return moneyFormatter.format(Number.isFinite(value) ? value : 0);
 }
 
 export function formatCount(amount: number) {

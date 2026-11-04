@@ -174,11 +174,11 @@ export function AppSidebar() {
   };
 
   const destino = (url?: string) => {
-    if (!url) return "/dashboard";
+    if (!url || url === "/dashboard") return "/dashboard";
     const aviso = avisosCola.find((item) => item.ruta.startsWith(url));
     return aviso?.ruta || url;
   };
-  const tieneAviso = (url?: string) => Boolean(url && (avisosCola.some((item) => item.ruta.startsWith(url)) || (url === "/dashboard/call-center" && pendientesCall > 0)));
+  const tieneAviso = (url?: string) => Boolean(url && url !== "/dashboard" && (avisosCola.some((item) => item.ruta.startsWith(url)) || (url === "/dashboard/call-center" && pendientesCall > 0)));
   const isActive = (path: string) => currentPath === path;
   const isGroupActive = (submenu: any[]) => 
     submenu.some(item => currentPath === item.url);

@@ -33,6 +33,9 @@ export type Solicitud = {
   comprobante_url?: string | null;
   motivo: string | null;
   ayuda?: string | null;
+  nota?: string | null;
+  llamada_atendida?: boolean;
+  fecha_propuesta?: string | null;
   pedido_id: number | null;
   numero_pedido: string | null;
   repartidor: RepartidorRef;
@@ -69,6 +72,10 @@ export type PedidoDia = {
   repartidor: RepartidorRef;
   ciudad_id: number | null;
   total: number;
+  codigo_oculto?: string | null;
+  fecha_propuesta?: string | null;
+  calificacion_servicio?: number | null;
+  calificacion_cliente?: number | null;
   comprobante_url: string | null;
 };
 
@@ -88,7 +95,9 @@ export type ComprobantePago = {
 
 export type DepositoRuta = {
   jornada_id: number;
+  repartidor_id?: number | null;
   repartidor: string | null;
+  estado?: string | null;
   efectivo_a_depositar: number;
   comprobante_url: string | null;
 };
@@ -145,9 +154,16 @@ export const callCenterService = {
     body: JSON.stringify({ lineas }),
   }),
   buscarInventario: (q: string) => request<InventarioHit[]>(`/call-center/inventario?q=${encodeURIComponent(q)}`),
-  resolverAyuda: (id: number, accion: "ver_codigo" | "aprobar_codigo" | "autorizar_tercero", receptor?: string) => request<{ codigo?: string; aprobado?: boolean; autorizado?: boolean }>(`/call-center/solicitudes/${id}/ayuda`, {
+  resolverAyuda: (id: number, accion: "ver_codigo" | "aprobar_codigo" | "autorizar_tercero" | "autorizar_dejar", receptor?: string) => request<{ codigo?: string; aprobado?: boolean; autorizado?: boolean }>(`/call-center/solicitudes/${id}/ayuda`, {
     method: "POST",
     body: JSON.stringify({ accion, ...(receptor ? { receptor } : {}) }),
+  }),
+  liberarIntento: (id: number) => request<{ liberado: boolean }>(`/call-center/solicitudes/${id}/liberar-intento`, { method: 'POST' }),
+  verCodigoPedido: (id: number) => request<{ codigo: string }>(`/call-center/pedidos/${id}/ver-codigo`, { method: 'POST' }),
+  enviarCodigo: (id: number) => request<{ enviado: boolean }>(`/call-center/pedidos/${id}/enviar-codigo`, { method: 'POST' }),
+  avisarFalla: (motivo: "averia" | "clima", pedidoIds: number[], repartidorId?: number) => request<{ enviados: number }>('/call-center/falla', {
+    method: 'POST',
+    body: JSON.stringify({ motivo, pedido_ids: pedidoIds, ...(repartidorId ? { repartidor_id: repartidorId } : {}) }),
   }),
   atender: (id: number, nota?: string) => request<{ atendida: boolean }>(`/call-center/solicitudes/${id}/atender`, {
     method: 'POST',

@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { AlertTriangle, ChevronDown, ClipboardCheck, Download, Headphones, History, Inbox, LifeBuoy, Loader2, LogOut, Package, Phone, Receipt, Truck, Users, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,6 +34,7 @@ import { config } from "@/config/environment";
 import { FlujoPasos } from "@/components/FlujoPasos";
 import { vistaDeError } from "@/lib/api-error";
 import { authService } from "@/services/authService";
+import { conversationsService } from "@/services/conversationsService";
 
 const TIPO: Record<string, string> = {
   check_in: "Check-in",
@@ -284,6 +285,38 @@ function HistorialHoy({ aprobaciones, fallos }: { aprobaciones: Solicitud[]; fal
   );
 }
 
+function AvisoFalla({ paradas, motivo, repartidorId, onChanged, onError }: { paradas: PedidoDia[]; motivo: "averia" | "clima"; repartidorId?: number; onChanged: () => void; onError: (error: unknown) => void }) {
+  const abiertas = paradas.filter((pedido) => pedido.estado !== "entregado" && pedido.estado_entrega !== "entregado" && pedido.estado !== "cancelado");
+  const [ids, setIds] = useState<number[]>(() => abiertas.map((pedido) => pedido.id));
+  const [enviando, setEnviando] = useState(false);
+  if (!abiertas.length) return <p>No quedan paradas abiertas en esta ruta.</p>;
+  return (
+    <div className="space-y-2">
+      <p>{motivo === "clima" ? "Elige a quién avisar que hoy no se entrega por el clima." : "Elige a quién avisar que hoy no se entrega por la avería."}</p>
+      {abiertas.map((pedido) => (
+        <label key={pedido.id} className="flex items-center gap-2">
+          <input type="checkbox" checked={ids.includes(pedido.id)} onChange={() => setIds((prev) => prev.includes(pedido.id) ? prev.filter((id) => id !== pedido.id) : [...prev, pedido.id])} />
+          <span>{pedido.numero_pedido} · {pedido.cliente || "Sin cliente"}</span>
+        </label>
+      ))}
+      <Button disabled={enviando || ids.length === 0} onClick={() => {
+        setEnviando(true);
+        void callCenterService.avisarFalla(motivo, ids, repartidorId).then(() => onChanged()).catch(onError).finally(() => setEnviando(false));
+      }}>{enviando ? "Avisando…" : "Avisar a los elegidos"}</Button>
+    </div>
+  );
+}
+
+function abrirChat(telefono: string | null | undefined, onError: (error: unknown) => void, navigate: ReturnType<typeof useNavigate>) {
+  const digits = String(telefono || "").replace(/\D/g, "");
+  if (digits.length < 5) return;
+  void conversationsService.getConversations({ search: digits, limit: 5 }).then((res) => {
+    const rows = res?.data?.conversaciones || [];
+    if (rows.length === 1) navigate(`/dashboard/conversations/${rows[0].id}`);
+    else navigate(`/dashboard/conversations?search=${encodeURIComponent(digits)}`);
+  }).catch(onError);
+}
+
 function MonitorRepartidores({
   pedidos,
   solicitudes,
@@ -291,8 +324,6 @@ function MonitorRepartidores({
   busy,
   codigo,
   codigoDe,
-  receptor,
-  onReceptor,
   onAyuda,
   onAtender,
   abiertoId,
@@ -310,9 +341,7 @@ function MonitorRepartidores({
   busy: boolean;
   codigo: string;
   codigoDe: number | null;
-  receptor: string;
-  onReceptor: (value: string) => void;
-  onAyuda: (id: number, accion: "ver_codigo" | "aprobar_codigo" | "autorizar_tercero") => void;
+  onAyuda: (id: number, accion: "ver_codigo" | "aprobar_codigo" | "autorizar_tercero" | "autorizar_dejar") => void;
   onAtender: (id: number) => void;
   abiertoId: number | null;
   velocidades: VelocidadDia[];
@@ -323,12 +352,15 @@ function MonitorRepartidores({
   onChanged: () => void;
   onReceipt: (url: string, numero: string) => void;
 }) {
+  const navigate = useNavigate();
   const [q, setQ] = useState("");
   const [ciudad, setCiudad] = useState("all");
   const [elegido, setElegido] = useState<number | null>(abiertoId);
   const [mensaje, setMensaje] = useState("");
   const [nuevaDireccion, setNuevaDireccion] = useState("");
   const [agentes, setAgentes] = useState<{ nombre: string; telefono: string; repartidor_ids: number[]; numeros?: { telefono: string; repartidor_ids: number[] }[] }[]>([]);
+  const [codigoPedido, setCodigoPedido] = useState<number | null>(null);
+  const [codigoPedidoTexto, setCodigoPedidoTexto] = useState("");
   const nombres = new Map<number, string>();
   for (const pedido of pedidos) {
     if (pedido.repartidor) nombres.set(pedido.repartidor.id, pedido.repartidor.nombre_completo);
@@ -479,6 +511,46 @@ function MonitorRepartidores({
                           <p className="font-semibold">{pedido.numero_pedido}</p>
                           <p>{pedido.cliente || "Sin cliente"}</p>
                           <span className={`mt-2 inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${chip}`}>{etiqueta}</span>
+                          {pedido.calificacion_servicio ? <p className="mt-2">El cliente calificó el servicio con {pedido.calificacion_servicio} estrellas.</p> : null}
+                          {pedido.calificacion_cliente ? <p>El repartidor calificó al cliente con {pedido.calificacion_cliente} estrellas.</p> : null}
+                          {pedido.fecha_propuesta ? <p className="mt-2">Fecha propuesta: {pedido.fecha_propuesta}. Falta confirmarla.</p> : pedido.estado === "no_entregado" ? <p className="mt-2">Sin fecha confirmada.</p> : null}
+                          {puede && pedido.codigo_oculto ? (
+                            codigoPedido === pedido.id ? <p className="mt-2 text-2xl font-semibold tracking-widest">{codigoPedidoTexto}</p> : (
+                              <Button variant="outline" className="mt-2" disabled={busy} onClick={() => {
+                                void callCenterService.verCodigoPedido(pedido.id).then((data) => {
+                                  setCodigoPedido(pedido.id);
+                                  setCodigoPedidoTexto(data.codigo);
+                                }).catch(onError);
+                              }}>Ver código</Button>
+                            )
+                          ) : null}
+                          {puede && pedido.codigo_oculto ? (
+                            <Button className="mt-2" disabled={busy} onClick={() => {
+                              void callCenterService.enviarCodigo(pedido.id).then(() => onChanged()).catch(onError);
+                            }}>Enviar código al cliente</Button>
+                          ) : null}
+                          {pedido.telefono ? (
+                            <Button variant="outline" className="mt-2" onClick={() => abrirChat(pedido.telefono, onError, navigate)}>Ver chat</Button>
+                          ) : null}
+                          {puede && !pedido.comprobante_url ? (
+                            <Button variant="outline" className="mt-2" asChild disabled={busy}>
+                              <label>
+                                {pedido.metodo_pago === "transferencia" || pedido.metodo_pago === "mixto" ? "Subir comprobante" : "Pasar a transferencia"}
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  className="hidden"
+                                  disabled={busy}
+                                  onChange={(event) => {
+                                    const file = event.target.files?.[0];
+                                    event.target.value = "";
+                                    if (!file) return;
+                                    void callCenterService.subirComprobante(pedido.id, file).then(() => onChanged()).catch(onError);
+                                  }}
+                                />
+                              </label>
+                            </Button>
+                          ) : null}
                         </div>
                         );
                       })}
@@ -487,10 +559,19 @@ function MonitorRepartidores({
                   {row.aprobaciones.map((solicitud) => (
                     <div key={solicitud.id} className="space-y-2 rounded-xl bg-pink-50 p-3">
                       <p className="font-semibold">
-                        {solicitud.ayuda === "tercero" ? "Entrega a otra persona" : solicitud.ayuda === "codigo" ? "Ayuda con el código" : solicitud.tipo === "llamada_cliente" ? "Llamada al cliente" : "Incidencia"}
+                        {solicitud.ayuda === "dejar" ? "Dejar el paquete" : solicitud.ayuda === "tercero" ? "Entrega a otra persona" : solicitud.ayuda === "codigo" ? "Ayuda con el código" : solicitud.motivo === "averia" ? "Avería" : solicitud.motivo === "clima" ? "Clima" : solicitud.motivo === "propuesta" ? "Fecha propuesta" : solicitud.tipo === "llamada_cliente" ? "Llamada al cliente" : "Incidencia"}
                         {solicitud.numero_pedido ? ` · ${solicitud.numero_pedido}` : ""}
                       </p>
-                      {solicitud.motivo ? <p>{solicitud.motivo}</p> : null}
+                      {solicitud.nota ? <p>{solicitud.nota}</p> : solicitud.motivo && solicitud.motivo !== "averia" && solicitud.motivo !== "clima" && solicitud.motivo !== "propuesta" ? <p>{solicitud.motivo}</p> : null}
+                      {(solicitud.motivo === "averia" || solicitud.motivo === "clima") && puede ? (
+                        <AvisoFalla paradas={row.paradas} motivo={solicitud.motivo} repartidorId={row.paradas[0]?.repartidor?.id} onChanged={onChanged} onError={onError} />
+                      ) : null}
+                      {(solicitud.motivo === "averia" || solicitud.motivo === "clima") && !puede ? <p>Solo un super admin puede avisar a los clientes.</p> : null}
+                      {solicitud.motivo === "propuesta" && solicitud.fecha_propuesta && solicitud.pedido_id && puede ? (
+                        <Button disabled={busy} onClick={() => {
+                          void callCenterService.reagendar(solicitud.pedido_id as number, solicitud.fecha_propuesta as string, "Cliente por WhatsApp").then(() => callCenterService.atender(solicitud.id)).then(() => onChanged()).catch(onError);
+                        }}>Confirmar {solicitud.fecha_propuesta}</Button>
+                      ) : null}
                       {solicitud.espera_desde ? <Cuenta desde={solicitud.espera_desde} minutos={solicitud.ayuda ? 15 : 5} /> : null}
                       {solicitud.ayuda === "codigo" ? (
                         codigoDe === solicitud.id && codigo ? <p className="text-2xl font-semibold tracking-widest">{codigo}</p> : (
@@ -502,19 +583,20 @@ function MonitorRepartidores({
                       ) : null}
                       {solicitud.ayuda === "codigo" && !puede ? <p>Solo un super admin puede aprobar la entrega sin código.</p> : null}
                       {solicitud.ayuda === "tercero" && puede ? (
-                        <>
-                          <label className="block" htmlFor={`quien-${solicitud.id}`}>Quién recibe</label>
-                          <input
-                            id={`quien-${solicitud.id}`}
-                            value={receptor}
-                            onChange={(event) => onReceptor(event.target.value)}
-                            className="h-10 w-full rounded-md border bg-background px-3"
-                          />
-                          <Button disabled={busy || receptor.trim().length < 2} onClick={() => onAyuda(solicitud.id, "autorizar_tercero")}>Autorizar terceros</Button>
-                        </>
+                        <Button disabled={busy} onClick={() => onAyuda(solicitud.id, "autorizar_tercero")}>Autorizar terceros</Button>
                       ) : null}
                       {solicitud.ayuda === "tercero" && !puede ? <p>Solo un super admin puede autorizar la entrega a otra persona.</p> : null}
-                      {!solicitud.ayuda ? (
+                      {solicitud.ayuda === "dejar" && puede ? (
+                        <Button disabled={busy} onClick={() => onAyuda(solicitud.id, "autorizar_dejar")}>Autorizar dejar el paquete</Button>
+                      ) : null}
+                      {solicitud.ayuda === "dejar" && !puede ? <p>Solo un super admin puede autorizar dejar el paquete.</p> : null}
+                      {solicitud.tipo === "llamada_cliente" ? (
+                        solicitud.llamada_atendida ? (
+                          <Button disabled={busy} onClick={() => { void callCenterService.liberarIntento(solicitud.id).then(() => onChanged()).catch(onError); }}>Liberar intento</Button>
+                        ) : (
+                          <Button disabled={busy} onClick={() => onAtender(solicitud.id)}>Ya llamé al cliente</Button>
+                        )
+                      ) : !solicitud.ayuda && solicitud.motivo !== "averia" && solicitud.motivo !== "clima" && solicitud.motivo !== "propuesta" ? (
                         <Button disabled={busy} onClick={() => onAtender(solicitud.id)}>Atendido</Button>
                       ) : null}
                     </div>
@@ -603,7 +685,7 @@ function MonitorRepartidores({
                       <span className="block text-sm text-muted-foreground">{row.paradas.length} pedidos en ruta</span>
                     </span>
                   </span>
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${row.enRuta ? "bg-amber-100 text-amber-900" : "bg-emerald-100 text-emerald-800"}`}>{row.enRuta ? "En ruta" : "Libre"}</span>
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${row.cierres.length > 0 ? "bg-zinc-200 text-zinc-600" : row.enRuta ? "bg-amber-100 text-amber-900" : "bg-emerald-100 text-emerald-800"}`}>{row.cierres.length > 0 ? "Terminó" : row.enRuta ? "En ruta" : "Libre"}</span>
                 </button>
               );
             })}
@@ -617,6 +699,7 @@ function MonitorRepartidores({
 function CheckoutDia({
   pedidos,
   solicitudes,
+  depositos,
   cities,
   busy,
   puede,
@@ -625,6 +708,7 @@ function CheckoutDia({
 }: {
   pedidos: PedidoDia[];
   solicitudes: Solicitud[];
+  depositos: DepositoRuta[];
   cities: { id: number; nombre: string }[];
   busy: boolean;
   puede: boolean;
@@ -686,6 +770,8 @@ function CheckoutDia({
       {activo ? (() => {
         const [id, nombre] = activo;
         const cierres = cierresDe(id);
+        const enviado = depositos.find((row) => row.repartidor_id === id || row.repartidor === nombre);
+        const jornadaCerrada = enviado?.estado === "cerrada" || (Boolean(enviado) && cierres.length === 0);
         return (
           <div className="space-y-4 overflow-hidden rounded-xl border-t-4 border-primary bg-white">
             <div className="flex items-center justify-between gap-3 px-4 py-4">
@@ -696,7 +782,15 @@ function CheckoutDia({
               <Button variant="outline" onClick={() => setElegido(null)}>Cerrar</Button>
             </div>
             <div className="space-y-3 bg-muted/40 p-4">
-              {cierres.length === 0 ? <p>Este repartidor no ha enviado el cierre de hoy.</p> : cierres.map((row) => (
+              {cierres.length === 0 && enviado ? (
+                <div className="space-y-3 rounded-xl bg-white p-4">
+                  <p className="font-semibold">{jornadaCerrada ? "El cierre ya se envió y la jornada está cerrada." : "El cierre ya se envió."}</p>
+                  <p>Efectivo a depositar ${formatMoney(enviado.efectivo_a_depositar || 0)}</p>
+                  {enviado.comprobante_url ? (
+                    <img src={receiptSrc(enviado.comprobante_url)} alt={`Comprobante de ${nombre}`} className="max-h-64 w-full rounded-md object-contain" />
+                  ) : null}
+                </div>
+              ) : cierres.length === 0 ? <p>Este repartidor no ha enviado el cierre de hoy.</p> : cierres.map((row) => (
                 <div key={row.id} data-aviso="1" className="aviso-rojo space-y-3 rounded-xl bg-white p-4">
                   <p><span className="rounded-full bg-red-600 px-2 py-0.5 text-xs font-semibold text-white">Check-out pendiente</span></p>
                   <p className="font-semibold">Efectivo a depositar ${formatMoney(row.efectivo_a_depositar || 0)}</p>
@@ -710,9 +804,9 @@ function CheckoutDia({
                   ) : <p>Solo un super admin puede aprobar el check-out.</p>}
                 </div>
               ))}
-              {puede ? (
+              {puede && !jornadaCerrada ? (
                 <Button disabled={busy} onClick={() => setConfirmar(id)}>Cerrar jornada</Button>
-              ) : <p>Solo un super admin puede cerrar la jornada sin el cierre del repartidor.</p>}
+              ) : !jornadaCerrada ? <p>Solo un super admin puede cerrar la jornada sin el cierre del repartidor.</p> : null}
             </div>
           </div>
         );
@@ -798,7 +892,6 @@ const CallCenter = () => {
   const [detail, setDetail] = useState<Solicitud | null>(null);
   const [codigoAyuda, setCodigoAyuda] = useState("");
   const [codigoDe, setCodigoDe] = useState<number | null>(null);
-  const [receptor, setReceptor] = useState("");
   const [nota, setNota] = useState("");
   const [busy, setBusy] = useState(false);
   const [trabajando, setTrabajando] = useState("");
@@ -967,7 +1060,6 @@ const CallCenter = () => {
     setDetail(null);
     setCodigoAyuda("");
     setCodigoDe(null);
-    setReceptor("");
     setSelectedId(null);
   };
 
@@ -1111,17 +1203,16 @@ const CallCenter = () => {
     }
   };
 
-  const resolverAyuda = async (id: number, accion: "ver_codigo" | "aprobar_codigo" | "autorizar_tercero") => {
+  const resolverAyuda = async (id: number, accion: "ver_codigo" | "aprobar_codigo" | "autorizar_tercero" | "autorizar_dejar") => {
     if (busy) return;
     setBusy(true);
     try {
-      const result = await callCenterService.resolverAyuda(id, accion, accion === "autorizar_tercero" ? receptor : undefined);
+      const result = await callCenterService.resolverAyuda(id, accion);
       if (accion === "ver_codigo") {
         setCodigoAyuda(result.codigo || "");
         setCodigoDe(id);
       } else {
-        toast({ title: accion === "aprobar_codigo" ? "Entrega aprobada sin código" : "Entrega a otra persona autorizada" });
-        setReceptor("");
+        toast({ title: accion === "aprobar_codigo" ? "Entrega aprobada sin código" : accion === "autorizar_dejar" ? "Ya puede dejar el paquete" : "Entrega a otra persona autorizada" });
         if (detail?.id === id) dismissDetail();
         await loadLists();
       }
@@ -1631,17 +1722,18 @@ const CallCenter = () => {
               {detail.ayuda === "tercero" && (
                 puedeAutorizarExcepcion() ? (
                   <div className="space-y-2 rounded-md bg-primary/10 p-3">
-                    <label className="block text-sm" htmlFor="quien-recibe">Quién recibe</label>
-                    <input
-                      id="quien-recibe"
-                      value={receptor}
-                      onChange={(event) => setReceptor(event.target.value)}
-                      className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-                    />
-                    <Button disabled={busy || receptor.trim().length < 2} onClick={() => void resolverAyuda(detail.id, "autorizar_tercero")}>Autorizar entrega a otra persona</Button>
+                    <p className="text-sm">El repartidor escribe nombre y apellido y toma la foto.</p>
+                    <Button disabled={busy} onClick={() => void resolverAyuda(detail.id, "autorizar_tercero")}>Autorizar entrega a otra persona</Button>
                   </div>
                 ) : (
                   <p className="text-sm">Solo un super admin puede autorizar la entrega a otra persona.</p>
+                )
+              )}
+              {detail.ayuda === "dejar" && (
+                puedeAutorizarExcepcion() ? (
+                  <Button disabled={busy} onClick={() => void resolverAyuda(detail.id, "autorizar_dejar")}>Autorizar dejar el paquete</Button>
+                ) : (
+                  <p className="text-sm">Solo un super admin puede autorizar dejar el paquete.</p>
                 )
               )}
               <Textarea value={nota} onChange={(event) => setNota(event.target.value)} placeholder="Nota opcional" />
@@ -1717,8 +1809,6 @@ const CallCenter = () => {
             busy={busy}
             codigo={codigoAyuda}
             codigoDe={codigoDe}
-            receptor={receptor}
-            onReceptor={setReceptor}
             onAyuda={(id, accion) => void resolverAyuda(id, accion)}
             onAtender={(id) => void atender(id)}
             abiertoId={solicitudes.find((row) => row.id === avisoId)?.repartidor?.id ?? (Number(searchParams.get("repartidor")) || null)}
@@ -1735,6 +1825,7 @@ const CallCenter = () => {
           <CheckoutDia
             pedidos={pedidos}
             solicitudes={solicitudes}
+            depositos={depositos}
             cities={cities}
             busy={busy}
             puede={puedeAutorizarExcepcion()}
