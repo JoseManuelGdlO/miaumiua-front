@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Banknote, Calendar, Download, MapPin, Navigation, Pencil, Phone, Truck, UserRound } from "lucide-react";
-import jsPDF from "jspdf";
 import { StatCard } from "@/components/StatCard";
+import { textoCupo, MAX_PARADAS_DIA } from "@/lib/agenda";
+import { descargarHoja, hojaDesdeRuta } from "@/lib/hojaRuta";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -78,7 +79,9 @@ const RutasPlanificadas = () => {
       driversService.getAllDrivers(),
     ]);
     if (routesResponse.success) setRoutes(routesResponse.data.rutas || []);
-    if (driversResponse.success) setDrivers(driversResponse.data.repartidores || []);
+    if (driversResponse.success) {
+      setDrivers((driversResponse.data.repartidores || []).filter((driver: { es_prueba?: boolean }) => !driver.es_prueba));
+    }
   };
 
   useEffect(() => {
@@ -108,25 +111,8 @@ const RutasPlanificadas = () => {
     }
   };
 
-  const pdf = (route: Route) => {
-    const doc = new jsPDF();
-    let y = 16;
-    doc.setFontSize(14);
-    doc.text(route.nombre_ruta, 14, y);
-    y += 8;
-    doc.setFontSize(10);
-    doc.text(`Repartidor: ${route.repartidor?.nombre_completo || "Sin asignar"}`, 14, y);
-    (route.pedidos || []).forEach((stop, index) => {
-      y += 8;
-      if (y > 280) {
-        doc.addPage();
-        y = 16;
-      }
-      doc.text(`${stop.orden_entrega || index + 1}. ${stop.pedido?.numero_pedido || stop.fkid_pedido} · ${stop.pedido?.cliente?.nombre_completo || ""}`, 14, y);
-      y += 5;
-      doc.text(String(stop.pedido?.direccion_entrega || "").slice(0, 90), 14, y);
-    });
-    doc.save(`Ruta_${route.id}.pdf`);
+  const pdf = (route: Route, modo: "salida" | "corte") => {
+    descargarHoja(hojaDesdeRuta(route), modo);
   };
 
   return (
@@ -172,7 +158,8 @@ const RutasPlanificadas = () => {
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="text-lg font-semibold">{route.nombre_ruta}</h2>
                   <Badge className={claseEstadoRuta(route.estado)}>{textoEstadoRuta(route.estado)}</Badge>
-                  <span className="text-sm text-muted-foreground">{paradasRuta.length} pedidos</span>
+                  <span className="text-sm text-muted-foreground">{textoCupo(paradasRuta.length)}</span>
+                  {paradasRuta.length >= MAX_PARADAS_DIA ? <Badge className="border-transparent bg-amber-100 text-amber-900">Saturado</Badge> : null}
                 </div>
                 <p className="mt-1 flex items-center gap-1 text-sm capitalize text-muted-foreground"><Calendar className="h-4 w-4" /> {fechaLarga(route.fecha_ruta)}</p>
               </div>
@@ -190,7 +177,8 @@ const RutasPlanificadas = () => {
                     </SelectContent>
                   </Select>
                 )}
-                <Button variant="outline" onClick={() => pdf(route)}><Download className="h-4 w-4" /> PDF</Button>
+                <Button variant="outline" onClick={() => pdf(route, "salida")}><Download className="h-4 w-4" /> Hoja de salida</Button>
+                <Button variant="outline" onClick={() => pdf(route, "corte")}><Download className="h-4 w-4" /> Corte del día</Button>
               </div>
             </div>
 
@@ -233,7 +221,7 @@ const RutasPlanificadas = () => {
               </Button>
             ) : null}
             <div className="flex flex-wrap gap-4 border-t pt-3 text-sm text-muted-foreground">
-              <span>{paradasRuta.length} entregas</span>
+              <span>{textoCupo(paradasRuta.length)}</span>
               <span className="font-medium text-foreground">Suma {dinero(suma)}</span>
               {route.tiempo_estimado ? <span className="flex items-center gap-1"><Truck className="h-4 w-4" /> {Math.round(Number(route.tiempo_estimado))} min</span> : null}
             </div>

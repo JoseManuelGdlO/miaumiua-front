@@ -35,6 +35,8 @@ import { FlujoPasos } from "@/components/FlujoPasos";
 import { vistaDeError } from "@/lib/api-error";
 import { authService } from "@/services/authService";
 import { conversationsService } from "@/services/conversationsService";
+import { MAX_PARADAS_DIA, textoCupo } from "@/lib/agenda";
+import { descargarHoja, hojaDesdeParadas } from "@/lib/hojaRuta";
 
 const TIPO: Record<string, string> = {
   check_in: "Check-in",
@@ -45,6 +47,33 @@ const TIPO: Record<string, string> = {
 
 function errorStatus(error: unknown) {
   return typeof error === "object" && error && "status" in error ? Number((error as { status: number }).status) : 0;
+}
+
+function etiquetaCobro(estado?: string | null) {
+  if (estado === "completo") return "Cobro completo";
+  if (estado === "falta comprobante") return "Falta comprobante";
+  if (estado === "falta cobro") return "Falta cobro";
+  return null;
+}
+
+function claseCobro(estado?: string | null) {
+  if (estado === "completo") return "border-transparent bg-emerald-100 text-emerald-800";
+  if (estado === "falta comprobante") return "border-transparent bg-amber-100 text-amber-900";
+  if (estado === "falta cobro") return "border-transparent bg-red-100 text-red-800";
+  return "border-transparent bg-muted text-muted-foreground";
+}
+
+function exportarHoja(paradas: PedidoDia[], nombre: string, modo: "salida" | "corte") {
+  const fecha = paradas.find((pedido) => pedido.fecha_ruta)?.fecha_ruta || new Date().toISOString().slice(0, 10);
+  const ciudad = paradas.find((pedido) => pedido.ciudad)?.ciudad || "";
+  descargarHoja(hojaDesdeParadas({ fecha, repartidor: nombre, ciudad, paradas }), modo);
+}
+
+function etiquetaDriver(driver: { nombre_completo: string; es_prueba?: boolean; paradas?: number }) {
+  const bits = [driver.nombre_completo];
+  if (driver.es_prueba) bits.push("Prueba");
+  if (driver.paradas != null) bits.push(textoCupo(driver.paradas));
+  return bits.join(" · ");
 }
 
 function errorText(error: unknown) {
@@ -439,12 +468,22 @@ function MonitorRepartidores({
                   <p className="flex flex-wrap items-center gap-2 text-lg font-semibold">
                     {nombre}
                     <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${row.enRuta ? "bg-emerald-100 text-emerald-800" : "bg-muted text-muted-foreground"}`}>{row.enRuta ? "En ruta" : "Sin entregas"}</span>
+                    {row.paradas.some((pedido) => pedido.repartidor?.es_prueba) ? <span className="rounded-full bg-violet-100 px-2 py-0.5 text-xs font-semibold text-violet-900">Prueba</span> : null}
+                    {row.paradas.length >= MAX_PARADAS_DIA ? <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900">Saturado</span> : null}
                     {row.pideAtencion ? <span className="h-2 w-2 rounded-full bg-red-500" aria-label="Tiene una incidencia" /> : null}
                   </p>
-                  <p className="text-sm text-muted-foreground">ID {id}{row.ciudadNombre ? ` · ${row.ciudadNombre}` : ""}</p>
+                  <p className="text-sm text-muted-foreground">ID {id}{row.ciudadNombre ? ` · ${row.ciudadNombre}` : ""} · {textoCupo(row.paradas.length)}</p>
                 </div>
               </div>
-              <Button variant="outline" onClick={() => setElegido(null)}>Cerrar</Button>
+              <div className="flex flex-wrap items-center gap-2">
+                {row.paradas.length > 0 ? (
+                  <>
+                    <Button variant="outline" size="sm" onClick={() => exportarHoja(row.paradas, nombre, "salida")}><Download className="h-4 w-4" /> Hoja de salida</Button>
+                    <Button variant="outline" size="sm" onClick={() => exportarHoja(row.paradas, nombre, "corte")}><Download className="h-4 w-4" /> Corte del día</Button>
+                  </>
+                ) : null}
+                <Button variant="outline" onClick={() => setElegido(null)}>Cerrar</Button>
+              </div>
             </div>
             <div className="grid gap-4 bg-muted/40 p-4 lg:grid-cols-2">
               <div className="space-y-4">
@@ -681,8 +720,8 @@ function MonitorRepartidores({
                   <span className="flex items-center gap-3">
                     <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">{iniciales(nombre)}</span>
                     <span>
-                      <span className="block font-semibold">{nombre}</span>
-                      <span className="block text-sm text-muted-foreground">{row.paradas.length} pedidos en ruta</span>
+                      <span className="block font-semibold">{nombre}{row.paradas.some((pedido) => pedido.repartidor?.es_prueba) ? " · Prueba" : ""}</span>
+                      <span className="block text-sm text-muted-foreground">{textoCupo(row.paradas.length)}{row.paradas.length >= MAX_PARADAS_DIA ? " · Saturado" : ""}</span>
                     </span>
                   </span>
                   <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${row.cierres.length > 0 ? "bg-zinc-200 text-zinc-600" : row.enRuta ? "bg-amber-100 text-amber-900" : "bg-emerald-100 text-emerald-800"}`}>{row.cierres.length > 0 ? "Terminó" : row.enRuta ? "En ruta" : "Libre"}</span>
@@ -1413,7 +1452,7 @@ const CallCenter = () => {
               <SelectTrigger className="w-56"><SelectValue placeholder="Repartidor" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos los repartidores</SelectItem>
-                {driverOptions.map((driver) => <SelectItem key={driver.id} value={String(driver.id)}>{driver.nombre_completo}</SelectItem>)}
+                {driverOptions.map((driver) => <SelectItem key={driver.id} value={String(driver.id)}>{etiquetaDriver(driver)}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -1574,14 +1613,50 @@ const CallCenter = () => {
               return `${row.repartidor || ""} ${row.ciudad || ""}`.toLowerCase().includes(q);
             });
             if (visibles.length === 0) return <p className="text-sm text-muted-foreground">No hay comprobantes con ese filtro.</p>;
+            const cortes: { id: number; fecha: string; nombre: string }[] = [];
+            const vistos = new Set<string>();
+            for (const row of visibles) {
+              const fecha = String(row.fecha || "").slice(0, 10);
+              const id = Number(row.repartidor_id);
+              if (!id || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) continue;
+              const key = `${id}|${fecha}`;
+              if (vistos.has(key)) continue;
+              vistos.add(key);
+              cortes.push({ id, fecha, nombre: row.repartidor || "Repartidor" });
+            }
             return (
             <div className="space-y-3">
+              {cortes.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {cortes.map((corte) => (
+                    <Button
+                      key={`${corte.id}-${corte.fecha}`}
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        void callCenterService.corte(corte.id, corte.fecha)
+                          .then((data) => descargarHoja(hojaDesdeParadas({
+                            fecha: data.fecha,
+                            repartidor: data.repartidor.nombre_completo,
+                            ciudad: data.ciudad || "",
+                            km_esperados: data.km_esperados,
+                            paradas: data.paradas,
+                          }), "corte"))
+                          .catch(notify);
+                      }}
+                    >
+                      <Download className="h-4 w-4" /> Exportar corte · {corte.nombre} · {corte.fecha}
+                    </Button>
+                  ))}
+                </div>
+              ) : null}
               {visibles.map((row) => (
                 <div key={`${row.fecha || "hoy"}-${row.pedido_id}`} className="space-y-2 text-sm">
                   <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="font-medium">{row.numero_pedido}{row.fecha ? ` · ${String(row.fecha).slice(0, 10)}` : ""}</p>
-                    <p className="text-muted-foreground">{row.repartidor || "—"}{row.ciudad ? ` · ${row.ciudad}` : ""} · {row.metodo}</p>
+                    <p className="text-muted-foreground">{row.repartidor || "—"}{row.ciudad ? ` · ${row.ciudad}` : ""} · {row.metodo}{row.monto ? ` · $${row.monto}` : ""}</p>
+                    {etiquetaCobro(row.estado_cobro) ? <Badge className={`mt-1 ${claseCobro(row.estado_cobro)}`}>{etiquetaCobro(row.estado_cobro)}</Badge> : null}
                     {row.nota ? <p>{row.nota}</p> : null}
                   </div>
                   {row.comprobante_url ? (
@@ -1789,7 +1864,7 @@ const CallCenter = () => {
                     <SelectTrigger><SelectValue placeholder="Reasignar repartidor" /></SelectTrigger>
                     <SelectContent>
                       {drivers.filter((driver) => driver.id !== reassignFor.repartidor?.id).map((driver) => (
-                        <SelectItem key={driver.id} value={String(driver.id)}>{driver.nombre_completo}</SelectItem>
+                        <SelectItem key={driver.id} value={String(driver.id)}>{etiquetaDriver(driver)}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>

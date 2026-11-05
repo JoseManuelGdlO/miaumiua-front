@@ -237,7 +237,10 @@ const Drivers = () => {
                           <Badge variant="outline">{driver.codigo_repartidor}</Badge>
                         </TableCell>
                         <TableCell className="font-medium">
-                          {driver.nombre_completo}
+                          <span className="inline-flex items-center gap-2">
+                            {driver.nombre_completo}
+                            {driver.es_prueba ? <Badge variant="secondary">Prueba</Badge> : null}
+                          </span>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center space-x-2">
