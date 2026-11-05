@@ -37,6 +37,7 @@ import { authService } from "@/services/authService";
 import { conversationsService } from "@/services/conversationsService";
 import { MAX_PARADAS_DIA, textoCupo } from "@/lib/agenda";
 import { descargarHoja, hojaDesdeParadas } from "@/lib/hojaRuta";
+import { MapaRutaEnVivo } from "@/components/MapaRutaEnVivo";
 
 const TIPO: Record<string, string> = {
   check_in: "Check-in",
@@ -390,6 +391,7 @@ function MonitorRepartidores({
   const [agentes, setAgentes] = useState<{ nombre: string; telefono: string; repartidor_ids: number[]; numeros?: { telefono: string; repartidor_ids: number[] }[] }[]>([]);
   const [codigoPedido, setCodigoPedido] = useState<number | null>(null);
   const [codigoPedidoTexto, setCodigoPedidoTexto] = useState("");
+  const [franjaMapa, setFranjaMapa] = useState<"manana" | "tarde">("manana");
   const nombres = new Map<number, string>();
   for (const pedido of pedidos) {
     if (pedido.repartidor) nombres.set(pedido.repartidor.id, pedido.repartidor.nombre_completo);
@@ -486,6 +488,27 @@ function MonitorRepartidores({
               </div>
             </div>
             <div className="grid gap-4 bg-muted/40 p-4 lg:grid-cols-2">
+              {(() => {
+                const tieneManana = row.paradas.some((pedido) => (pedido.franja || "manana") === "manana");
+                const tieneTarde = row.paradas.some((pedido) => pedido.franja === "tarde");
+                const franja = (franjaMapa === "tarde" && tieneTarde) || (franjaMapa === "manana" && tieneManana)
+                  ? franjaMapa
+                  : (tieneTarde && !tieneManana ? "tarde" : "manana");
+                const rutaId = row.paradas.find((pedido) => (pedido.franja || "manana") === franja)?.ruta_id
+                  ?? row.paradas.find((pedido) => pedido.ruta_id)?.ruta_id
+                  ?? null;
+                return (
+                  <div className="space-y-3 lg:col-span-2">
+                    {tieneManana && tieneTarde ? (
+                      <div className="flex gap-2">
+                        <Button variant={franja === "manana" ? "default" : "outline"} size="sm" onClick={() => setFranjaMapa("manana")}>Mañana</Button>
+                        <Button variant={franja === "tarde" ? "default" : "outline"} size="sm" onClick={() => setFranjaMapa("tarde")}>Tarde</Button>
+                      </div>
+                    ) : null}
+                    <MapaRutaEnVivo rutaId={rutaId ?? null} />
+                  </div>
+                );
+              })()}
               <div className="space-y-4">
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="rounded-xl bg-white p-4">

@@ -78,6 +78,9 @@ export type PedidoDia = {
   codigo_oculto?: string | null;
   fecha_propuesta?: string | null;
   fecha_ruta?: string | null;
+  ruta_id?: number | null;
+  lat?: number | null;
+  lng?: number | null;
   calificacion_servicio?: number | null;
   calificacion_cliente?: number | null;
   comprobante_url: string | null;
@@ -144,6 +147,29 @@ export type VelocidadDia = {
   nombre: string | null;
   promedio: number;
   lecturas: number;
+  lat?: number | null;
+  lng?: number | null;
+  ubicacion_at?: string | null;
+};
+
+export type TrazadoRuta = {
+  ruta_id: number;
+  franja: "manana" | "tarde";
+  ciudad: string | null;
+  repartidor: { id: number | null; lat: number | null; lng: number | null; ubicacion_at: string | null };
+  paradas: {
+    orden: number;
+    pedido_id: number;
+    numero: string | null;
+    cliente: string | null;
+    lat: number;
+    lng: number;
+    direccion: string | null;
+    estado_entrega: string;
+  }[];
+  polyline: { lat: number; lng: number }[];
+  eta: { pedido_id: number; numero: string | null; minutos: number; km: number | null } | null;
+  sin_coords: { pedido_id: number; direccion: string | null }[];
 };
 
 export type CargaValidada = Solicitud & {
@@ -240,6 +266,7 @@ export const callCenterService = {
     method: 'POST',
   }),
   listarVelocidad: () => request<VelocidadDia[]>('/call-center/velocidad'),
+  trazado: (rutaId: number) => request<TrazadoRuta>(`/call-center/rutas/${rutaId}/trazado`),
   listarComprobantes: (query?: { historico?: boolean }) => request<ComprobantePago[]>(`/call-center/comprobantes${query?.historico ? '?historico=1' : ''}`),
   corte: (repartidorId: number, fecha: string) => request<CorteDia>(`/call-center/corte?repartidorId=${repartidorId}&fecha=${fecha}`),
   anotarComprobante: (id: number, comentario: string) => request<{ guardado: boolean }>(`/call-center/pedidos/${id}/comprobante-nota`, {
