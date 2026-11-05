@@ -22,6 +22,7 @@ import {
   buildListQueryParams,
   buildListScopeParams,
   type ConversationListFilter,
+  CONVERSATION_DAY_OPTIONS,
   CONVERSATION_LIST_FILTER_OPTIONS,
   fetchConversationKpiStats,
   getListFilterLabel,
@@ -110,6 +111,8 @@ const Conversations = () => {
   const searchFromUrl = searchParams.get("search") || "";
   const [searchTerm, setSearchTerm] = useState(searchFromUrl);
   const [listFilter, setListFilter] = useState<ConversationListFilter>(searchFromUrl ? "activa" : "all");
+  const [dayFilter, setDayFilter] = useState("all");
+  const [unreadOnly, setUnreadOnly] = useState(false);
   const [selectedFlags, setSelectedFlags] = useState<number[]>([]);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [assignFlagsModalOpen, setAssignFlagsModalOpen] = useState(false);
@@ -141,6 +144,8 @@ const Conversations = () => {
           limit,
           ...scope,
           ...buildListQueryParams(listFilter),
+          unread: unreadOnly || undefined,
+          days: dayFilter === "all" ? undefined : Number(dayFilter),
         }),
         useScopedKpis
           ? fetchConversationKpiStats(scope)
@@ -160,7 +165,7 @@ const Conversations = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, limit, selectedFlags, searchTerm, listFilter]);
+  }, [page, limit, selectedFlags, searchTerm, listFilter, dayFilter, unreadOnly]);
 
   useEffect(() => {
     loadConversations();
@@ -184,11 +189,16 @@ const Conversations = () => {
   };
 
   const activeFiltersCount =
-    (listFilter !== "all" ? 1 : 0) + selectedFlags.length;
+    (listFilter !== "all" ? 1 : 0)
+    + selectedFlags.length
+    + (dayFilter !== "all" ? 1 : 0)
+    + (unreadOnly ? 1 : 0);
 
   const clearAllFilters = () => {
     setListFilter("all");
     setSelectedFlags([]);
+    setDayFilter("all");
+    setUnreadOnly(false);
     setPage(1);
   };
 
@@ -422,10 +432,42 @@ const Conversations = () => {
             <SheetHeader>
               <SheetTitle>Filtros de Conversaciones</SheetTitle>
               <SheetDescription>
-                Filtra por estado y flags
+                Filtra por días, no leídos, estado y flags
               </SheetDescription>
             </SheetHeader>
             <div className="mt-6 space-y-4">
+              <div>
+                <label className="text-sm font-medium mb-2 block">Días</label>
+                <Select
+                  value={dayFilter}
+                  onValueChange={(value) => {
+                    setDayFilter(value);
+                    setPage(1);
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Todos los días" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CONVERSATION_DAY_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <input
+                  type="checkbox"
+                  checked={unreadOnly}
+                  onChange={(event) => {
+                    setUnreadOnly(event.target.checked);
+                    setPage(1);
+                  }}
+                />
+                Solo no leídos
+              </label>
               <div>
                 <label className="text-sm font-medium mb-2 block">Estado</label>
                 <Select
@@ -471,8 +513,34 @@ const Conversations = () => {
           </SheetContent>
         </Sheet>
       </div>
-      {(listFilter !== "all" || selectedFlags.length > 0) && (
+      {(listFilter !== "all" || selectedFlags.length > 0 || dayFilter !== "all" || unreadOnly) && (
         <div className="flex flex-wrap items-center gap-2">
+          {dayFilter !== "all" && (
+            <Badge variant="secondary" className="gap-1 pr-1">
+              {CONVERSATION_DAY_OPTIONS.find((option) => option.value === dayFilter)?.label}
+              <button
+                type="button"
+                className="ml-1 rounded-full hover:bg-muted p-0.5"
+                onClick={() => { setDayFilter("all"); setPage(1); }}
+                aria-label="Quitar filtro de días"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          )}
+          {unreadOnly && (
+            <Badge variant="secondary" className="gap-1 pr-1">
+              No leídos
+              <button
+                type="button"
+                className="ml-1 rounded-full hover:bg-muted p-0.5"
+                onClick={() => { setUnreadOnly(false); setPage(1); }}
+                aria-label="Quitar filtro de no leídos"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          )}
           {listFilter !== "all" && (
             <Badge variant="secondary" className="gap-1 pr-1">
               Estado: {getListFilterLabel(listFilter)}

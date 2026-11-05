@@ -50,6 +50,30 @@ function errorStatus(error: unknown) {
   return typeof error === "object" && error && "status" in error ? Number((error as { status: number }).status) : 0;
 }
 
+function etiquetaMetodo(metodo?: string | null) {
+  if (metodo === "efectivo") return "Efectivo";
+  if (metodo === "transferencia") return "Transferencia";
+  if (metodo === "mixto") return "Mixto";
+  if (metodo === "tarjeta") return "Tarjeta";
+  return metodo || "Sin método";
+}
+
+function resumenPago(row: { cobros?: { metodo?: string | null }[]; efectivo_cobrado?: number; virtual_cobrado?: number }) {
+  const cobros = row.cobros || [];
+  if (cobros.length) {
+    const counts: Record<string, number> = {};
+    for (const cobro of cobros) {
+      const key = etiquetaMetodo(cobro.metodo);
+      counts[key] = (counts[key] || 0) + 1;
+    }
+    return Object.entries(counts).map(([nombre, n]) => `${n} ${nombre.toLowerCase()}`).join(" · ");
+  }
+  const bits = [];
+  if (Number(row.efectivo_cobrado) > 0) bits.push(`Efectivo $${formatMoney(Number(row.efectivo_cobrado))}`);
+  if (Number(row.virtual_cobrado) > 0) bits.push(`Transferencia $${formatMoney(Number(row.virtual_cobrado))}`);
+  return bits.join(" · ") || "Sin cobros";
+}
+
 function etiquetaCobro(estado?: string | null) {
   if (estado === "completo") return "Cobro completo";
   if (estado === "falta comprobante") return "Falta comprobante";
@@ -944,6 +968,7 @@ const CallCenter = () => {
   const [comprobantes, setComprobantes] = useState<ComprobantePago[]>([]);
   const [comprobantesHistorico, setComprobantesHistorico] = useState<ComprobantePago[] | null>(null);
   const [filtroPago, setFiltroPago] = useState("all");
+  const [filtroEstadoCobro, setFiltroEstadoCobro] = useState("all");
   const [filtroCobro, setFiltroCobro] = useState("");
   const [notaCobro, setNotaCobro] = useState<Record<number, string>>({});
   const [depositos, setDepositos] = useState<DepositoRuta[]>([]);
@@ -1599,7 +1624,7 @@ const CallCenter = () => {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><Receipt className="h-5 w-5 text-primary" />{comprobantesHistorico ? "Histórico de comprobantes" : "Comprobantes de hoy"}</CardTitle>
-          <CardDescription>Cobros y fotos. El comentario queda en la parada de esa entrega.</CardDescription>
+          <CardDescription>Método, montos y si el cobro está completo. El corte final se exporta por repartidor y fecha.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex flex-wrap gap-2">
@@ -1625,6 +1650,15 @@ const CallCenter = () => {
                 <SelectItem value="tarjeta">Tarjeta</SelectItem>
               </SelectContent>
             </Select>
+            <Select value={filtroEstadoCobro} onValueChange={setFiltroEstadoCobro}>
+              <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todo el cobro</SelectItem>
+                <SelectItem value="completo">Cobro completo</SelectItem>
+                <SelectItem value="falta cobro">Falta cobro</SelectItem>
+                <SelectItem value="falta comprobante">Falta comprobante</SelectItem>
+              </SelectContent>
+            </Select>
             <Input value={filtroCobro} onChange={(event) => setFiltroCobro(event.target.value)} placeholder="Repartidor o ciudad" className="w-56" />
           </div>
           {(() => {
@@ -1632,6 +1666,7 @@ const CallCenter = () => {
             const q = filtroCobro.trim().toLowerCase();
             const visibles = fuente.filter((row) => {
               if (filtroPago !== "all" && row.metodo !== filtroPago) return false;
+              if (filtroEstadoCobro !== "all" && row.estado_cobro !== filtroEstadoCobro) return false;
               if (!q) return true;
               return `${row.repartidor || ""} ${row.ciudad || ""}`.toLowerCase().includes(q);
             });
@@ -1668,7 +1703,7 @@ const CallCenter = () => {
                           .catch(notify);
                       }}
                     >
-                      <Download className="h-4 w-4" /> Exportar corte · {corte.nombre} · {corte.fecha}
+                      <Download className="h-4 w-4" /> Exportar corte final · {corte.nombre} · {corte.fecha}
                     </Button>
                   ))}
                 </div>
@@ -1678,7 +1713,19 @@ const CallCenter = () => {
                   <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="font-medium">{row.numero_pedido}{row.fecha ? ` · ${String(row.fecha).slice(0, 10)}` : ""}</p>
-                    <p className="text-muted-foreground">{row.repartidor || "—"}{row.ciudad ? ` · ${row.ciudad}` : ""} · {row.metodo}{row.monto ? ` · $${row.monto}` : ""}</p>
+                    <p className="text-muted-foreground">{row.repartidor || "—"}{row.ciudad ? ` · ${row.ciudad}` : ""}</p>
+                    <p>
+                      Pedido: {row.metodo_pedido || "sin método"}
+                      {row.metodo && row.metodo !== row.metodo_pedido ? ` · cobrado: ${row.metodo}` : ""}
+                      {row.monto ? ` · total $${formatMoney(row.monto)}` : ""}
+                    </p>
+                    {(row.monto_efectivo || row.monto_transferencia) ? (
+                      <p>
+                        {row.monto_efectivo ? `Efectivo $${formatMoney(row.monto_efectivo)}` : ""}
+                        {row.monto_efectivo && row.monto_transferencia ? " · " : ""}
+                        {row.monto_transferencia ? `Transferencia $${formatMoney(row.monto_transferencia)}` : ""}
+                      </p>
+                    ) : null}
                     {etiquetaCobro(row.estado_cobro) ? <Badge className={`mt-1 ${claseCobro(row.estado_cobro)}`}>{etiquetaCobro(row.estado_cobro)}</Badge> : null}
                     {row.nota ? <p>{row.nota}</p> : null}
                   </div>
@@ -2012,7 +2059,7 @@ const CallCenter = () => {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2"><History className="h-5 w-5 text-primary" />Histórico</CardTitle>
-              <CardDescription>Cargas ya validadas</CardDescription>
+              <CardDescription>Cargas validadas y cómo se cobró cada pedido</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="rounded-md border">
@@ -2023,13 +2070,14 @@ const CallCenter = () => {
                     <TableHead>Fecha</TableHead>
                     <TableHead>Hora</TableHead>
                     <TableHead>Dinero esperado</TableHead>
+                    <TableHead>Pago</TableHead>
                     <TableHead>Validó</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {historial.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                      <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
                         Aún no hay cargas validadas
                       </TableCell>
                     </TableRow>
@@ -2046,11 +2094,28 @@ const CallCenter = () => {
                       <TableCell>{row.fecha}</TableCell>
                       <TableCell>{row.hora}</TableCell>
                       <TableCell>${formatMoney(Number(row.dinero_esperado) || 0)}</TableCell>
+                      <TableCell>{resumenPago(row)}</TableCell>
                       <TableCell>{row.validado_por_nombre || "—"}</TableCell>
                     </TableRow>
                     {abierto ? (
                       <TableRow className="bg-pink-100 shadow-[inset_4px_0_0_hsl(var(--primary))] hover:bg-pink-100">
-                        <TableCell colSpan={5} className="bg-pink-100">
+                        <TableCell colSpan={6} className="bg-pink-100">
+                          {(row.cobros || []).length > 0 ? (
+                            <div className="mb-4 grid grid-cols-[1fr_1fr_1fr_1fr] gap-x-3 gap-y-2 text-sm text-foreground">
+                              <p className="font-medium">Pedido</p>
+                              <p className="font-medium">Método</p>
+                              <p className="font-medium">Monto</p>
+                              <p className="font-medium">Cobro</p>
+                              {(row.cobros || []).map((cobro, index) => (
+                                <Fragment key={`${cobro.numero_pedido || "pedido"}-${index}`}>
+                                  <p>{cobro.numero_pedido || "—"}</p>
+                                  <p>{etiquetaMetodo(cobro.metodo)}</p>
+                                  <p>${formatMoney(Number(cobro.monto) || 0)}</p>
+                                  <p>{etiquetaCobro(cobro.estado_cobro) || "—"}</p>
+                                </Fragment>
+                              ))}
+                            </div>
+                          ) : null}
                           <div className="grid grid-cols-[1.4fr_0.6fr_0.6fr_0.6fr] gap-x-3 gap-y-2 text-sm text-foreground">
                             <p className="font-medium">Producto</p>
                             <p className="font-medium">Cantidad</p>
@@ -2065,7 +2130,7 @@ const CallCenter = () => {
                               </Fragment>
                             ))}
                           </div>
-                          <p className="mt-3 text-base font-semibold text-foreground">Total del pedido ${formatMoney(total)}</p>
+                          <p className="mt-3 text-base font-semibold text-foreground">Total de la carga ${formatMoney(total)}</p>
                         </TableCell>
                       </TableRow>
                     ) : null}

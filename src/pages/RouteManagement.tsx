@@ -708,8 +708,8 @@ const RouteManagement = () => {
     toast({ title: "Cambios guardados", description: "La ruta quedó actualizada." });
   };
 
-  const downloadRoutePDF = (route: Route, modo: "salida" | "corte") => {
-    descargarHoja(hojaDesdeRuta(route), modo);
+  const downloadRoutePDF = (route: Route) => {
+    descargarHoja(hojaDesdeRuta(route), "salida");
   };
 
   return (
@@ -1086,11 +1086,8 @@ const RouteManagement = () => {
                           <Plus className="h-4 w-4" />
                           Agregar pedidos
                         </Button>
-                        <Button variant="outline" size="sm" onClick={() => downloadRoutePDF(route, "salida")}>
+                        <Button variant="outline" size="sm" onClick={() => downloadRoutePDF(route)}>
                           <Download className="h-4 w-4" /> Hoja de salida
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={() => downloadRoutePDF(route, "corte")}>
-                          <Download className="h-4 w-4" /> Corte del día
                         </Button>
                         {canDelete("routes") && (
                           <Tooltip>

@@ -110,7 +110,11 @@ export type ComprobantePago = {
   repartidor_id?: number | null;
   ciudad?: string | null;
   metodo: string;
+  metodo_pedido?: string | null;
   monto?: number;
+  monto_efectivo?: number;
+  monto_transferencia?: number;
+  tiene_comprobante?: boolean;
   estado_cobro?: "completo" | "falta comprobante" | "falta cobro";
   nota?: string | null;
   fecha?: string | null;
@@ -172,8 +176,18 @@ export type TrazadoRuta = {
   sin_coords: { pedido_id: number; direccion: string | null }[];
 };
 
+export type CobroHistorico = {
+  numero_pedido: string | null;
+  metodo: string | null;
+  estado_cobro?: string;
+  monto?: number;
+};
+
 export type CargaValidada = Solicitud & {
   validado_por_nombre: string | null;
+  efectivo_cobrado?: number;
+  virtual_cobrado?: number;
+  cobros?: CobroHistorico[];
 };
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
