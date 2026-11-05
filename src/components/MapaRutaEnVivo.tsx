@@ -10,7 +10,7 @@ type MapsWindow = Window & {
   google?: {
     maps: {
       Map: new (el: HTMLElement, opts: Record<string, unknown>) => { fitBounds: (b: unknown) => void; setCenter: (p: { lat: number; lng: number }) => void };
-      Marker: new (opts: Record<string, unknown>) => { setMap: (m: unknown) => void };
+      Marker: new (opts: Record<string, unknown>) => { setMap: (m: unknown) => void; setPosition?: (p: { lat: number; lng: number }) => void };
       Polyline: new (opts: Record<string, unknown>) => { setMap: (m: unknown) => void };
       LatLngBounds: new () => { extend: (p: { lat: number; lng: number }) => void };
       Size: new (w: number, h: number) => unknown;
@@ -49,8 +49,9 @@ function pin(maps: NonNullable<MapsWindow["google"]>["maps"], fill: string, labe
 }
 
 export function MapaRutaEnVivo({ rutaId }: { rutaId: number | null }) {
-  const key = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
+  const key = (import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined)?.trim();
   const node = useRef<HTMLDivElement>(null);
+  const driver = useRef<{ setPosition?: (p: { lat: number; lng: number }) => void } | null>(null);
   const [trazado, setTrazado] = useState<TrazadoRuta | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -124,14 +125,15 @@ export function MapaRutaEnVivo({ rutaId }: { rutaId: number | null }) {
         bounds.extend({ lat: parada.lat, lng: parada.lng });
       }
       if (gps) {
-        const driver = new maps.Marker({
+        const pinDriver = new maps.Marker({
           map,
           position: gps,
           icon: pin(maps, NARANJA, "R"),
           title: "Repartidor",
           zIndex: 999,
         });
-        overlays.push(driver);
+        driver.current = pinDriver;
+        overlays.push(pinDriver);
         bounds.extend(gps);
       }
       if (trazado.paradas.length || gps) map.fitBounds(bounds);
@@ -140,9 +142,17 @@ export function MapaRutaEnVivo({ rutaId }: { rutaId: number | null }) {
     });
     return () => {
       stop = true;
+      driver.current = null;
       for (const overlay of overlays) overlay.setMap(null);
     };
-  }, [key, trazado]);
+  }, [key, rutaId, trazado?.polyline.length, trazado?.paradas.length, Boolean(trazado?.repartidor.lat)]);
+
+  useEffect(() => {
+    const gps = trazado?.repartidor.lat != null && trazado?.repartidor.lng != null
+      ? { lat: trazado.repartidor.lat, lng: trazado.repartidor.lng }
+      : null;
+    if (gps) driver.current?.setPosition?.(gps);
+  }, [trazado?.repartidor.lat, trazado?.repartidor.lng]);
 
   if (rutaId == null) {
     return <p className="rounded-xl bg-white p-4 text-sm text-muted-foreground">Sin ruta para esta franja.</p>;
@@ -156,22 +166,27 @@ export function MapaRutaEnVivo({ rutaId }: { rutaId: number | null }) {
       ? "Sin próxima parada con coordenadas"
       : "Sin posición del repartidor";
 
-  if (!key || failed) {
-    const dest = trazado?.paradas.find((parada) => parada.estado_entrega === "en_camino") || trazado?.paradas[0];
-    const href = dest ? `https://www.google.com/maps/dir/?api=1&destination=${dest.lat},${dest.lng}&travelmode=driving` : "https://www.google.com/maps";
-    return (
-      <div className="space-y-2 rounded-xl bg-white p-4">
-        <p className="font-semibold">{etiqueta}</p>
-        <p className="text-sm text-muted-foreground">El mapa embebido necesita la llave de Google Maps del navegador.</p>
-        <a className="text-sm font-semibold text-primary" href={href} target="_blank" rel="noreferrer">Ver en Google Maps</a>
-      </div>
-    );
-  }
+  const dest = trazado?.paradas.find((parada) => parada.estado_entrega === "en_camino") || trazado?.paradas[0];
+  const href = dest ? `https://www.google.com/maps/dir/?api=1&destination=${dest.lat},${dest.lng}&travelmode=driving` : "https://www.google.com/maps";
+  const sinLlave = !key || failed;
 
   return (
     <div className="overflow-hidden rounded-xl bg-white">
       <p className="px-4 py-3 text-sm font-semibold">{etiqueta}</p>
-      <div ref={node} className="h-80 w-full" />
+      {sinLlave ? (
+        <div className="mx-4 mb-4 flex h-80 items-end rounded-lg bg-muted p-4">
+          <p className="text-sm text-foreground">
+            {hayGps
+              ? "Hay GPS del repartidor. Al poner VITE_GOOGLE_MAPS_API_KEY se ve el mapa aquí."
+              : "Cuando el repartidor abra la app, aquí aparece su posición. El mapa se enciende con la llave de Maps."}
+          </p>
+        </div>
+      ) : (
+        <div ref={node} className="h-80 w-full bg-muted" />
+      )}
+      <div className="px-4 pb-3">
+        <a className="text-sm font-semibold text-primary" href={href} target="_blank" rel="noreferrer">Ver en Google Maps</a>
+      </div>
       {trazado?.sin_coords.length ? (
         <p className="px-4 py-2 text-sm text-muted-foreground">{trazado.sin_coords.length} paradas sin coordenadas, no salen en el mapa.</p>
       ) : null}
