@@ -104,6 +104,7 @@ export interface PublicSiteSettingsData {
   mercadolibreUrl: string;
   qrActions: QrActions;
   maintenancePlaceholder: boolean;
+  mapsApiApagada?: boolean;
 }
 
 export interface UpdateHeroVideoResponse {
@@ -242,6 +243,37 @@ class SiteSettingsService {
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({ maintenancePlaceholder }),
+    });
+
+    if (!res.ok) {
+      const { authService } = await import('./authService');
+      authService.handleAuthError(res);
+      let message = `Error ${res.status}`;
+      try {
+        const json = await res.json();
+        if (json?.message) message = json.message;
+      } catch {
+        /* ignore */
+      }
+      throw new Error(message);
+    }
+
+    return res.json();
+  }
+
+  async updateMapsApiApagada(mapsApiApagada: boolean): Promise<UpdateHeroVideoResponse> {
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+      throw new Error('Token de acceso requerido');
+    }
+
+    const res = await fetch(`${config.apiBaseUrl}/site-settings/maps-api-apagada`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ mapsApiApagada }),
     });
 
     if (!res.ok) {
