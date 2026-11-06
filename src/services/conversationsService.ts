@@ -92,6 +92,8 @@ export interface ConversationsQueryParams {
 	status?: ConversationStatus;
 	has_error?: boolean;
 	has_escalation?: boolean;
+	unread?: boolean;
+	days?: number;
 	page?: number;
 	limit?: number;
 	search?: string;
@@ -127,6 +129,8 @@ class ConversationsService {
 		if (params.status) qs.append('status', params.status);
 		if (params.has_error) qs.append('has_error', 'true');
 		if (params.has_escalation) qs.append('has_escalation', 'true');
+		if (params.unread) qs.append('unread', 'true');
+		if (params.days) qs.append('days', String(params.days));
 		if (params.page) qs.append('page', String(params.page));
 		if (params.limit) qs.append('limit', String(params.limit));
 		if (params.search) qs.append('search', params.search);

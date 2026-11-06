@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, MapPin, Calendar, Car, User, Phone, Mail, FileText, CreditCard, Shield, Lock } from "lucide-react";
 import { driversService, CreateDriverData } from "@/services/driversService";
 import { citiesService } from "@/services/citiesService";
@@ -56,6 +57,7 @@ const CreateDriverModal = ({ isOpen, onClose, onSuccess }: CreateDriverModalProp
     seguro_vehiculo: "",
     notas: "",
     contrasena: "",
+    es_prueba: false,
   });
   const { toast } = useToast();
 
@@ -87,7 +89,7 @@ const CreateDriverModal = ({ isOpen, onClose, onSuccess }: CreateDriverModalProp
     }));
   };
 
-  const handleInputChange = (field: keyof CreateDriverData, value: string | number) => {
+  const handleInputChange = (field: keyof CreateDriverData, value: string | number | boolean) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
@@ -180,6 +182,7 @@ const CreateDriverModal = ({ isOpen, onClose, onSuccess }: CreateDriverModalProp
       seguro_vehiculo: "",
       notas: "",
       contrasena: "",
+      es_prueba: false,
     });
   };
 
@@ -453,6 +456,18 @@ const CreateDriverModal = ({ isOpen, onClose, onSuccess }: CreateDriverModalProp
                   placeholder="SEGURO-789"
                 />
               </div>
+            </div>
+          </div>
+
+          <div className="flex items-start space-x-2 rounded-lg border p-3">
+            <Checkbox
+              id="es_prueba"
+              checked={Boolean(formData.es_prueba)}
+              onCheckedChange={(checked) => handleInputChange("es_prueba", checked === true)}
+            />
+            <div className="space-y-1">
+              <Label htmlFor="es_prueba">Repartidor de prueba</Label>
+              <p className="text-xs text-muted-foreground">No entra en el bot ni en el armado de rutas. Sí se ve en Call Center.</p>
             </div>
           </div>
 

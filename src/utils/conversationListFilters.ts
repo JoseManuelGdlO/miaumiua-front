@@ -30,6 +30,13 @@ export const CONVERSATION_LIST_FILTER_OPTIONS: {
   { value: "en_espera", label: "En espera" },
 ];
 
+export const CONVERSATION_DAY_OPTIONS: { value: string; label: string; days?: number }[] = [
+  { value: "all", label: "Todos los días" },
+  { value: "1", label: "Hoy", days: 1 },
+  { value: "7", label: "Últimos 7 días", days: 7 },
+  { value: "30", label: "Últimos 30 días", days: 30 },
+];
+
 export const KPI_FILTER_KEYS: ConversationListFilter[] = [
   "activa",
   "error",

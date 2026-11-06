@@ -30,7 +30,8 @@ import { DndContext, DragEndEvent, DragOverEvent, DragOverlay, DragStartEvent, c
 import { MapPin, Truck, Plus, Users, MoreHorizontal, Calendar, Navigation, Sparkles, Loader2, ChevronDown, Download, Trash2, X } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import jsPDF from "jspdf";
+import { descargarHoja, hojaDesdeRuta } from "@/lib/hojaRuta";
+import { MAX_PARADAS_DIA, textoCupo } from "@/lib/agenda";
 import { routesService, Route, AvailableDriver, AvailableOrder } from "@/services/routesService";
 import { usersService } from "@/services/usersService";
 import { driversService, Driver } from "@/services/driversService";
@@ -45,6 +46,11 @@ interface AvailableDriverSimple {
   capacidad_carga: number;
   calificacion_promedio: number;
   total_entregas: number;
+  es_prueba?: boolean;
+}
+
+function sinPrueba<T extends { es_prueba?: boolean }>(rows: T[] | undefined) {
+  return (rows || []).filter((row) => !row.es_prueba);
 }
 import { useToast } from "@/hooks/use-toast";
 import { canCreate, canEdit, canDelete, canViewStats } from "@/utils/permissions";
@@ -126,13 +132,13 @@ const RouteManagement = () => {
       if (selectedCity) {
         const driversResponse = await driversService.getAvailableDrivers(parseInt(selectedCity));
         if (driversResponse.success) {
-          setDrivers(driversResponse.data);
+          setDrivers(sinPrueba(driversResponse.data));
         }
       } else {
         // Si no hay ciudad seleccionada, cargar todos los repartidores
         const driversResponse = await driversService.getAllDrivers();
         if (driversResponse.success) {
-          setDrivers(driversResponse.data.repartidores);
+          setDrivers(sinPrueba(driversResponse.data.repartidores));
         }
       }
 
@@ -178,7 +184,7 @@ const RouteManagement = () => {
       // Cargar repartidores disponibles para la ciudad seleccionada
       const driversResponse = await driversService.getAvailableDrivers(parseInt(selectedCity));
       if (driversResponse.success) {
-        setDrivers(driversResponse.data);
+        setDrivers(sinPrueba(driversResponse.data));
       }
     } catch (error) {
       console.error('Error cargando datos de rutas:', error);
@@ -211,7 +217,7 @@ const RouteManagement = () => {
       // Cargar repartidores disponibles para la ciudad seleccionada
       const driversResponse = await driversService.getAvailableDrivers(parseInt(selectedCity));
       if (driversResponse.success) {
-        setDrivers(driversResponse.data);
+        setDrivers(sinPrueba(driversResponse.data));
       }
     } catch (error) {
       console.error('Error cargando datos de rutas en background:', error);
@@ -703,214 +709,7 @@ const RouteManagement = () => {
   };
 
   const downloadRoutePDF = (route: Route) => {
-    try {
-      const doc = new jsPDF();
-      const pageWidth = doc.internal.pageSize.getWidth();
-      const margin = 15;
-      let yPos = margin;
-
-      // Título
-      doc.setFontSize(18);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Detalle de Ruta', pageWidth / 2, yPos, { align: 'center' });
-      yPos += 10;
-
-      // Información de la ruta
-      doc.setFontSize(12);
-      doc.setFont('helvetica', 'normal');
-      doc.text(`Ruta: ${route.nombre_ruta}`, margin, yPos);
-      yPos += 7;
-      
-      doc.text(`Fecha: ${new Date(route.fecha_ruta).toLocaleDateString('es-ES', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      })}`, margin, yPos);
-      yPos += 7;
-
-      if (route.repartidor) {
-        doc.text(`Repartidor: ${route.repartidor.nombre_completo}`, margin, yPos);
-        if (route.repartidor.codigo_repartidor) {
-          doc.text(`Código: ${route.repartidor.codigo_repartidor}`, margin + 60, yPos);
-        }
-        yPos += 7;
-      }
-
-      doc.text(`Estado: ${route.estado === 'planificada' ? 'Planificada' :
-                route.estado === 'en_progreso' ? 'En Progreso' :
-                route.estado === 'completada' ? 'Completada' : 'Cancelada'}`, margin, yPos);
-      yPos += 10;
-
-      // Línea separadora
-      doc.setLineWidth(0.5);
-      doc.line(margin, yPos, pageWidth - margin, yPos);
-      yPos += 7;
-
-      // Listado de entregas
-      if (route.pedidos && route.pedidos.length > 0) {
-        doc.setFontSize(14);
-        doc.setFont('helvetica', 'bold');
-        doc.text('Direcciones a Entregar', margin, yPos);
-        yPos += 8;
-
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'normal');
-
-        const sortedPedidos = [...route.pedidos].sort((a, b) => (a.orden_entrega || 0) - (b.orden_entrega || 0));
-
-        sortedPedidos.forEach((routeOrder, index) => {
-          // Verificar si necesitamos una nueva página
-          if (yPos > 270) {
-            doc.addPage();
-            yPos = margin;
-          }
-
-          // Número de orden
-          doc.setFont('helvetica', 'bold');
-          doc.text(`${routeOrder.orden_entrega || index + 1}.`, margin, yPos);
-          
-          if (routeOrder.pedido) {
-            // Información del pedido
-            doc.setFont('helvetica', 'normal');
-            doc.text(`Pedido: ${routeOrder.pedido.numero_pedido}`, margin + 10, yPos);
-            yPos += 5;
-
-            doc.text(`Dirección: ${routeOrder.pedido.direccion_entrega}`, margin + 10, yPos);
-            yPos += 5;
-
-            if (routeOrder.pedido.cliente) {
-              doc.text(`Cliente: ${routeOrder.pedido.cliente.nombre_completo}`, margin + 10, yPos);
-              yPos += 5;
-              if (routeOrder.pedido.cliente.telefono) {
-                doc.text(`Tel: ${routeOrder.pedido.cliente.telefono}`, margin + 10, yPos);
-                yPos += 5;
-              }
-            }
-
-            if (routeOrder.pedido.total) {
-              doc.text(`Total: $${routeOrder.pedido.total.toLocaleString('es-CO')}`, margin + 10, yPos);
-              yPos += 5;
-            }
-
-            // Productos del pedido
-            if (routeOrder.pedido.productos && routeOrder.pedido.productos.length > 0) {
-              doc.setFont('helvetica', 'bold');
-              doc.text('Productos:', margin + 10, yPos);
-              yPos += 5;
-              doc.setFont('helvetica', 'normal');
-              routeOrder.pedido.productos.forEach((producto: any) => {
-                if (yPos > 270) {
-                  doc.addPage();
-                  yPos = margin;
-                }
-                const productoText = `  • ${producto.producto?.nombre || 'Producto'} - Cant: ${producto.cantidad} - $${producto.precio_unidad?.toLocaleString('es-CO') || '0'}`;
-                doc.text(productoText, margin + 10, yPos);
-                yPos += 4;
-              });
-            }
-
-            // Paquetes del pedido
-            if (routeOrder.pedido.paquetes && routeOrder.pedido.paquetes.length > 0) {
-              doc.setFont('helvetica', 'bold');
-              doc.text('Paquetes:', margin + 10, yPos);
-              yPos += 5;
-              doc.setFont('helvetica', 'normal');
-              routeOrder.pedido.paquetes.forEach((paquete: any) => {
-                if (yPos > 270) {
-                  doc.addPage();
-                  yPos = margin;
-                }
-                const paqueteText = `  • ${paquete.paquete?.nombre || 'Paquete'} - Cant: ${paquete.cantidad} - $${paquete.precio_unidad?.toLocaleString('es-CO') || paquete.paquete?.precio_final?.toLocaleString('es-CO') || '0'}`;
-                doc.text(paqueteText, margin + 10, yPos);
-                yPos += 4;
-              });
-            }
-
-            // Información adicional
-            if (routeOrder.pedido.metodo_pago) {
-              doc.text(`Método de pago: ${routeOrder.pedido.metodo_pago}`, margin + 10, yPos);
-              yPos += 5;
-            }
-            if (routeOrder.pedido.telefono_referencia) {
-              doc.text(`Tel. referencia: ${routeOrder.pedido.telefono_referencia}`, margin + 10, yPos);
-              yPos += 5;
-            }
-            if (routeOrder.pedido.email_referencia) {
-              doc.text(`Email referencia: ${routeOrder.pedido.email_referencia}`, margin + 10, yPos);
-              yPos += 5;
-            }
-            if (routeOrder.pedido.notas) {
-              doc.setFont('helvetica', 'italic');
-              doc.text(`Notas del pedido: ${routeOrder.pedido.notas}`, margin + 10, yPos);
-              doc.setFont('helvetica', 'normal');
-              yPos += 5;
-            }
-          } else {
-            doc.text(`Pedido ID: ${routeOrder.fkid_pedido}`, margin + 10, yPos);
-            yPos += 5;
-          }
-
-          doc.text(`Estado: ${routeOrder.estado_entrega === 'pendiente' ? 'Pendiente' :
-                    routeOrder.estado_entrega === 'en_camino' ? 'En Camino' :
-                    routeOrder.estado_entrega === 'entregado' ? 'Entregado' : 'Fallido'}`, margin + 10, yPos);
-          yPos += 5;
-
-          if (routeOrder.notas_entrega) {
-            doc.setFont('helvetica', 'italic');
-            doc.text(`Notas: ${routeOrder.notas_entrega}`, margin + 10, yPos);
-            doc.setFont('helvetica', 'normal');
-            yPos += 5;
-          }
-
-          // Línea separadora entre entregas
-          yPos += 2;
-          doc.setLineWidth(0.2);
-          doc.line(margin + 10, yPos, pageWidth - margin - 10, yPos);
-          yPos += 5;
-        });
-      } else {
-        doc.text('No hay pedidos asignados a esta ruta', margin, yPos);
-        yPos += 7;
-      }
-
-      // Estadísticas al final
-      if (route.distancia_estimada || route.tiempo_estimado) {
-        if (yPos > 250) {
-          doc.addPage();
-          yPos = margin;
-        }
-        yPos += 5;
-        doc.setLineWidth(0.5);
-        doc.line(margin, yPos, pageWidth - margin, yPos);
-        yPos += 7;
-
-        doc.setFontSize(10);
-        if (route.distancia_estimada != null && typeof route.distancia_estimada === 'number') {
-          doc.text(`Distancia estimada: ${route.distancia_estimada.toFixed(2)} km`, margin, yPos);
-          yPos += 5;
-        }
-        if (route.tiempo_estimado != null && typeof route.tiempo_estimado === 'number') {
-          doc.text(`Tiempo estimado: ${Math.round(route.tiempo_estimado)} min`, margin, yPos);
-        }
-      }
-
-      // Guardar el PDF
-      const fileName = `Ruta_${route.nombre_ruta.replace(/\s+/g, '_')}_${route.fecha_ruta}.pdf`;
-      doc.save(fileName);
-
-      toast({
-        title: "PDF generado",
-        description: `El detalle de la ruta se ha descargado exitosamente`,
-      });
-    } catch (error) {
-      console.error('Error al generar PDF:', error);
-      toast({
-        title: "Error",
-        description: "No se pudo generar el PDF",
-        variant: "destructive",
-      });
-    }
+    descargarHoja(hojaDesdeRuta(route), "salida");
   };
 
   return (
@@ -1287,14 +1086,9 @@ const RouteManagement = () => {
                           <Plus className="h-4 w-4" />
                           Agregar pedidos
                         </Button>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button variant="outline" size="icon" onClick={() => downloadRoutePDF(route)} aria-label="Descargar PDF">
-                              <Download className="h-4 w-4" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>Descargar PDF</TooltipContent>
-                        </Tooltip>
+                        <Button variant="outline" size="sm" onClick={() => downloadRoutePDF(route)}>
+                          <Download className="h-4 w-4" /> Hoja de salida
+                        </Button>
                         {canDelete("routes") && (
                           <Tooltip>
                             <TooltipTrigger asChild>
@@ -1309,7 +1103,8 @@ const RouteManagement = () => {
                     </div>
                     <p className={collapsedRoutes.has(route.id) ? "text-lg font-semibold text-foreground" : "text-sm text-muted-foreground"}>
                       <MapPin className="mr-1 inline h-4 w-4" />
-                      {route.pedidos?.length || route.total_pedidos || 0} {(route.pedidos?.length || route.total_pedidos || 0) === 1 ? "pedido" : "pedidos"}
+                      {textoCupo(route.pedidos?.length || route.total_pedidos || 0)}
+                      {(route.pedidos?.length || route.total_pedidos || 0) >= MAX_PARADAS_DIA ? " · Saturado" : ""}
                     </p>
                   </div>
 

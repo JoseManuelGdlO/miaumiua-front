@@ -3,7 +3,7 @@ import { falloHttp } from '@/lib/api-error';
 import { authService } from '@/services/authService';
 import { pedidosPath, repartidoresPath } from '@/lib/call-center-rules.mjs';
 
-export type RepartidorRef = { id: number; nombre_completo: string; telefono?: string | null } | null;
+export type RepartidorRef = { id: number; nombre_completo: string; telefono?: string | null; es_prueba?: boolean } | null;
 
 export type CargaLinea = {
   id?: number | null;
@@ -71,26 +71,63 @@ export type PedidoDia = {
   orden_entrega?: number | null;
   repartidor: RepartidorRef;
   ciudad_id: number | null;
+  ciudad?: string | null;
+  productos?: { nombre: string; cantidad: number; precio_unidad?: number }[];
+  subtotal?: number;
   total: number;
   codigo_oculto?: string | null;
   fecha_propuesta?: string | null;
+  fecha_ruta?: string | null;
+  ruta_id?: number | null;
+  lat?: number | null;
+  lng?: number | null;
   calificacion_servicio?: number | null;
   calificacion_cliente?: number | null;
   comprobante_url: string | null;
+  estado_cobro?: "completo" | "falta comprobante" | "falta cobro";
+  cobro?: {
+    metodo?: string;
+    monto_efectivo?: number;
+    monto_transferencia?: number;
+    tiene_comprobante?: boolean;
+  } | null;
 };
 
-export type RepartidorOpcion = { id: number; nombre_completo: string; estado: string };
+export type RepartidorOpcion = {
+  id: number;
+  nombre_completo: string;
+  estado: string;
+  es_prueba?: boolean;
+  paradas?: number;
+  max_paradas?: number;
+  saturado?: boolean;
+};
 
 export type ComprobantePago = {
   pedido_id: number;
   numero_pedido: string;
   repartidor: string | null;
+  repartidor_id?: number | null;
   ciudad?: string | null;
   metodo: string;
+  metodo_pedido?: string | null;
+  monto?: number;
+  monto_efectivo?: number;
+  monto_transferencia?: number;
+  tiene_comprobante?: boolean;
+  estado_cobro?: "completo" | "falta comprobante" | "falta cobro";
   nota?: string | null;
   fecha?: string | null;
   comprobante_url: string | null;
   puede_subir: boolean;
+};
+
+export type CorteDia = {
+  fecha: string;
+  repartidor: { id: number; nombre_completo: string; es_prueba?: boolean };
+  ciudad?: string | null;
+  km_esperados?: number | null;
+  paradas: PedidoDia[];
 };
 
 export type DepositoRuta = {
@@ -114,10 +151,43 @@ export type VelocidadDia = {
   nombre: string | null;
   promedio: number;
   lecturas: number;
+  lat?: number | null;
+  lng?: number | null;
+  ubicacion_at?: string | null;
+};
+
+export type TrazadoRuta = {
+  ruta_id: number;
+  franja: "manana" | "tarde";
+  ciudad: string | null;
+  repartidor: { id: number | null; lat: number | null; lng: number | null; ubicacion_at: string | null };
+  paradas: {
+    orden: number;
+    pedido_id: number;
+    numero: string | null;
+    cliente: string | null;
+    lat: number;
+    lng: number;
+    direccion: string | null;
+    estado_entrega: string;
+  }[];
+  polyline: { lat: number; lng: number }[];
+  eta: { pedido_id: number; numero: string | null; minutos: number; km: number | null } | null;
+  sin_coords: { pedido_id: number; direccion: string | null }[];
+};
+
+export type CobroHistorico = {
+  numero_pedido: string | null;
+  metodo: string | null;
+  estado_cobro?: string;
+  monto?: number;
 };
 
 export type CargaValidada = Solicitud & {
   validado_por_nombre: string | null;
+  efectivo_cobrado?: number;
+  virtual_cobrado?: number;
+  cobros?: CobroHistorico[];
 };
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -210,7 +280,9 @@ export const callCenterService = {
     method: 'POST',
   }),
   listarVelocidad: () => request<VelocidadDia[]>('/call-center/velocidad'),
+  trazado: (rutaId: number) => request<TrazadoRuta>(`/call-center/rutas/${rutaId}/trazado`),
   listarComprobantes: (query?: { historico?: boolean }) => request<ComprobantePago[]>(`/call-center/comprobantes${query?.historico ? '?historico=1' : ''}`),
+  corte: (repartidorId: number, fecha: string) => request<CorteDia>(`/call-center/corte?repartidorId=${repartidorId}&fecha=${fecha}`),
   anotarComprobante: (id: number, comentario: string) => request<{ guardado: boolean }>(`/call-center/pedidos/${id}/comprobante-nota`, {
     method: 'POST',
     body: JSON.stringify({ comentario }),

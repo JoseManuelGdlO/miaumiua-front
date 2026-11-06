@@ -35,6 +35,7 @@ import Proveedores from "./pages/Proveedores";
 import Packages from "./pages/Packages";
 import Notifications from "./pages/Notifications";
 import SiteSettings from "./pages/SiteSettings";
+import ConfiguracionMaps from "./pages/ConfiguracionMaps";
 import Flags from "./pages/Flags";
 import ConfiguracionQr from "./pages/ConfiguracionQr";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
@@ -92,6 +93,7 @@ const App = () => (
             <Route path="packages" element={<Packages />} />
             <Route path="notifications" element={<Notifications />} />
             <Route path="settings" element={<SiteSettings />} />
+            <Route path="maps" element={<ConfiguracionMaps />} />
           </Route>
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
