@@ -537,9 +537,15 @@ function MonitorRepartidores({
                       paradas={deFranja.length ? deFranja : row.paradas}
                       ciudad={row.ciudadNombre || null}
                       destinoId={row.actual?.id ?? null}
-                      gps={row.velocidad?.lat != null && row.velocidad?.lng != null
-                        ? { lat: Number(row.velocidad.lat), lng: Number(row.velocidad.lng) }
-                        : null}
+                      gps={(() => {
+                        const candidatos = [row.velocidad, row.paradas.find((pedido) => pedido.repartidor?.lat != null)?.repartidor];
+                        for (const punto of candidatos) {
+                          const lat = Number(punto?.lat);
+                          const lng = Number(punto?.lng);
+                          if (Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0)) return { lat, lng };
+                        }
+                        return null;
+                      })()}
                     />
                   </div>
                 );

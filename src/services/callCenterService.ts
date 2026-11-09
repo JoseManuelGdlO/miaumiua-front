@@ -3,7 +3,7 @@ import { falloHttp } from '@/lib/api-error';
 import { authService } from '@/services/authService';
 import { pedidosPath, repartidoresPath } from '@/lib/call-center-rules.mjs';
 
-export type RepartidorRef = { id: number; nombre_completo: string; telefono?: string | null; es_prueba?: boolean } | null;
+export type RepartidorRef = { id: number; nombre_completo: string; telefono?: string | null; es_prueba?: boolean; lat?: number | null; lng?: number | null } | null;
 
 export type CargaLinea = {
   id?: number | null;

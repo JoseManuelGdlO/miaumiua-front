@@ -2,6 +2,22 @@ type Punto = { lat: number; lng: number };
 
 const memo = new Map<string, Punto[]>();
 
+export function destPedido(lat: number | null | undefined, lng: number | null | undefined, here: Punto | null) {
+  const a = Number(lat);
+  const b = Number(lng);
+  if (!Number.isFinite(a) || !Number.isFinite(b) || (a === 0 && b === 0)) return null;
+  const punto = { lat: a, lng: b };
+  if (!here) return punto;
+  const rad = Math.PI / 180;
+  const dLat = (here.lat - a) * rad;
+  const dLng = (here.lng - b) * rad;
+  const x = Math.sin(dLat / 2) ** 2
+    + Math.cos(a * rad) * Math.cos(here.lat * rad) * Math.sin(dLng / 2) ** 2;
+  // shortcut: <80 m del GPS es el repartidor, no el domicilio
+  if (6371000 * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x)) < 80) return null;
+  return punto;
+}
+
 export function selloRuta(origen: Punto, destino: Punto) {
   return `${origen.lat.toFixed(3)},${origen.lng.toFixed(3)}>${destino.lat.toFixed(5)},${destino.lng.toFixed(5)}`;
 }
