@@ -74,9 +74,10 @@ const Inventarios = () => {
         activos: showArchived ? "false" : "true",
       });
 
-      setInventarios(response.data.inventarios);
-      setTotalPages(response.data.pagination.totalPages);
-      setTotalItems(response.data.pagination.totalItems);
+      const pag = response.data?.pagination ?? {};
+      setInventarios(response.data?.inventarios ?? []);
+      setTotalItems(pag.totalItems ?? pag.total ?? 0);
+      setTotalPages(pag.totalPages || 1);
     } catch (error) {
       console.error('Error al cargar inventarios:', error);
       toast({

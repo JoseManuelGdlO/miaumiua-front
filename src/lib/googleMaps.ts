@@ -16,6 +16,15 @@ type MapsWindow = Window & {
       LatLngBounds: new () => { extend: (p: { lat: number; lng: number }) => void };
       Size: new (w: number, h: number) => unknown;
       Point: new (x: number, y: number) => unknown;
+      Geocoder?: new () => {
+        geocode: (
+          req: { address: string },
+          cb: (
+            results: Array<{ geometry: { location: { lat: () => number; lng: () => number } } }> | null,
+            status: string,
+          ) => void,
+        ) => void;
+      };
     };
   };
 };
@@ -57,5 +66,14 @@ export function pin(maps: NonNullable<ReturnType<typeof mapsApi>>, fill: string,
     url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
     scaledSize: new maps.Size(28, 28),
     anchor: new maps.Point(14, 14),
+  };
+}
+
+export function camioneta(maps: NonNullable<ReturnType<typeof mapsApi>>, fill = "#FF6300") {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36"><circle cx="18" cy="18" r="16" fill="${fill}" stroke="#111111" stroke-width="2"/><path fill="#FFFFFF" d="M9 21V13h9l6 4.5V21h-2.1a3 3 0 0 1-5.8 0h-2.2A3 3 0 0 1 9 21z"/><circle cx="12.2" cy="21" r="1.8" fill="${fill}"/><circle cx="23.2" cy="21" r="1.8" fill="${fill}"/></svg>`;
+  return {
+    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
+    scaledSize: new maps.Size(36, 36),
+    anchor: new maps.Point(18, 18),
   };
 }

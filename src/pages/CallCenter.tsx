@@ -518,9 +518,10 @@ function MonitorRepartidores({
                 const franja = (franjaMapa === "tarde" && tieneTarde) || (franjaMapa === "manana" && tieneManana)
                   ? franjaMapa
                   : (tieneTarde && !tieneManana ? "tarde" : "manana");
-                const rutaId = row.paradas.find((pedido) => (pedido.franja || "manana") === franja)?.ruta_id
-                  ?? row.paradas.find((pedido) => pedido.ruta_id)?.ruta_id
-                  ?? null;
+                const deFranja = row.paradas.filter((pedido) => (pedido.franja || "manana") === franja);
+                const rutaId = [...deFranja, ...row.paradas]
+                  .map((pedido) => Number(pedido.ruta_id))
+                  .find((value) => Number.isInteger(value) && value > 0) ?? null;
                 return (
                   <div className="space-y-3 lg:col-span-2">
                     {tieneManana && tieneTarde ? (
@@ -529,7 +530,17 @@ function MonitorRepartidores({
                         <Button variant={franja === "tarde" ? "default" : "outline"} size="sm" onClick={() => setFranjaMapa("tarde")}>Tarde</Button>
                       </div>
                     ) : null}
-                    <MapaRutaEnVivo rutaId={rutaId ?? null} />
+                    <MapaRutaEnVivo
+                      key={`${id}-${franja}`}
+                      rutaId={rutaId}
+                      repartidorId={id}
+                      paradas={deFranja.length ? deFranja : row.paradas}
+                      ciudad={row.ciudadNombre || null}
+                      destinoId={row.actual?.id ?? null}
+                      gps={row.velocidad?.lat != null && row.velocidad?.lng != null
+                        ? { lat: Number(row.velocidad.lat), lng: Number(row.velocidad.lng) }
+                        : null}
+                    />
                   </div>
                 );
               })()}

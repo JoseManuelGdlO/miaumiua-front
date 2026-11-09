@@ -81,11 +81,9 @@ const CreateDriverModal = ({ isOpen, onClose, onSuccess }: CreateDriverModalProp
   };
 
   const generateDriverCode = () => {
-    const timestamp = Date.now();
-    const randomNum = Math.floor(Math.random() * 1000);
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      codigo_repartidor: `REP-${timestamp}-${randomNum}`
+      codigo_repartidor: `REP-${String(Date.now()).slice(-8)}`,
     }));
   };
 
@@ -220,8 +218,9 @@ const CreateDriverModal = ({ isOpen, onClose, onSuccess }: CreateDriverModalProp
                 <Input
                   id="codigo_repartidor"
                   value={formData.codigo_repartidor}
-                  onChange={(e) => handleInputChange("codigo_repartidor", e.target.value)}
+                  onChange={(e) => handleInputChange("codigo_repartidor", e.target.value.slice(0, 20))}
                   placeholder="REP-001"
+                  maxLength={20}
                   required
                 />
               </div>
@@ -364,31 +363,7 @@ const CreateDriverModal = ({ isOpen, onClose, onSuccess }: CreateDriverModalProp
               <span>Información Laboral</span>
             </h3>
             
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="tarifa_base">Tarifa Base ($)</Label>
-                <Input
-                  id="tarifa_base"
-                  type="number"
-                  step="0.01"
-                  value={formData.tarifa_base}
-                  onChange={(e) => handleInputChange("tarifa_base", parseFloat(e.target.value) || 0)}
-                  placeholder="15.00"
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="comision_porcentaje">Comisión (%)</Label>
-                <Input
-                  id="comision_porcentaje"
-                  type="number"
-                  step="0.1"
-                  value={formData.comision_porcentaje}
-                  onChange={(e) => handleInputChange("comision_porcentaje", parseFloat(e.target.value) || 0)}
-                  placeholder="10.0"
-                />
-              </div>
-              
+            <div className="grid grid-cols-1 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="fecha_ingreso">Fecha de Ingreso</Label>
                 <Input

@@ -1,31 +1,132 @@
 import { useEffect, useRef, useState } from "react";
-import { callCenterService, type TrazadoRuta } from "@/services/callCenterService";
+import { callCenterService } from "@/services/callCenterService";
 import { siteSettingsService } from "@/services/siteSettingsService";
 import { config } from "@/config/environment";
-import { callCenterSocketUrl, loadMaps, mapsApi, pin } from "@/lib/googleMaps";
+import { callCenterSocketUrl, camioneta, loadMaps, mapsApi, pin } from "@/lib/googleMaps";
+import { pedirRutaCalles, rutaDeCalles, selloRuta, splitRuta } from "@/lib/rutaCalles";
 
 const ROSA = "#E83E8C";
 const NARANJA = "#FF6300";
-const GRIS = "#6B7280";
-const CDMX = { lat: 19.4326, lng: -99.1332 };
+const GRIS = "#C4C4C4";
+
+type Punto = { lat: number; lng: number };
+type ParadaVista = {
+  id?: number;
+  ruta_id?: number | null;
+  lat?: number | null;
+  lng?: number | null;
+  estado_entrega?: string;
+  estado?: string;
+  orden_entrega?: number | null;
+  numero_pedido?: string | null;
+  direccion?: string | null;
+};
+
+const geoMemo = new Map<string, Punto>();
+
+function puntoParada(parada: ParadaVista | null | undefined): Punto | null {
+  if (!parada) return null;
+  const lat = Number(parada.lat);
+  const lng = Number(parada.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || (lat === 0 && lng === 0)) return null;
+  return { lat, lng };
+}
+
+function ordenadas(paradas: ParadaVista[]) {
+  return [...paradas].sort((a, b) => (Number(a.orden_entrega) || 0) - (Number(b.orden_entrega) || 0));
+}
+
+function destinoActual(paradas: ParadaVista[], destinoId?: number | null) {
+  const rows = ordenadas(paradas);
+  if (destinoId != null) {
+    const hit = rows.find((parada) => Number(parada.id) === Number(destinoId));
+    if (hit) return hit;
+  }
+  return rows.find((parada) => (parada.estado_entrega || parada.estado) === "en_camino")
+    || rows.find((parada) => (parada.estado_entrega || parada.estado) === "pendiente")
+    || rows[0]
+    || null;
+}
+
+function geocodeDireccion(
+  maps: NonNullable<ReturnType<typeof mapsApi>>,
+  query: string,
+  ciudad: string | null,
+): Promise<Punto | null> {
+  const address = `${query}${ciudad ? `, ${ciudad}` : ""}, México`;
+  const hit = geoMemo.get(address);
+  if (hit) return Promise.resolve(hit);
+  const geocoder = maps.Geocoder ? new maps.Geocoder() : null;
+  if (!geocoder) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    geocoder.geocode({ address }, (results, status) => {
+      const loc = results?.[0]?.geometry?.location;
+      if (status !== "OK" || !loc) return resolve(null);
+      const punto = { lat: loc.lat(), lng: loc.lng() };
+      geoMemo.set(address, punto);
+      resolve(punto);
+    });
+  });
+}
+
+async function resolverPunto(
+  maps: NonNullable<ReturnType<typeof mapsApi>>,
+  parada: ParadaVista | null,
+  ciudad: string | null,
+) {
+  const known = puntoParada(parada);
+  if (known) return known;
+  const query = parada?.direccion?.trim();
+  if (!query) return null;
+  return geocodeDireccion(maps, query, ciudad);
+}
 
 type Overlay = { setMap: (m: unknown) => void };
-type MapHandle = { fitBounds: (b: unknown) => void; setCenter: (p: { lat: number; lng: number }) => void };
-type LineHandle = Overlay & { setPath?: (p: { lat: number; lng: number }[]) => void };
-type PinHandle = Overlay & { setPosition?: (p: { lat: number; lng: number }) => void };
+type MapHandle = { fitBounds: (b: unknown) => void; setCenter: (p: Punto) => void };
+type LineHandle = Overlay & { setPath?: (p: Punto[]) => void };
+type PinHandle = Overlay & { setPosition?: (p: Punto) => void };
 
-export function MapaRutaEnVivo({ rutaId }: { rutaId: number | null }) {
+function gpsValido(punto: Punto | null | undefined): Punto | null {
+  if (!punto) return null;
+  const lat = Number(punto.lat);
+  const lng = Number(punto.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || (lat === 0 && lng === 0)) return null;
+  return { lat, lng };
+}
+
+export function MapaRutaEnVivo({
+  rutaId,
+  paradas = [],
+  ciudad = null,
+  destinoId = null,
+  repartidorId = null,
+  gps: gpsProp = null,
+}: {
+  rutaId: number | null;
+  paradas?: ParadaVista[];
+  ciudad?: string | null;
+  destinoId?: number | null;
+  repartidorId?: number | null;
+  gps?: Punto | null;
+}) {
   const key = (import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined)?.trim();
   const node = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapHandle | null>(null);
-  const lineRef = useRef<LineHandle | null>(null);
-  const stopsRef = useRef<Overlay[]>([]);
-  const driver = useRef<PinHandle | null>(null);
-  const repartidorId = useRef<number | null>(null);
-  const [trazado, setTrazado] = useState<TrazadoRuta | null>(null);
-  const [failed, setFailed] = useState(false);
+  const hechoRef = useRef<LineHandle | null>(null);
+  const faltaRef = useRef<LineHandle | null>(null);
+  const destRef = useRef<PinHandle | null>(null);
+  const driverRef = useRef<PinHandle | null>(null);
+  const gpsRef = useRef<Punto | null>(gpsValido(gpsProp));
+  const dirStamp = useRef("");
+  const fitted = useRef(false);
+  const fittedLine = useRef(false);
   const [apagada, setApagada] = useState(false);
-  const [gpsLive, setGpsLive] = useState<{ lat: number; lng: number } | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [dest, setDest] = useState<Punto | null>(null);
+  const [gpsRuta, setGpsRuta] = useState<Punto | null>(gpsValido(gpsProp));
+  const [preview, setPreview] = useState<Punto[]>([]);
+
+  const actual = destinoActual(paradas, destinoId);
 
   useEffect(() => {
     void siteSettingsService.getPublic().then((res) => {
@@ -34,29 +135,52 @@ export function MapaRutaEnVivo({ rutaId }: { rutaId: number | null }) {
   }, []);
 
   useEffect(() => {
-    if (rutaId == null) {
-      setTrazado(null);
-      setGpsLive(null);
-      repartidorId.current = null;
-      return;
-    }
-    setGpsLive(null);
+    if (!paradas.length) return;
     let vivo = true;
+    const aplicar = (rows: ParadaVista[]) => {
+      if (!vivo || !key || apagada) return;
+      void loadMaps(key).then(async () => {
+        if (!vivo) return;
+        const maps = mapsApi();
+        if (!maps) {
+          setFailed(true);
+          return;
+        }
+        const destPunto = await resolverPunto(maps, destinoActual(rows, destinoId), ciudad);
+        if (vivo) setDest(destPunto);
+      }).catch(() => {
+        if (vivo) setFailed(true);
+      });
+    };
+    if (rutaId == null) {
+      aplicar(paradas);
+      return () => {
+        vivo = false;
+      };
+    }
     void callCenterService.trazado(rutaId).then((data) => {
       if (!vivo) return;
-      setTrazado(data);
-      repartidorId.current = data.repartidor.id;
+      const deTrazado = gpsValido({ lat: data.repartidor.lat ?? 0, lng: data.repartidor.lng ?? 0 });
+      if (deTrazado && !gpsRef.current) {
+        gpsRef.current = deTrazado;
+        setGpsRuta(deTrazado);
+      }
+      const merged = paradas.map((parada) => {
+        const hit = data.paradas.find((row) => Number(row.pedido_id) === Number(parada.id));
+        return hit ? { ...parada, lat: hit.lat, lng: hit.lng } : parada;
+      });
+      aplicar(merged);
     }).catch(() => {
-      if (vivo) setTrazado(null);
+      if (vivo) aplicar(paradas);
     });
     return () => {
       vivo = false;
     };
-  }, [rutaId]);
+  }, [key, apagada, rutaId, ciudad, destinoId, paradas.length, actual?.id]);
 
   useEffect(() => {
     const token = localStorage.getItem("auth_token");
-    if (!token) return;
+    if (!token || repartidorId == null) return;
     let stopped = false;
     let ws: WebSocket | null = null;
     const connect = () => {
@@ -74,13 +198,13 @@ export function MapaRutaEnVivo({ rutaId }: { rutaId: number | null }) {
           return;
         }
         if (data?.type !== "gps") return;
-        if (repartidorId.current != null && Number(data.repartidorId) !== Number(repartidorId.current)) return;
-        const lat = Number(data.lat);
-        const lng = Number(data.lng);
-        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
-        const punto = { lat, lng };
-        setGpsLive(punto);
-        driver.current?.setPosition?.(punto);
+        if (Number(data.repartidorId) !== Number(repartidorId)) return;
+        const punto = gpsValido({ lat: Number(data.lat), lng: Number(data.lng) });
+        if (!punto) return;
+        gpsRef.current = punto;
+        driverRef.current?.setPosition?.(punto);
+        const coarse = { lat: Number(punto.lat.toFixed(3)), lng: Number(punto.lng.toFixed(3)) };
+        setGpsRuta((prev) => (prev && prev.lat === coarse.lat && prev.lng === coarse.lng ? prev : coarse));
       };
     };
     connect();
@@ -88,10 +212,21 @@ export function MapaRutaEnVivo({ rutaId }: { rutaId: number | null }) {
       stopped = true;
       ws?.close();
     };
-  }, []);
+  }, [repartidorId]);
 
   useEffect(() => {
-    if (apagada || !key || !node.current || !trazado) return;
+    if (!gpsRuta || !dest) return;
+    if (gpsRuta.lat === dest.lat && gpsRuta.lng === dest.lng) return;
+    const stamp = selloRuta(gpsRuta, dest);
+    if (stamp === dirStamp.current) return;
+    dirStamp.current = stamp;
+    void pedirRutaCalles(gpsRuta, dest).then((path) => {
+      if (dirStamp.current === stamp && path.length > 2) setPreview(path);
+    }).catch(() => {});
+  }, [gpsRuta?.lat, gpsRuta?.lng, dest?.lat, dest?.lng]);
+
+  useEffect(() => {
+    if (apagada || !key || !node.current || !dest) return;
     let stop = false;
     void loadMaps(key).then(() => {
       if (stop || !node.current) return;
@@ -100,98 +235,94 @@ export function MapaRutaEnVivo({ rutaId }: { rutaId: number | null }) {
         setFailed(true);
         return;
       }
-      const gps = gpsLive
-        || (trazado.repartidor.lat != null && trazado.repartidor.lng != null
-          ? { lat: trazado.repartidor.lat, lng: trazado.repartidor.lng }
-          : null);
       if (!mapRef.current) {
         mapRef.current = new maps.Map(node.current, {
-          center: gps || trazado.paradas[0] || CDMX,
+          center: dest,
           zoom: 13,
           disableDefaultUI: true,
           zoomControl: true,
         });
       }
       const map = mapRef.current;
-      if (lineRef.current) {
-        if (trazado.polyline.length > 1) lineRef.current.setPath?.(trazado.polyline);
-        else lineRef.current.setMap(null);
-        if (trazado.polyline.length <= 1) lineRef.current = null;
-      } else if (trazado.polyline.length > 1) {
-        lineRef.current = new maps.Polyline({
-          path: trazado.polyline,
+      const gps = gpsRef.current || gpsRuta;
+      const naranja = rutaDeCalles(preview);
+      const { hecho, falta } = splitRuta(naranja, gps);
+      if (!hechoRef.current) {
+        hechoRef.current = new maps.Polyline({
+          path: hecho,
+          strokeColor: GRIS,
+          strokeWeight: 6,
+          strokeOpacity: 1,
+          map,
+        });
+      } else {
+        hechoRef.current.setMap(map);
+        hechoRef.current.setPath?.(hecho);
+      }
+      if (!faltaRef.current) {
+        faltaRef.current = new maps.Polyline({
+          path: falta.length ? falta : naranja,
           strokeColor: NARANJA,
-          strokeWeight: 5,
-          strokeOpacity: 0.9,
+          strokeWeight: 6,
+          strokeOpacity: 1,
           map,
         });
+      } else {
+        faltaRef.current.setMap(map);
+        faltaRef.current.setPath?.(falta.length ? falta : naranja);
       }
-      for (const overlay of stopsRef.current) overlay.setMap(null);
-      stopsRef.current = [];
-      const bounds = new maps.LatLngBounds();
-      if (trazado.polyline.length > 1) {
-        for (const punto of trazado.polyline) bounds.extend(punto);
-      }
-      const actual = trazado.paradas.find((parada) => parada.estado_entrega === "en_camino")
-        || trazado.paradas.find((parada) => parada.estado_entrega === "pendiente");
-      for (const parada of trazado.paradas) {
-        const hecho = parada.estado_entrega === "entregado" || parada.estado_entrega === "fallido";
-        const esActual = actual?.pedido_id === parada.pedido_id;
-        const fill = hecho ? GRIS : esActual ? ROSA : "#FFFFFF";
-        const ink = fill === "#FFFFFF" ? "#111111" : "#FFFFFF";
-        const marker = new maps.Marker({
+      if (destRef.current) {
+        destRef.current.setPosition?.(dest);
+        destRef.current.setMap(map);
+      } else {
+        destRef.current = new maps.Marker({
           map,
-          position: { lat: parada.lat, lng: parada.lng },
-          icon: pin(maps, fill, String(parada.orden || ""), ink),
-          title: parada.numero || "",
+          position: dest,
+          icon: pin(maps, ROSA, "D"),
+          title: actual?.numero_pedido || "Destino",
         });
-        stopsRef.current.push(marker);
-        bounds.extend({ lat: parada.lat, lng: parada.lng });
       }
       if (gps) {
-        if (driver.current) {
-          driver.current.setPosition?.(gps);
-          driver.current.setMap(map);
+        if (driverRef.current) {
+          driverRef.current.setPosition?.(gps);
+          driverRef.current.setMap(map);
         } else {
-          driver.current = new maps.Marker({
+          driverRef.current = new maps.Marker({
             map,
             position: gps,
-            icon: pin(maps, NARANJA, "R"),
+            icon: camioneta(maps, NARANJA),
             title: "Repartidor",
             zIndex: 999,
           });
         }
-        bounds.extend(gps);
       }
-      if (trazado.paradas.length || gps) map.fitBounds(bounds);
+      if (!fitted.current || (naranja.length > 2 && !fittedLine.current)) {
+        fitted.current = true;
+        if (naranja.length > 2) fittedLine.current = true;
+        const bounds = new maps.LatLngBounds();
+        bounds.extend(dest);
+        if (gps) bounds.extend(gps);
+        for (const punto of naranja) bounds.extend(punto);
+        map.fitBounds(bounds);
+      }
     }).catch(() => {
       if (!stop) setFailed(true);
     });
     return () => {
       stop = true;
     };
-  }, [key, apagada, rutaId, trazado, gpsLive == null]);
+  }, [key, apagada, dest?.lat, dest?.lng, preview.length, gpsRuta?.lat, gpsRuta?.lng]);
 
-  if (rutaId == null) {
-    return <p className="rounded-xl bg-white p-4 text-sm text-muted-foreground">Sin ruta para esta franja.</p>;
-  }
-
-  const eta = trazado?.eta;
-  const hayGps = gpsLive != null || trazado?.repartidor.lat != null;
-  const etiqueta = eta
-    ? `Próxima entrega: Pedido #${eta.numero || eta.pedido_id} · ${eta.minutos} min${eta.km != null ? ` · ${eta.km} km` : ""}`
-    : hayGps
-      ? "Sin próxima parada con coordenadas"
-      : "Sin posición del repartidor";
-
-  const dest = trazado?.paradas.find((parada) => parada.estado_entrega === "en_camino") || trazado?.paradas[0];
-  const pinHref = gpsLive
-    ? `https://www.google.com/maps?q=${gpsLive.lat},${gpsLive.lng}`
+  const etiqueta = actual?.numero_pedido
+    ? `Ruta al pedido ${actual.numero_pedido}`
     : dest
-      ? `https://www.google.com/maps?q=${dest.lat},${dest.lng}`
-      : dest?.direccion
-        ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(dest.direccion)}`
-        : "https://www.google.com/maps";
+      ? "Ruta al pedido actual"
+      : "Sin domicilio para trazar la ruta";
+  const pinHref = dest
+    ? `https://www.google.com/maps?q=${dest.lat},${dest.lng}`
+    : actual?.direccion
+      ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(actual.direccion)}`
+      : "https://www.google.com/maps";
   const sinMapa = apagada || !key || failed;
 
   return (
@@ -202,22 +333,21 @@ export function MapaRutaEnVivo({ rutaId }: { rutaId: number | null }) {
           <p className="text-sm text-foreground">
             {apagada
               ? "Google Maps está apagado. Abre la ubicación en Maps."
-              : hayGps
-                ? "Hay GPS del repartidor. Al poner VITE_GOOGLE_MAPS_API_KEY se ve el mapa aquí."
-                : "Cuando el repartidor abra la app, aquí aparece su posición. El mapa se enciende con la llave de Maps."}
+              : "Al poner VITE_GOOGLE_MAPS_API_KEY se ve aquí la ruta del repartidor al pedido actual."}
           </p>
         </div>
-      ) : (
+      ) : dest ? (
         <div ref={node} className="h-80 w-full bg-muted" />
+      ) : (
+        <div className="mx-4 mb-4 flex h-80 items-end rounded-lg bg-muted p-4">
+          <p className="text-sm text-foreground">Buscando el domicilio del pedido actual.</p>
+        </div>
       )}
       <div className="px-4 pb-3">
         <a className="text-sm font-semibold text-primary" href={pinHref} target="_blank" rel="noreferrer">
           Ver ubicación
         </a>
       </div>
-      {trazado?.sin_coords.length ? (
-        <p className="px-4 py-2 text-sm text-muted-foreground">{trazado.sin_coords.length} paradas sin coordenadas, no salen en el mapa.</p>
-      ) : null}
     </div>
   );
 }
