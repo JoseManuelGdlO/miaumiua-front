@@ -36,6 +36,78 @@ interface City {
   departamento: string;
 }
 
+const CLAVES: Record<string, string> = {
+  durango: "DGO",
+  jalisco: "JAL",
+  "nuevo leon": "NL",
+  "ciudad de mexico": "CDMX",
+  cdmx: "CDMX",
+  coahuila: "COA",
+  "estado de mexico": "MEX",
+  mexico: "MEX",
+  guanajuato: "GTO",
+  puebla: "PUE",
+  veracruz: "VER",
+  yucatan: "YUC",
+  sinaloa: "SIN",
+  sonora: "SON",
+  chihuahua: "CHH",
+  tamaulipas: "TAM",
+  michoacan: "MIC",
+  oaxaca: "OAX",
+  "baja california": "BC",
+  "baja california sur": "BCS",
+  queretaro: "QRO",
+  "san luis potosi": "SLP",
+  hidalgo: "HGO",
+  morelos: "MOR",
+  tabasco: "TAB",
+  chiapas: "CHP",
+  campeche: "CAM",
+  nayarit: "NAY",
+  colima: "COL",
+  tlaxcala: "TLA",
+  zacatecas: "ZAC",
+  aguascalientes: "AGS",
+  guerrero: "GRO",
+  "quintana roo": "ROO",
+};
+
+function normalizarEstado(texto?: string) {
+  return String(texto || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z\s]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function tagDe(texto?: string) {
+  const key = normalizarEstado(texto);
+  if (!key) return "";
+  if (CLAVES[key]) return CLAVES[key];
+  const letters = key.replace(/ /g, "").slice(0, 3).toUpperCase();
+  return letters.length >= 2 ? letters : "";
+}
+
+function codigoDeCiudad(nombre?: string, departamento?: string) {
+  const nom = normalizarEstado(nombre);
+  const dep = normalizarEstado(departamento);
+  const estadoNombre = CLAVES[nom] || "";
+  const estadoDep = CLAVES[dep] || "";
+  const estado = estadoNombre || estadoDep || tagDe(nombre) || tagDe(departamento) || "MX";
+  let sitio = "";
+  if (estadoNombre && dep && dep !== nom && !estadoDep) sitio = tagDe(departamento);
+  else if (estadoDep && nom && nom !== dep && !estadoNombre) sitio = tagDe(nombre);
+  else if (!estadoNombre && !estadoDep && dep && dep !== nom) sitio = tagDe(departamento);
+  if (sitio === estado) sitio = "";
+  const bytes = new Uint8Array(sitio ? 2 : 3);
+  crypto.getRandomValues(bytes);
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return (sitio ? `REP-${estado}-${sitio}-${hex}` : `REP-${estado}-${hex}`).slice(0, 20);
+}
+
 const CreateDriverModal = ({ isOpen, onClose, onSuccess }: CreateDriverModalProps) => {
   const [loading, setLoading] = useState(false);
   const [cities, setCities] = useState<City[]>([]);
@@ -80,10 +152,10 @@ const CreateDriverModal = ({ isOpen, onClose, onSuccess }: CreateDriverModalProp
     }
   };
 
-  const generateDriverCode = () => {
+  const generateDriverCode = (city?: City) => {
     setFormData((prev) => ({
       ...prev,
-      codigo_repartidor: `REP-${String(Date.now()).slice(-8)}`,
+      codigo_repartidor: codigoDeCiudad(city?.nombre, city?.departamento),
     }));
   };
 
@@ -218,11 +290,12 @@ const CreateDriverModal = ({ isOpen, onClose, onSuccess }: CreateDriverModalProp
                 <Input
                   id="codigo_repartidor"
                   value={formData.codigo_repartidor}
-                  onChange={(e) => handleInputChange("codigo_repartidor", e.target.value.slice(0, 20))}
-                  placeholder="REP-001"
+                  readOnly
+                  placeholder="REP-DGO-a1b2c3"
                   maxLength={20}
                   required
                 />
+                <p className="text-xs text-muted-foreground">Se genera solo. Estado más ubicación si no es la principal.</p>
               </div>
               
               <div className="space-y-2">
@@ -329,7 +402,12 @@ const CreateDriverModal = ({ isOpen, onClose, onSuccess }: CreateDriverModalProp
                 <Label htmlFor="fkid_ciudad">Ciudad</Label>
                 <Select
                   value={formData.fkid_ciudad.toString()}
-                  onValueChange={(value) => handleInputChange("fkid_ciudad", parseInt(value))}
+                  onValueChange={(value) => {
+                    const id = parseInt(value, 10);
+                    const city = cities.find((row) => row.id === id);
+                    handleInputChange("fkid_ciudad", id);
+                    generateDriverCode(city);
+                  }}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Selecciona una ciudad" />
