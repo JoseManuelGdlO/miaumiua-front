@@ -56,7 +56,7 @@ type MenuItem = {
   icon: ComponentType<{ className?: string }>;
   permission: string | null;
   requireConfigureSystem?: boolean;
-  submenu?: { title: string; url: string; permission: string | null; adminOnly?: boolean }[];
+  submenu?: { title: string; url: string; permission: string | null; adminOnly?: boolean; requireConfigureSystem?: boolean }[];
 };
 
 const menuSections: { label: string | null; items: MenuItem[] }[] = [
@@ -118,8 +118,9 @@ const menuSections: { label: string | null; items: MenuItem[] }[] = [
       {
         title: "Configuraciones",
         icon: Settings,
-        permission: "categories",
+        permission: null,
         submenu: [
+          { title: "Maps", url: "/dashboard/maps", permission: null, requireConfigureSystem: true },
           { title: "Categorías Producto", url: "/dashboard/categorias-producto", permission: "categories" },
           { title: "Pesos", url: "/dashboard/pesos", permission: "weights" },
           { title: "Proveedores", url: "/dashboard/proveedores", permission: "suppliers" },
@@ -190,7 +191,8 @@ export function AppSidebar() {
     }));
   };
 
-  const puedeVer = (item: { permission: string | null; adminOnly?: boolean }) => {
+  const puedeVer = (item: { permission: string | null; adminOnly?: boolean; requireConfigureSystem?: boolean }) => {
+    if (item.requireConfigureSystem && !canConfigureSystem()) return false;
     if (item.adminOnly) {
       const rol = authService.getUserData()?.rol?.nombre;
       return rol === "admin" || rol === "super_admin";
@@ -237,6 +239,10 @@ export function AppSidebar() {
         {menuSections.map((section) => {
           const visibleItems = section.items.filter((item) => {
             if (item.requireConfigureSystem && !canConfigureSystem()) return false;
+            if (item.submenu) {
+              if (item.permission && !hasSectionAccess(item.permission as never)) return false;
+              return item.submenu.some((sub) => puedeVer(sub));
+            }
             if (item.permission && !hasSectionAccess(item.permission as never)) return false;
             return true;
           });

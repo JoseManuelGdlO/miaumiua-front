@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, MapPin, Calendar, Car, User, Phone, Mail, FileText, CreditCard, Shield, Activity, Lock } from "lucide-react";
 import { driversService, Driver, UpdateDriverData } from "@/services/driversService";
 import { citiesService } from "@/services/citiesService";
@@ -86,6 +87,7 @@ const EditDriverModal = ({ isOpen, onClose, onSuccess, driver }: EditDriverModal
           licencia_conducir: driver.licencia_conducir || "",
           seguro_vehiculo: driver.seguro_vehiculo || "",
           notas: driver.notas || "",
+          es_prueba: Boolean(driver.es_prueba),
         });
       }
     } catch (error) {
@@ -603,6 +605,18 @@ const EditDriverModal = ({ isOpen, onClose, onSuccess, driver }: EditDriverModal
                   required
                 />
               </div>
+            </div>
+          </div>
+
+          <div className="flex items-start space-x-2 rounded-lg border p-3">
+            <Checkbox
+              id="es_prueba"
+              checked={Boolean(formData.es_prueba)}
+              onCheckedChange={(checked) => handleInputChange("es_prueba", checked === true)}
+            />
+            <div className="space-y-1">
+              <Label htmlFor="es_prueba">Repartidor de prueba</Label>
+              <p className="text-xs text-muted-foreground">No entra en el bot ni en el armado de rutas. Sí se ve en Call Center.</p>
             </div>
           </div>
 

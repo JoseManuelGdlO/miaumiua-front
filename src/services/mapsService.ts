@@ -76,11 +76,12 @@ class MapsService {
     address: string,
     ciudad?: string,
     colonia?: string,
-    codigo_postal?: string
+    codigo_postal?: string,
+    estado?: string
   ): Promise<GeocodeResponse> {
     return this.request<GeocodeResponse>('/maps/geocode', {
       method: 'POST',
-      body: JSON.stringify({ address, ciudad, colonia, codigo_postal }),
+      body: JSON.stringify({ address, ciudad, colonia, codigo_postal, estado }),
     });
   }
 
@@ -101,6 +102,20 @@ class MapsService {
       method: 'POST',
       body: JSON.stringify({ origins, destinations }),
     });
+  }
+
+  async getTrazado(rutaId: number) {
+    const payload = await this.request<{ success: boolean; data: {
+      ruta_id: number;
+      franja: "manana" | "tarde";
+      ciudad: string | null;
+      repartidor: { id: number | null; lat: number | null; lng: number | null; ubicacion_at: string | null };
+      paradas: { orden: number; pedido_id: number; numero: string | null; lat: number; lng: number; estado_entrega: string }[];
+      polyline: Coordinates[];
+      eta: { pedido_id: number; numero: string | null; minutos: number; km: number | null } | null;
+      sin_coords: { pedido_id: number; direccion: string | null }[];
+    } }>(`/rutas/${rutaId}/trazado`);
+    return payload.data;
   }
 }
 

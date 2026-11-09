@@ -35,6 +35,9 @@ import { FlujoPasos } from "@/components/FlujoPasos";
 import { vistaDeError } from "@/lib/api-error";
 import { authService } from "@/services/authService";
 import { conversationsService } from "@/services/conversationsService";
+import { MAX_PARADAS_DIA, textoCupo } from "@/lib/agenda";
+import { descargarHoja, hojaDesdeParadas } from "@/lib/hojaRuta";
+import { MapaRutaEnVivo } from "@/components/MapaRutaEnVivo";
 
 const TIPO: Record<string, string> = {
   check_in: "Check-in",
@@ -45,6 +48,57 @@ const TIPO: Record<string, string> = {
 
 function errorStatus(error: unknown) {
   return typeof error === "object" && error && "status" in error ? Number((error as { status: number }).status) : 0;
+}
+
+function etiquetaMetodo(metodo?: string | null) {
+  if (metodo === "efectivo") return "Efectivo";
+  if (metodo === "transferencia") return "Transferencia";
+  if (metodo === "mixto") return "Mixto";
+  if (metodo === "tarjeta") return "Tarjeta";
+  return metodo || "Sin método";
+}
+
+function resumenPago(row: { cobros?: { metodo?: string | null }[]; efectivo_cobrado?: number; virtual_cobrado?: number }) {
+  const cobros = row.cobros || [];
+  if (cobros.length) {
+    const counts: Record<string, number> = {};
+    for (const cobro of cobros) {
+      const key = etiquetaMetodo(cobro.metodo);
+      counts[key] = (counts[key] || 0) + 1;
+    }
+    return Object.entries(counts).map(([nombre, n]) => `${n} ${nombre.toLowerCase()}`).join(" · ");
+  }
+  const bits = [];
+  if (Number(row.efectivo_cobrado) > 0) bits.push(`Efectivo $${formatMoney(Number(row.efectivo_cobrado))}`);
+  if (Number(row.virtual_cobrado) > 0) bits.push(`Transferencia $${formatMoney(Number(row.virtual_cobrado))}`);
+  return bits.join(" · ") || "Sin cobros";
+}
+
+function etiquetaCobro(estado?: string | null) {
+  if (estado === "completo") return "Cobro completo";
+  if (estado === "falta comprobante") return "Falta comprobante";
+  if (estado === "falta cobro") return "Falta cobro";
+  return null;
+}
+
+function claseCobro(estado?: string | null) {
+  if (estado === "completo") return "border-transparent bg-emerald-100 text-emerald-800";
+  if (estado === "falta comprobante") return "border-transparent bg-amber-100 text-amber-900";
+  if (estado === "falta cobro") return "border-transparent bg-red-100 text-red-800";
+  return "border-transparent bg-muted text-muted-foreground";
+}
+
+function exportarHoja(paradas: PedidoDia[], nombre: string, modo: "salida" | "corte") {
+  const fecha = paradas.find((pedido) => pedido.fecha_ruta)?.fecha_ruta || new Date().toISOString().slice(0, 10);
+  const ciudad = paradas.find((pedido) => pedido.ciudad)?.ciudad || "";
+  descargarHoja(hojaDesdeParadas({ fecha, repartidor: nombre, ciudad, paradas }), modo);
+}
+
+function etiquetaDriver(driver: { nombre_completo: string; es_prueba?: boolean; paradas?: number }) {
+  const bits = [driver.nombre_completo];
+  if (driver.es_prueba) bits.push("Prueba");
+  if (driver.paradas != null) bits.push(textoCupo(driver.paradas));
+  return bits.join(" · ");
 }
 
 function errorText(error: unknown) {
@@ -361,6 +415,7 @@ function MonitorRepartidores({
   const [agentes, setAgentes] = useState<{ nombre: string; telefono: string; repartidor_ids: number[]; numeros?: { telefono: string; repartidor_ids: number[] }[] }[]>([]);
   const [codigoPedido, setCodigoPedido] = useState<number | null>(null);
   const [codigoPedidoTexto, setCodigoPedidoTexto] = useState("");
+  const [franjaMapa, setFranjaMapa] = useState<"manana" | "tarde">("manana");
   const nombres = new Map<number, string>();
   for (const pedido of pedidos) {
     if (pedido.repartidor) nombres.set(pedido.repartidor.id, pedido.repartidor.nombre_completo);
@@ -439,14 +494,62 @@ function MonitorRepartidores({
                   <p className="flex flex-wrap items-center gap-2 text-lg font-semibold">
                     {nombre}
                     <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${row.enRuta ? "bg-emerald-100 text-emerald-800" : "bg-muted text-muted-foreground"}`}>{row.enRuta ? "En ruta" : "Sin entregas"}</span>
+                    {row.paradas.some((pedido) => pedido.repartidor?.es_prueba) ? <span className="rounded-full bg-violet-100 px-2 py-0.5 text-xs font-semibold text-violet-900">Prueba</span> : null}
+                    {row.paradas.length >= MAX_PARADAS_DIA ? <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900">Saturado</span> : null}
                     {row.pideAtencion ? <span className="h-2 w-2 rounded-full bg-red-500" aria-label="Tiene una incidencia" /> : null}
                   </p>
-                  <p className="text-sm text-muted-foreground">ID {id}{row.ciudadNombre ? ` · ${row.ciudadNombre}` : ""}</p>
+                  <p className="text-sm text-muted-foreground">ID {id}{row.ciudadNombre ? ` · ${row.ciudadNombre}` : ""} · {textoCupo(row.paradas.length)}</p>
                 </div>
               </div>
-              <Button variant="outline" onClick={() => setElegido(null)}>Cerrar</Button>
+              <div className="flex flex-wrap items-center gap-2">
+                {row.paradas.length > 0 ? (
+                  <>
+                    <Button variant="outline" size="sm" onClick={() => exportarHoja(row.paradas, nombre, "salida")}><Download className="h-4 w-4" /> Hoja de salida</Button>
+                    <Button variant="outline" size="sm" onClick={() => exportarHoja(row.paradas, nombre, "corte")}><Download className="h-4 w-4" /> Corte del día</Button>
+                  </>
+                ) : null}
+                <Button variant="outline" onClick={() => setElegido(null)}>Cerrar</Button>
+              </div>
             </div>
             <div className="grid gap-4 bg-muted/40 p-4 lg:grid-cols-2">
+              {(() => {
+                const tieneManana = row.paradas.some((pedido) => (pedido.franja || "manana") === "manana");
+                const tieneTarde = row.paradas.some((pedido) => pedido.franja === "tarde");
+                const franja = (franjaMapa === "tarde" && tieneTarde) || (franjaMapa === "manana" && tieneManana)
+                  ? franjaMapa
+                  : (tieneTarde && !tieneManana ? "tarde" : "manana");
+                const deFranja = row.paradas.filter((pedido) => (pedido.franja || "manana") === franja);
+                const rutaId = [...deFranja, ...row.paradas]
+                  .map((pedido) => Number(pedido.ruta_id))
+                  .find((value) => Number.isInteger(value) && value > 0) ?? null;
+                return (
+                  <div className="space-y-3 lg:col-span-2">
+                    {tieneManana && tieneTarde ? (
+                      <div className="flex gap-2">
+                        <Button variant={franja === "manana" ? "default" : "outline"} size="sm" onClick={() => setFranjaMapa("manana")}>Mañana</Button>
+                        <Button variant={franja === "tarde" ? "default" : "outline"} size="sm" onClick={() => setFranjaMapa("tarde")}>Tarde</Button>
+                      </div>
+                    ) : null}
+                    <MapaRutaEnVivo
+                      key={`${id}-${franja}`}
+                      rutaId={rutaId}
+                      repartidorId={id}
+                      paradas={deFranja.length ? deFranja : row.paradas}
+                      ciudad={row.ciudadNombre || null}
+                      destinoId={row.actual?.id ?? null}
+                      gps={(() => {
+                        const candidatos = [row.velocidad, row.paradas.find((pedido) => pedido.repartidor?.lat != null)?.repartidor];
+                        for (const punto of candidatos) {
+                          const lat = Number(punto?.lat);
+                          const lng = Number(punto?.lng);
+                          if (Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0)) return { lat, lng };
+                        }
+                        return null;
+                      })()}
+                    />
+                  </div>
+                );
+              })()}
               <div className="space-y-4">
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="rounded-xl bg-white p-4">
@@ -506,50 +609,68 @@ function MonitorRepartidores({
                               : siguiente
                               ? "Siguiente"
                               : "En la ruta";
+                        const verCodigo = puede && pedido.codigo_oculto && codigoPedido !== pedido.id;
+                        const verChat = Boolean(pedido.telefono);
+                        const enviarCodigo = puede && pedido.codigo_oculto;
+                        const comprobante = puede && !pedido.comprobante_url;
                         return (
-                        <div key={pedido.id} className={`rounded-xl px-3 py-3 ${tono}`}>
-                          <p className="font-semibold">{pedido.numero_pedido}</p>
-                          <p>{pedido.cliente || "Sin cliente"}</p>
-                          <span className={`mt-2 inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${chip}`}>{etiqueta}</span>
-                          {pedido.calificacion_servicio ? <p className="mt-2">El cliente calificó el servicio con {pedido.calificacion_servicio} estrellas.</p> : null}
+                        <div key={pedido.id} className={`flex flex-col gap-3 rounded-xl px-4 py-4 ${tono}`}>
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-lg font-semibold leading-tight">{pedido.numero_pedido}</p>
+                              <p className="mt-1">{pedido.cliente || "Sin cliente"}</p>
+                            </div>
+                            <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${chip}`}>{etiqueta}</span>
+                          </div>
+                          {pedido.calificacion_servicio ? <p>El cliente calificó el servicio con {pedido.calificacion_servicio} estrellas.</p> : null}
                           {pedido.calificacion_cliente ? <p>El repartidor calificó al cliente con {pedido.calificacion_cliente} estrellas.</p> : null}
-                          {pedido.fecha_propuesta ? <p className="mt-2">Fecha propuesta: {pedido.fecha_propuesta}. Falta confirmarla.</p> : pedido.estado === "no_entregado" ? <p className="mt-2">Sin fecha confirmada.</p> : null}
-                          {puede && pedido.codigo_oculto ? (
-                            codigoPedido === pedido.id ? <p className="mt-2 text-2xl font-semibold tracking-widest">{codigoPedidoTexto}</p> : (
-                              <Button variant="outline" className="mt-2" disabled={busy} onClick={() => {
-                                void callCenterService.verCodigoPedido(pedido.id).then((data) => {
-                                  setCodigoPedido(pedido.id);
-                                  setCodigoPedidoTexto(data.codigo);
-                                }).catch(onError);
-                              }}>Ver código</Button>
-                            )
+                          {pedido.fecha_propuesta ? <p>Fecha propuesta: {pedido.fecha_propuesta}. Falta confirmarla.</p> : pedido.estado === "no_entregado" ? <p>Sin fecha confirmada.</p> : null}
+                          {puede && pedido.codigo_oculto && codigoPedido === pedido.id ? (
+                            <p className="text-2xl font-semibold tracking-widest">{codigoPedidoTexto}</p>
                           ) : null}
-                          {puede && pedido.codigo_oculto ? (
-                            <Button className="mt-2" disabled={busy} onClick={() => {
-                              void callCenterService.enviarCodigo(pedido.id).then(() => onChanged()).catch(onError);
-                            }}>Enviar código al cliente</Button>
-                          ) : null}
-                          {pedido.telefono ? (
-                            <Button variant="outline" className="mt-2" onClick={() => abrirChat(pedido.telefono, onError, navigate)}>Ver chat</Button>
-                          ) : null}
-                          {puede && !pedido.comprobante_url ? (
-                            <Button variant="outline" className="mt-2" asChild disabled={busy}>
-                              <label>
-                                {pedido.metodo_pago === "transferencia" || pedido.metodo_pago === "mixto" ? "Subir comprobante" : "Pasar a transferencia"}
-                                <input
-                                  type="file"
-                                  accept="image/*"
-                                  className="hidden"
-                                  disabled={busy}
-                                  onChange={(event) => {
-                                    const file = event.target.files?.[0];
-                                    event.target.value = "";
-                                    if (!file) return;
-                                    void callCenterService.subirComprobante(pedido.id, file).then(() => onChanged()).catch(onError);
-                                  }}
-                                />
-                              </label>
-                            </Button>
+                          {enviarCodigo || verCodigo || verChat || comprobante ? (
+                          <div className="flex flex-col gap-2">
+                            {enviarCodigo ? (
+                              <Button className="w-full" disabled={busy} onClick={() => {
+                                void callCenterService.enviarCodigo(pedido.id).then(() => onChanged()).catch(onError);
+                              }}>Enviar código al cliente</Button>
+                            ) : null}
+                            {verCodigo || verChat ? (
+                            <div className="grid grid-cols-2 gap-2">
+                              {verCodigo ? (
+                                <Button variant="outline" className={`w-full ${verChat ? "" : "col-span-2"}`} disabled={busy} onClick={() => {
+                                  void callCenterService.verCodigoPedido(pedido.id).then((data) => {
+                                    setCodigoPedido(pedido.id);
+                                    setCodigoPedidoTexto(data.codigo);
+                                  }).catch(onError);
+                                }}>Ver código</Button>
+                              ) : null}
+                              {verChat ? (
+                                <Button variant="outline" className={`w-full ${verCodigo ? "" : "col-span-2"}`} onClick={() => abrirChat(pedido.telefono, onError, navigate)}>Ver chat</Button>
+                              ) : null}
+                            </div>
+                            ) : null}
+                            {comprobante ? (
+                              <Button variant="outline" className="w-full" asChild disabled={busy}>
+                                <label htmlFor={`comp-${pedido.id}`}>
+                                  {pedido.metodo_pago === "transferencia" || pedido.metodo_pago === "mixto" ? "Subir comprobante" : "Pasar a transferencia"}
+                                  <input
+                                    id={`comp-${pedido.id}`}
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    disabled={busy}
+                                    onChange={(event) => {
+                                      const file = event.target.files?.[0];
+                                      event.target.value = "";
+                                      if (!file) return;
+                                      void callCenterService.subirComprobante(pedido.id, file).then(() => onChanged()).catch(onError);
+                                    }}
+                                  />
+                                </label>
+                              </Button>
+                            ) : null}
+                          </div>
                           ) : null}
                         </div>
                         );
@@ -681,8 +802,8 @@ function MonitorRepartidores({
                   <span className="flex items-center gap-3">
                     <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">{iniciales(nombre)}</span>
                     <span>
-                      <span className="block font-semibold">{nombre}</span>
-                      <span className="block text-sm text-muted-foreground">{row.paradas.length} pedidos en ruta</span>
+                      <span className="block font-semibold">{nombre}{row.paradas.some((pedido) => pedido.repartidor?.es_prueba) ? " · Prueba" : ""}</span>
+                      <span className="block text-sm text-muted-foreground">{textoCupo(row.paradas.length)}{row.paradas.length >= MAX_PARADAS_DIA ? " · Saturado" : ""}</span>
                     </span>
                   </span>
                   <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${row.cierres.length > 0 ? "bg-zinc-200 text-zinc-600" : row.enRuta ? "bg-amber-100 text-amber-900" : "bg-emerald-100 text-emerald-800"}`}>{row.cierres.length > 0 ? "Terminó" : row.enRuta ? "En ruta" : "Libre"}</span>
@@ -882,6 +1003,7 @@ const CallCenter = () => {
   const [comprobantes, setComprobantes] = useState<ComprobantePago[]>([]);
   const [comprobantesHistorico, setComprobantesHistorico] = useState<ComprobantePago[] | null>(null);
   const [filtroPago, setFiltroPago] = useState("all");
+  const [filtroEstadoCobro, setFiltroEstadoCobro] = useState("all");
   const [filtroCobro, setFiltroCobro] = useState("");
   const [notaCobro, setNotaCobro] = useState<Record<number, string>>({});
   const [depositos, setDepositos] = useState<DepositoRuta[]>([]);
@@ -1413,7 +1535,7 @@ const CallCenter = () => {
               <SelectTrigger className="w-56"><SelectValue placeholder="Repartidor" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos los repartidores</SelectItem>
-                {driverOptions.map((driver) => <SelectItem key={driver.id} value={String(driver.id)}>{driver.nombre_completo}</SelectItem>)}
+                {driverOptions.map((driver) => <SelectItem key={driver.id} value={String(driver.id)}>{etiquetaDriver(driver)}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -1537,7 +1659,7 @@ const CallCenter = () => {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><Receipt className="h-5 w-5 text-primary" />{comprobantesHistorico ? "Histórico de comprobantes" : "Comprobantes de hoy"}</CardTitle>
-          <CardDescription>Cobros y fotos. El comentario queda en la parada de esa entrega.</CardDescription>
+          <CardDescription>Método, montos y si el cobro está completo. El corte final se exporta por repartidor y fecha.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex flex-wrap gap-2">
@@ -1563,6 +1685,15 @@ const CallCenter = () => {
                 <SelectItem value="tarjeta">Tarjeta</SelectItem>
               </SelectContent>
             </Select>
+            <Select value={filtroEstadoCobro} onValueChange={setFiltroEstadoCobro}>
+              <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todo el cobro</SelectItem>
+                <SelectItem value="completo">Cobro completo</SelectItem>
+                <SelectItem value="falta cobro">Falta cobro</SelectItem>
+                <SelectItem value="falta comprobante">Falta comprobante</SelectItem>
+              </SelectContent>
+            </Select>
             <Input value={filtroCobro} onChange={(event) => setFiltroCobro(event.target.value)} placeholder="Repartidor o ciudad" className="w-56" />
           </div>
           {(() => {
@@ -1570,18 +1701,67 @@ const CallCenter = () => {
             const q = filtroCobro.trim().toLowerCase();
             const visibles = fuente.filter((row) => {
               if (filtroPago !== "all" && row.metodo !== filtroPago) return false;
+              if (filtroEstadoCobro !== "all" && row.estado_cobro !== filtroEstadoCobro) return false;
               if (!q) return true;
               return `${row.repartidor || ""} ${row.ciudad || ""}`.toLowerCase().includes(q);
             });
             if (visibles.length === 0) return <p className="text-sm text-muted-foreground">No hay comprobantes con ese filtro.</p>;
+            const cortes: { id: number; fecha: string; nombre: string }[] = [];
+            const vistos = new Set<string>();
+            for (const row of visibles) {
+              const fecha = String(row.fecha || "").slice(0, 10);
+              const id = Number(row.repartidor_id);
+              if (!id || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) continue;
+              const key = `${id}|${fecha}`;
+              if (vistos.has(key)) continue;
+              vistos.add(key);
+              cortes.push({ id, fecha, nombre: row.repartidor || "Repartidor" });
+            }
             return (
             <div className="space-y-3">
+              {cortes.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {cortes.map((corte) => (
+                    <Button
+                      key={`${corte.id}-${corte.fecha}`}
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        void callCenterService.corte(corte.id, corte.fecha)
+                          .then((data) => descargarHoja(hojaDesdeParadas({
+                            fecha: data.fecha,
+                            repartidor: data.repartidor.nombre_completo,
+                            ciudad: data.ciudad || "",
+                            km_esperados: data.km_esperados,
+                            paradas: data.paradas,
+                          }), "corte"))
+                          .catch(notify);
+                      }}
+                    >
+                      <Download className="h-4 w-4" /> Exportar corte final · {corte.nombre} · {corte.fecha}
+                    </Button>
+                  ))}
+                </div>
+              ) : null}
               {visibles.map((row) => (
                 <div key={`${row.fecha || "hoy"}-${row.pedido_id}`} className="space-y-2 text-sm">
                   <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="font-medium">{row.numero_pedido}{row.fecha ? ` · ${String(row.fecha).slice(0, 10)}` : ""}</p>
-                    <p className="text-muted-foreground">{row.repartidor || "—"}{row.ciudad ? ` · ${row.ciudad}` : ""} · {row.metodo}</p>
+                    <p className="text-muted-foreground">{row.repartidor || "—"}{row.ciudad ? ` · ${row.ciudad}` : ""}</p>
+                    <p>
+                      Pedido: {row.metodo_pedido || "sin método"}
+                      {row.metodo && row.metodo !== row.metodo_pedido ? ` · cobrado: ${row.metodo}` : ""}
+                      {row.monto ? ` · total $${formatMoney(row.monto)}` : ""}
+                    </p>
+                    {(row.monto_efectivo || row.monto_transferencia) ? (
+                      <p>
+                        {row.monto_efectivo ? `Efectivo $${formatMoney(row.monto_efectivo)}` : ""}
+                        {row.monto_efectivo && row.monto_transferencia ? " · " : ""}
+                        {row.monto_transferencia ? `Transferencia $${formatMoney(row.monto_transferencia)}` : ""}
+                      </p>
+                    ) : null}
+                    {etiquetaCobro(row.estado_cobro) ? <Badge className={`mt-1 ${claseCobro(row.estado_cobro)}`}>{etiquetaCobro(row.estado_cobro)}</Badge> : null}
                     {row.nota ? <p>{row.nota}</p> : null}
                   </div>
                   {row.comprobante_url ? (
@@ -1789,7 +1969,7 @@ const CallCenter = () => {
                     <SelectTrigger><SelectValue placeholder="Reasignar repartidor" /></SelectTrigger>
                     <SelectContent>
                       {drivers.filter((driver) => driver.id !== reassignFor.repartidor?.id).map((driver) => (
-                        <SelectItem key={driver.id} value={String(driver.id)}>{driver.nombre_completo}</SelectItem>
+                        <SelectItem key={driver.id} value={String(driver.id)}>{etiquetaDriver(driver)}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -1914,7 +2094,7 @@ const CallCenter = () => {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2"><History className="h-5 w-5 text-primary" />Histórico</CardTitle>
-              <CardDescription>Cargas ya validadas</CardDescription>
+              <CardDescription>Cargas validadas y cómo se cobró cada pedido</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="rounded-md border">
@@ -1925,13 +2105,14 @@ const CallCenter = () => {
                     <TableHead>Fecha</TableHead>
                     <TableHead>Hora</TableHead>
                     <TableHead>Dinero esperado</TableHead>
+                    <TableHead>Pago</TableHead>
                     <TableHead>Validó</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {historial.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                      <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
                         Aún no hay cargas validadas
                       </TableCell>
                     </TableRow>
@@ -1948,11 +2129,28 @@ const CallCenter = () => {
                       <TableCell>{row.fecha}</TableCell>
                       <TableCell>{row.hora}</TableCell>
                       <TableCell>${formatMoney(Number(row.dinero_esperado) || 0)}</TableCell>
+                      <TableCell>{resumenPago(row)}</TableCell>
                       <TableCell>{row.validado_por_nombre || "—"}</TableCell>
                     </TableRow>
                     {abierto ? (
                       <TableRow className="bg-pink-100 shadow-[inset_4px_0_0_hsl(var(--primary))] hover:bg-pink-100">
-                        <TableCell colSpan={5} className="bg-pink-100">
+                        <TableCell colSpan={6} className="bg-pink-100">
+                          {(row.cobros || []).length > 0 ? (
+                            <div className="mb-4 grid grid-cols-[1fr_1fr_1fr_1fr] gap-x-3 gap-y-2 text-sm text-foreground">
+                              <p className="font-medium">Pedido</p>
+                              <p className="font-medium">Método</p>
+                              <p className="font-medium">Monto</p>
+                              <p className="font-medium">Cobro</p>
+                              {(row.cobros || []).map((cobro, index) => (
+                                <Fragment key={`${cobro.numero_pedido || "pedido"}-${index}`}>
+                                  <p>{cobro.numero_pedido || "—"}</p>
+                                  <p>{etiquetaMetodo(cobro.metodo)}</p>
+                                  <p>${formatMoney(Number(cobro.monto) || 0)}</p>
+                                  <p>{etiquetaCobro(cobro.estado_cobro) || "—"}</p>
+                                </Fragment>
+                              ))}
+                            </div>
+                          ) : null}
                           <div className="grid grid-cols-[1.4fr_0.6fr_0.6fr_0.6fr] gap-x-3 gap-y-2 text-sm text-foreground">
                             <p className="font-medium">Producto</p>
                             <p className="font-medium">Cantidad</p>
@@ -1967,7 +2165,7 @@ const CallCenter = () => {
                               </Fragment>
                             ))}
                           </div>
-                          <p className="mt-3 text-base font-semibold text-foreground">Total del pedido ${formatMoney(total)}</p>
+                          <p className="mt-3 text-base font-semibold text-foreground">Total de la carga ${formatMoney(total)}</p>
                         </TableCell>
                       </TableRow>
                     ) : null}

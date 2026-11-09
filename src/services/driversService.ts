@@ -35,6 +35,7 @@ export interface Driver {
   licencia_conducir: string;
   seguro_vehiculo: string;
   notas?: string;
+  es_prueba?: boolean;
   calificacion_promedio?: number;
   total_entregas?: number;
   total_km_recorridos?: number;
@@ -91,6 +92,7 @@ export interface CreateDriverData {
   seguro_vehiculo: string;
   notas?: string;
   contrasena?: string;
+  es_prueba?: boolean;
 }
 
 export interface UpdateDriverData {
@@ -180,6 +182,7 @@ export interface AvailableDriversResponse {
     capacidad_carga: number;
     calificacion_promedio: number;
     total_entregas: number;
+    es_prueba?: boolean;
   }>;
 }
 

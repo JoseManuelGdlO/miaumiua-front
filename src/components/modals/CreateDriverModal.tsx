@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, MapPin, Calendar, Car, User, Phone, Mail, FileText, CreditCard, Shield, Lock } from "lucide-react";
 import { driversService, CreateDriverData } from "@/services/driversService";
 import { citiesService } from "@/services/citiesService";
@@ -33,6 +34,78 @@ interface City {
   id: number;
   nombre: string;
   departamento: string;
+}
+
+const CLAVES: Record<string, string> = {
+  durango: "DGO",
+  jalisco: "JAL",
+  "nuevo leon": "NL",
+  "ciudad de mexico": "CDMX",
+  cdmx: "CDMX",
+  coahuila: "COA",
+  "estado de mexico": "MEX",
+  mexico: "MEX",
+  guanajuato: "GTO",
+  puebla: "PUE",
+  veracruz: "VER",
+  yucatan: "YUC",
+  sinaloa: "SIN",
+  sonora: "SON",
+  chihuahua: "CHH",
+  tamaulipas: "TAM",
+  michoacan: "MIC",
+  oaxaca: "OAX",
+  "baja california": "BC",
+  "baja california sur": "BCS",
+  queretaro: "QRO",
+  "san luis potosi": "SLP",
+  hidalgo: "HGO",
+  morelos: "MOR",
+  tabasco: "TAB",
+  chiapas: "CHP",
+  campeche: "CAM",
+  nayarit: "NAY",
+  colima: "COL",
+  tlaxcala: "TLA",
+  zacatecas: "ZAC",
+  aguascalientes: "AGS",
+  guerrero: "GRO",
+  "quintana roo": "ROO",
+};
+
+function normalizarEstado(texto?: string) {
+  return String(texto || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z\s]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function tagDe(texto?: string) {
+  const key = normalizarEstado(texto);
+  if (!key) return "";
+  if (CLAVES[key]) return CLAVES[key];
+  const letters = key.replace(/ /g, "").slice(0, 3).toUpperCase();
+  return letters.length >= 2 ? letters : "";
+}
+
+function codigoDeCiudad(nombre?: string, departamento?: string) {
+  const nom = normalizarEstado(nombre);
+  const dep = normalizarEstado(departamento);
+  const estadoNombre = CLAVES[nom] || "";
+  const estadoDep = CLAVES[dep] || "";
+  const estado = estadoNombre || estadoDep || tagDe(nombre) || tagDe(departamento) || "MX";
+  let sitio = "";
+  if (estadoNombre && dep && dep !== nom && !estadoDep) sitio = tagDe(departamento);
+  else if (estadoDep && nom && nom !== dep && !estadoNombre) sitio = tagDe(nombre);
+  else if (!estadoNombre && !estadoDep && dep && dep !== nom) sitio = tagDe(departamento);
+  if (sitio === estado) sitio = "";
+  const bytes = new Uint8Array(sitio ? 2 : 3);
+  crypto.getRandomValues(bytes);
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return (sitio ? `REP-${estado}-${sitio}-${hex}` : `REP-${estado}-${hex}`).slice(0, 20);
 }
 
 const CreateDriverModal = ({ isOpen, onClose, onSuccess }: CreateDriverModalProps) => {
@@ -56,6 +129,7 @@ const CreateDriverModal = ({ isOpen, onClose, onSuccess }: CreateDriverModalProp
     seguro_vehiculo: "",
     notas: "",
     contrasena: "",
+    es_prueba: false,
   });
   const { toast } = useToast();
 
@@ -78,16 +152,14 @@ const CreateDriverModal = ({ isOpen, onClose, onSuccess }: CreateDriverModalProp
     }
   };
 
-  const generateDriverCode = () => {
-    const timestamp = Date.now();
-    const randomNum = Math.floor(Math.random() * 1000);
-    setFormData(prev => ({
+  const generateDriverCode = (city?: City) => {
+    setFormData((prev) => ({
       ...prev,
-      codigo_repartidor: `REP-${timestamp}-${randomNum}`
+      codigo_repartidor: codigoDeCiudad(city?.nombre, city?.departamento),
     }));
   };
 
-  const handleInputChange = (field: keyof CreateDriverData, value: string | number) => {
+  const handleInputChange = (field: keyof CreateDriverData, value: string | number | boolean) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
@@ -180,6 +252,7 @@ const CreateDriverModal = ({ isOpen, onClose, onSuccess }: CreateDriverModalProp
       seguro_vehiculo: "",
       notas: "",
       contrasena: "",
+      es_prueba: false,
     });
   };
 
@@ -217,10 +290,12 @@ const CreateDriverModal = ({ isOpen, onClose, onSuccess }: CreateDriverModalProp
                 <Input
                   id="codigo_repartidor"
                   value={formData.codigo_repartidor}
-                  onChange={(e) => handleInputChange("codigo_repartidor", e.target.value)}
-                  placeholder="REP-001"
+                  readOnly
+                  placeholder="REP-DGO-a1b2c3"
+                  maxLength={20}
                   required
                 />
+                <p className="text-xs text-muted-foreground">Se genera solo. Estado más ubicación si no es la principal.</p>
               </div>
               
               <div className="space-y-2">
@@ -327,7 +402,12 @@ const CreateDriverModal = ({ isOpen, onClose, onSuccess }: CreateDriverModalProp
                 <Label htmlFor="fkid_ciudad">Ciudad</Label>
                 <Select
                   value={formData.fkid_ciudad.toString()}
-                  onValueChange={(value) => handleInputChange("fkid_ciudad", parseInt(value))}
+                  onValueChange={(value) => {
+                    const id = parseInt(value, 10);
+                    const city = cities.find((row) => row.id === id);
+                    handleInputChange("fkid_ciudad", id);
+                    generateDriverCode(city);
+                  }}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Selecciona una ciudad" />
@@ -361,31 +441,7 @@ const CreateDriverModal = ({ isOpen, onClose, onSuccess }: CreateDriverModalProp
               <span>Información Laboral</span>
             </h3>
             
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="tarifa_base">Tarifa Base ($)</Label>
-                <Input
-                  id="tarifa_base"
-                  type="number"
-                  step="0.01"
-                  value={formData.tarifa_base}
-                  onChange={(e) => handleInputChange("tarifa_base", parseFloat(e.target.value) || 0)}
-                  placeholder="15.00"
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="comision_porcentaje">Comisión (%)</Label>
-                <Input
-                  id="comision_porcentaje"
-                  type="number"
-                  step="0.1"
-                  value={formData.comision_porcentaje}
-                  onChange={(e) => handleInputChange("comision_porcentaje", parseFloat(e.target.value) || 0)}
-                  placeholder="10.0"
-                />
-              </div>
-              
+            <div className="grid grid-cols-1 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="fecha_ingreso">Fecha de Ingreso</Label>
                 <Input
@@ -453,6 +509,18 @@ const CreateDriverModal = ({ isOpen, onClose, onSuccess }: CreateDriverModalProp
                   placeholder="SEGURO-789"
                 />
               </div>
+            </div>
+          </div>
+
+          <div className="flex items-start space-x-2 rounded-lg border p-3">
+            <Checkbox
+              id="es_prueba"
+              checked={Boolean(formData.es_prueba)}
+              onCheckedChange={(checked) => handleInputChange("es_prueba", checked === true)}
+            />
+            <div className="space-y-1">
+              <Label htmlFor="es_prueba">Repartidor de prueba</Label>
+              <p className="text-xs text-muted-foreground">No entra en el bot ni en el armado de rutas. Sí se ve en Call Center.</p>
             </div>
           </div>
 

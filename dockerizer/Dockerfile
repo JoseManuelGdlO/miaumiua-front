@@ -17,6 +17,14 @@ RUN npm ci --no-audit --no-fund && \
 # Copiar código fuente
 COPY . .
 
+# Vite las hornea en el JS. En EasyPanel van como Build Args, no solo env de runtime.
+ARG VITE_API_BASE_URL
+ARG VITE_GOOGLE_MAPS_API_KEY
+ARG VITE_IMAGE_BASE_URL
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+ENV VITE_GOOGLE_MAPS_API_KEY=$VITE_GOOGLE_MAPS_API_KEY
+ENV VITE_IMAGE_BASE_URL=$VITE_IMAGE_BASE_URL
+
 # Limpiar cache de build y construir
 RUN rm -rf node_modules/.cache dist && \
     npm run build && \

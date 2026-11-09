@@ -67,6 +67,12 @@ export interface RouteOrder {
       nombre_completo: string;
       telefono: string;
     };
+    cobro_entrega?: {
+      metodo?: string;
+      monto_efectivo?: number;
+      monto_transferencia?: number;
+      comprobante_path?: string | null;
+    } | null;
     productos?: Array<{
       id: number;
       cantidad: number;
