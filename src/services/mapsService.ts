@@ -76,11 +76,12 @@ class MapsService {
     address: string,
     ciudad?: string,
     colonia?: string,
-    codigo_postal?: string
+    codigo_postal?: string,
+    estado?: string
   ): Promise<GeocodeResponse> {
     return this.request<GeocodeResponse>('/maps/geocode', {
       method: 'POST',
-      body: JSON.stringify({ address, ciudad, colonia, codigo_postal }),
+      body: JSON.stringify({ address, ciudad, colonia, codigo_postal, estado }),
     });
   }
 

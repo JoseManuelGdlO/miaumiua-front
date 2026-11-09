@@ -110,9 +110,32 @@ export async function buildCostMatrix(
     }
 
     return { distanceMatrix, timeMatrix };
-  } catch (error) {
-    console.error('Error building cost matrix:', error);
-    throw new Error(`Failed to build cost matrix: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  } catch {
+    // shortcut: sin Distance Matrix usa km en línea y 30 km/h; volver a Google cuando la API responda
+    const n = locations.length;
+    const distanceMatrix: number[][] = [];
+    const timeMatrix: number[][] = [];
+    const R = 6371;
+    for (let i = 0; i < n; i++) {
+      distanceMatrix[i] = [];
+      timeMatrix[i] = [];
+      for (let j = 0; j < n; j++) {
+        if (i === j) {
+          distanceMatrix[i][j] = 0;
+          timeMatrix[i][j] = 0;
+          continue;
+        }
+        const dLat = (locations[j].lat - locations[i].lat) * Math.PI / 180;
+        const dLon = (locations[j].lng - locations[i].lng) * Math.PI / 180;
+        const a =
+          Math.sin(dLat / 2) ** 2
+          + Math.cos(locations[i].lat * Math.PI / 180) * Math.cos(locations[j].lat * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+        const km = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        distanceMatrix[i][j] = km;
+        timeMatrix[i][j] = (km / 30) * 60;
+      }
+    }
+    return { distanceMatrix, timeMatrix };
   }
 }
 

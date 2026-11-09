@@ -603,50 +603,68 @@ function MonitorRepartidores({
                               : siguiente
                               ? "Siguiente"
                               : "En la ruta";
+                        const verCodigo = puede && pedido.codigo_oculto && codigoPedido !== pedido.id;
+                        const verChat = Boolean(pedido.telefono);
+                        const enviarCodigo = puede && pedido.codigo_oculto;
+                        const comprobante = puede && !pedido.comprobante_url;
                         return (
-                        <div key={pedido.id} className={`rounded-xl px-3 py-3 ${tono}`}>
-                          <p className="font-semibold">{pedido.numero_pedido}</p>
-                          <p>{pedido.cliente || "Sin cliente"}</p>
-                          <span className={`mt-2 inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${chip}`}>{etiqueta}</span>
-                          {pedido.calificacion_servicio ? <p className="mt-2">El cliente calificó el servicio con {pedido.calificacion_servicio} estrellas.</p> : null}
+                        <div key={pedido.id} className={`flex flex-col gap-3 rounded-xl px-4 py-4 ${tono}`}>
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-lg font-semibold leading-tight">{pedido.numero_pedido}</p>
+                              <p className="mt-1">{pedido.cliente || "Sin cliente"}</p>
+                            </div>
+                            <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${chip}`}>{etiqueta}</span>
+                          </div>
+                          {pedido.calificacion_servicio ? <p>El cliente calificó el servicio con {pedido.calificacion_servicio} estrellas.</p> : null}
                           {pedido.calificacion_cliente ? <p>El repartidor calificó al cliente con {pedido.calificacion_cliente} estrellas.</p> : null}
-                          {pedido.fecha_propuesta ? <p className="mt-2">Fecha propuesta: {pedido.fecha_propuesta}. Falta confirmarla.</p> : pedido.estado === "no_entregado" ? <p className="mt-2">Sin fecha confirmada.</p> : null}
-                          {puede && pedido.codigo_oculto ? (
-                            codigoPedido === pedido.id ? <p className="mt-2 text-2xl font-semibold tracking-widest">{codigoPedidoTexto}</p> : (
-                              <Button variant="outline" className="mt-2" disabled={busy} onClick={() => {
-                                void callCenterService.verCodigoPedido(pedido.id).then((data) => {
-                                  setCodigoPedido(pedido.id);
-                                  setCodigoPedidoTexto(data.codigo);
-                                }).catch(onError);
-                              }}>Ver código</Button>
-                            )
+                          {pedido.fecha_propuesta ? <p>Fecha propuesta: {pedido.fecha_propuesta}. Falta confirmarla.</p> : pedido.estado === "no_entregado" ? <p>Sin fecha confirmada.</p> : null}
+                          {puede && pedido.codigo_oculto && codigoPedido === pedido.id ? (
+                            <p className="text-2xl font-semibold tracking-widest">{codigoPedidoTexto}</p>
                           ) : null}
-                          {puede && pedido.codigo_oculto ? (
-                            <Button className="mt-2" disabled={busy} onClick={() => {
-                              void callCenterService.enviarCodigo(pedido.id).then(() => onChanged()).catch(onError);
-                            }}>Enviar código al cliente</Button>
-                          ) : null}
-                          {pedido.telefono ? (
-                            <Button variant="outline" className="mt-2" onClick={() => abrirChat(pedido.telefono, onError, navigate)}>Ver chat</Button>
-                          ) : null}
-                          {puede && !pedido.comprobante_url ? (
-                            <Button variant="outline" className="mt-2" asChild disabled={busy}>
-                              <label>
-                                {pedido.metodo_pago === "transferencia" || pedido.metodo_pago === "mixto" ? "Subir comprobante" : "Pasar a transferencia"}
-                                <input
-                                  type="file"
-                                  accept="image/*"
-                                  className="hidden"
-                                  disabled={busy}
-                                  onChange={(event) => {
-                                    const file = event.target.files?.[0];
-                                    event.target.value = "";
-                                    if (!file) return;
-                                    void callCenterService.subirComprobante(pedido.id, file).then(() => onChanged()).catch(onError);
-                                  }}
-                                />
-                              </label>
-                            </Button>
+                          {enviarCodigo || verCodigo || verChat || comprobante ? (
+                          <div className="flex flex-col gap-2">
+                            {enviarCodigo ? (
+                              <Button className="w-full" disabled={busy} onClick={() => {
+                                void callCenterService.enviarCodigo(pedido.id).then(() => onChanged()).catch(onError);
+                              }}>Enviar código al cliente</Button>
+                            ) : null}
+                            {verCodigo || verChat ? (
+                            <div className="grid grid-cols-2 gap-2">
+                              {verCodigo ? (
+                                <Button variant="outline" className={`w-full ${verChat ? "" : "col-span-2"}`} disabled={busy} onClick={() => {
+                                  void callCenterService.verCodigoPedido(pedido.id).then((data) => {
+                                    setCodigoPedido(pedido.id);
+                                    setCodigoPedidoTexto(data.codigo);
+                                  }).catch(onError);
+                                }}>Ver código</Button>
+                              ) : null}
+                              {verChat ? (
+                                <Button variant="outline" className={`w-full ${verCodigo ? "" : "col-span-2"}`} onClick={() => abrirChat(pedido.telefono, onError, navigate)}>Ver chat</Button>
+                              ) : null}
+                            </div>
+                            ) : null}
+                            {comprobante ? (
+                              <Button variant="outline" className="w-full" asChild disabled={busy}>
+                                <label htmlFor={`comp-${pedido.id}`}>
+                                  {pedido.metodo_pago === "transferencia" || pedido.metodo_pago === "mixto" ? "Subir comprobante" : "Pasar a transferencia"}
+                                  <input
+                                    id={`comp-${pedido.id}`}
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    disabled={busy}
+                                    onChange={(event) => {
+                                      const file = event.target.files?.[0];
+                                      event.target.value = "";
+                                      if (!file) return;
+                                      void callCenterService.subirComprobante(pedido.id, file).then(() => onChanged()).catch(onError);
+                                    }}
+                                  />
+                                </label>
+                              </Button>
+                            ) : null}
+                          </div>
                           ) : null}
                         </div>
                         );
