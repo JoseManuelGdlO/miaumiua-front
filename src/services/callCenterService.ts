@@ -78,6 +78,7 @@ export type PedidoDia = {
   codigo_oculto?: string | null;
   fecha_propuesta?: string | null;
   fecha_ruta?: string | null;
+  fecha_incidencia?: string | null;
   ruta_id?: number | null;
   lat?: number | null;
   lng?: number | null;

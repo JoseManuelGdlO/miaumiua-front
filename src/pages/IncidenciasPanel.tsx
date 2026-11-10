@@ -18,6 +18,18 @@ function fechaMexico(delta: number) {
   return dt.toISOString().slice(0, 10);
 }
 
+function diaDe(value: string | null | undefined) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  if (/^\d{4}-\d{2}-\d{2}T/.test(raw) || /T|\d{2}:\d{2}/.test(raw)) {
+    const date = new Date(raw);
+    if (!Number.isNaN(date.getTime())) {
+      return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Mexico_City" }).format(date);
+    }
+  }
+  return raw.slice(0, 10);
+}
+
 type Props = {
   pedidos: PedidoDia[];
   solicitudes: Solicitud[];
@@ -42,13 +54,14 @@ export default function IncidenciasPanel({ pedidos, solicitudes, superAdmin, onC
     if (estado === "no_entregado") return false;
     if (estado === "soporte" && row.tipo !== "soporte") return false;
     if (estado === "llamada" && row.tipo !== "llamada_cliente") return false;
-    if (dia && !String(row.fecha || "").includes(dia)) return false;
+    if (dia && diaDe(row.fecha) !== dia) return false;
     if (texto && !`${row.repartidor?.nombre_completo || ""} ${row.motivo || ""}`.toLowerCase().includes(texto)) return false;
     return true;
   });
   const noEntregados = pedidos.filter((row) => {
     if (row.estado !== "no_entregado" && row.estado_entrega !== "fallido") return false;
     if (estado === "soporte" || estado === "llamada") return false;
+    if (dia && diaDe(row.fecha_incidencia || row.fecha_ruta) !== dia) return false;
     if (texto && !`${row.repartidor?.nombre_completo || ""} ${row.numero_pedido || ""} ${row.cliente || ""}`.toLowerCase().includes(texto)) return false;
     return true;
   }).sort((a, b) => Number(Boolean(a.fecha_propuesta)) - Number(Boolean(b.fecha_propuesta)));
@@ -110,7 +123,7 @@ export default function IncidenciasPanel({ pedidos, solicitudes, superAdmin, onC
         <CardContent className="space-y-3 text-sm">
           <div className="flex flex-wrap gap-3">
             <Input aria-label="Filtrar por repartidor" value={q} onChange={(event) => { setQ(event.target.value); setPage(1); }} placeholder="Filtrar por repartidor" className="w-56" />
-            <Input aria-label="Filtrar por fecha" type="date" value={dia} onChange={(event) => { setDia(event.target.value); setPage(1); }} className="w-56" />
+            <Input aria-label="Día en que surgió la incidencia" type="date" value={dia} onChange={(event) => { setDia(event.target.value); setPage(1); }} className="w-56" />
             <Select value={estado} onValueChange={(value) => { setEstado(value); setPage(1); }}>
               <SelectTrigger className="w-56" aria-label="Filtrar por estado"><SelectValue placeholder="Estado" /></SelectTrigger>
               <SelectContent>
