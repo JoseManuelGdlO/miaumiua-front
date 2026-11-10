@@ -16,16 +16,20 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Search, Plus, MoreHorizontal, Edit, Trash2, User, Phone, MapPin, Calendar, Truck, Loader2, Star, Activity } from "lucide-react";
 import { StatCard } from "@/components/StatCard";
 import { canCreate, canEdit, canDelete, canActivateDriver, canViewDriverStats } from "@/utils/permissions";
-import { driversService, Driver } from "@/services/driversService";
+import { driversService, Driver, DriverEstado } from "@/services/driversService";
 import { useToast } from "@/hooks/use-toast";
 import CreateDriverModal from "@/components/modals/CreateDriverModal";
 import EditDriverModal from "@/components/modals/EditDriverModal";
 import ConfirmDeleteDriverModal from "@/components/modals/ConfirmDeleteDriverModal";
+import { ESTADOS_ADMIN, ESTADOS_LABEL } from "@/components/modals/DriverWizard";
 
 // Usar la interfaz Driver del servicio
 
@@ -98,19 +102,33 @@ const Drivers = () => {
 
   // Obtener estado del repartidor
   const getDriverStatus = (driver: Driver) => {
-    switch (driver.estado) {
-      case 'activo':
-        return { status: "Activo", variant: "default" as const };
-      case 'inactivo':
-        return { status: "Inactivo", variant: "secondary" as const };
-      case 'ocupado':
-        return { status: "Ocupado", variant: "destructive" as const };
-      case 'disponible':
-        return { status: "Disponible", variant: "default" as const };
-      case 'en_ruta':
-        return { status: "En Ruta", variant: "outline" as const };
-      default:
-        return { status: "Desconocido", variant: "secondary" as const };
+    const status = ESTADOS_LABEL[driver.estado] || driver.estado || "Sin estado";
+    if (driver.estado === "disponible" || driver.estado === "activo") {
+      return { status, variant: "default" as const };
+    }
+    if (driver.estado === "ocupado" || driver.estado === "en_ruta") {
+      return { status, variant: "outline" as const };
+    }
+    return { status, variant: "secondary" as const };
+  };
+
+  const parseRating = (value: Driver["calificacion_promedio"]) => {
+    if (value === null || value === undefined || value === "") return "N/A";
+    const n = Number(value);
+    return Number.isFinite(n) ? n.toFixed(1) : "N/A";
+  };
+
+  const changeStatus = async (driver: Driver, estado: DriverEstado) => {
+    try {
+      const response = await driversService.changeDriverStatus(driver.id, { estado });
+      if (response.success) {
+        toast({ title: "Estado actualizado", description: `${driver.nombre_completo}: ${ESTADOS_LABEL[estado]}` });
+        loadDrivers();
+      } else {
+        toast({ title: "Error", description: response.message || "No se pudo cambiar el estado", variant: "destructive" });
+      }
+    } catch (error) {
+      toast({ title: "Error", description: "No se pudo cambiar el estado", variant: "destructive" });
     }
   };
 
@@ -167,11 +185,7 @@ const Drivers = () => {
         />
         <StatCard
           title="Mejor Calificados"
-          value={drivers.filter(d =>
-            d.calificacion_promedio &&
-            typeof d.calificacion_promedio === 'number' &&
-            d.calificacion_promedio >= 4.5
-          ).length}
+          value={drivers.filter((d) => Number(d.calificacion_promedio) >= 4.5).length}
           icon={Star}
           tone="info"
         />
@@ -266,11 +280,7 @@ const Drivers = () => {
                         <TableCell>
                           <div className="flex items-center space-x-1">
                             <Star className="h-3 w-3 text-yellow-500" />
-                            <span className="font-medium">
-                              {driver.calificacion_promedio && typeof driver.calificacion_promedio === 'number' 
-                                ? driver.calificacion_promedio.toFixed(1) 
-                                : 'N/A'}
-                            </span>
+                            <span className="font-medium">{parseRating(driver.calificacion_promedio)}</span>
                           </div>
                         </TableCell>
                         <TableCell>
@@ -307,10 +317,23 @@ const Drivers = () => {
                                 </DropdownMenuItem>
                               )}
                               {canActivateDriver() && (
-                                <DropdownMenuItem>
-                                  <Activity className="mr-2 h-4 w-4" />
-                                  Cambiar Estado
-                                </DropdownMenuItem>
+                                <DropdownMenuSub>
+                                  <DropdownMenuSubTrigger>
+                                    <Activity className="mr-2 h-4 w-4" />
+                                    Cambiar estado
+                                  </DropdownMenuSubTrigger>
+                                  <DropdownMenuSubContent>
+                                    {ESTADOS_ADMIN.map((item) => (
+                                      <DropdownMenuItem
+                                        key={item.value}
+                                        disabled={driver.estado === item.value}
+                                        onClick={() => changeStatus(driver, item.value)}
+                                      >
+                                        {item.label}
+                                      </DropdownMenuItem>
+                                    ))}
+                                  </DropdownMenuSubContent>
+                                </DropdownMenuSub>
                               )}
                               {canDelete('drivers') && (
                                 <DropdownMenuItem

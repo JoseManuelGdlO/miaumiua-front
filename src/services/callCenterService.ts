@@ -98,6 +98,7 @@ export type RepartidorOpcion = {
   nombre_completo: string;
   estado: string;
   es_prueba?: boolean;
+  siniestro_completo?: boolean;
   paradas?: number;
   max_paradas?: number;
   saturado?: boolean;
