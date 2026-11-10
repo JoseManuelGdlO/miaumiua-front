@@ -4,7 +4,6 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -33,7 +32,7 @@ import PromotionSelector from "@/components/ui/PromotionSelector";
 import ClienteSelector from "@/components/ui/ClienteSelector";
 import { packagesService } from "@/services/packagesService";
 import type { Package } from "@/services/packagesService";
-import { Loader2, Plus, Trash2, Package as PackageIcon, Package2, Calendar, MapPin, Phone, Mail, Tag } from "lucide-react";
+import { Loader2, Plus, Trash2, Package as PackageIcon, Package2, ChevronLeft, ChevronRight, MapPin, ShoppingBag, Tag, User } from "lucide-react";
 
 interface CreateOrderModalProps {
   open: boolean;
@@ -57,6 +56,20 @@ interface PackageFormData {
   descuento_paquete: number;
   notas_paquete: string;
   paquete?: Package; // Para almacenar la información del paquete seleccionado
+}
+
+const STEPS = [
+  { id: 1, title: "Cliente y entrega" },
+  { id: 2, title: "Productos y paquetes" },
+  { id: 3, title: "Pago y resumen" },
+];
+
+function money(n: number) {
+  return `$${n.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function lineTotal(cantidad: number, precio: number, descuento: number) {
+  return cantidad * Number(precio || 0) * (1 - Number(descuento || 0) / 100);
 }
 
 const EMPTY_ORDER_FORM = {
@@ -86,6 +99,7 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
   const [selectedPromotion, setSelectedPromotion] = useState<Promotion | null>(null);
   
   const [formData, setFormData] = useState(EMPTY_ORDER_FORM);
+  const [step, setStep] = useState(1);
   const [wasOpen, setWasOpen] = useState(open);
 
   // Al pasar de cerrado a abierto, limpiar antes de pintar el contenido.
@@ -101,6 +115,7 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
       setSelectedPromotion(null);
       setPendingStripeOrderId(null);
       setStripeRetryLoading(false);
+      setStep(1);
     }
   }
 
@@ -514,95 +529,155 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
     }));
   };
 
+  const subtotalProductos = products.reduce(
+    (sum, p) => sum + lineTotal(p.cantidad, Number(p.producto?.precio_venta || p.precio_unidad || 0), p.descuento_producto),
+    0
+  );
+  const subtotalPaquetes = packages.reduce(
+    (sum, p) => sum + lineTotal(p.cantidad, Number(p.paquete?.precio_final || p.precio_unidad || 0), p.descuento_paquete),
+    0
+  );
+  const subtotal = subtotalProductos + subtotalPaquetes;
+  const itemsCount = products.filter((p) => p.fkid_producto).length + packages.filter((p) => p.fkid_paquete).length;
+
+  function canNext() {
+    if (step === 1) return Boolean(formData.fkid_cliente && formData.direccion_entrega && formData.fkid_ciudad);
+    if (step === 2) {
+      const hayProducto = products.some((p) => p.fkid_producto && p.producto && p.cantidad > 0);
+      const hayPaquete = packages.some((p) => p.fkid_paquete && p.paquete && p.cantidad > 0);
+      return hayProducto || hayPaquete;
+    }
+    return true;
+  }
+
+  const resumen = (
+    <div className="space-y-3 rounded-xl bg-muted/50 p-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-semibold">Resumen del pedido</p>
+        <span className="text-xs text-muted-foreground">{itemsCount} ítems</span>
+      </div>
+      <div className="space-y-1 text-sm">
+        <div className="flex justify-between"><span>Subtotal productos</span><span>{money(subtotalProductos)}</span></div>
+        <div className="flex justify-between"><span>Subtotal paquetes</span><span>{money(subtotalPaquetes)}</span></div>
+        {selectedPromotion ? (
+          <div className="flex justify-between text-emerald-700">
+            <span>Promo {selectedPromotion.codigo}</span>
+            <span>
+              {selectedPromotion.tipo_promocion === "porcentaje"
+                ? `-${selectedPromotion.valor_descuento}%`
+                : `-$${selectedPromotion.valor_descuento}`}
+            </span>
+          </div>
+        ) : null}
+      </div>
+      <div className="flex justify-between text-base font-semibold">
+        <span>Total</span>
+        <span className="text-primary">{money(subtotal)}</span>
+      </div>
+      {selectedCliente ? (
+        <p className="text-xs text-muted-foreground">
+          {selectedCliente.nombre_completo}
+          {formData.direccion_entrega ? ` · ${formData.direccion_entrega}` : ""}
+        </p>
+      ) : null}
+    </div>
+  );
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
-          <DialogTitle>Nuevo Pedido</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <ShoppingBag className="h-5 w-5 text-primary" />
+            Nuevo pedido
+          </DialogTitle>
           <DialogDescription>
-            Crea un nuevo pedido en el sistema
+            Completa la información para crear un despacho en la flota oficial Miau Miau
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Información del Cliente */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <PackageIcon className="h-5 w-5" />
-                Información del Cliente
-              </CardTitle>
-              <CardDescription>
-                Selecciona el cliente y completa la información de contacto
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="fkid_cliente">Cliente *</Label>
-                <ClienteSelector
-                  value={formData.fkid_cliente || undefined}
-                  onValueChange={handleClientChange}
-                  placeholder="Buscar y seleccionar cliente..."
-                  disabled={loading}
-                />
-              </div>
+        <form
+          className="space-y-6"
+          onSubmit={(event) => {
+            if (step < 3) {
+              event.preventDefault();
+              if (canNext()) setStep(step + 1);
+              return;
+            }
+            void handleSubmit(event);
+          }}
+        >
+          <div className="grid grid-cols-3 gap-2">
+            {STEPS.map((item) => {
+              const active = step === item.id;
+              const done = step > item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => {
+                    if (item.id < step || (item.id === step + 1 && canNext())) setStep(item.id);
+                  }}
+                  className={`rounded-xl px-3 py-3 text-left ${
+                    active
+                      ? "bg-primary text-primary-foreground"
+                      : done
+                        ? "bg-emerald-50 text-emerald-800"
+                        : "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  <span className="block text-xs font-medium">{item.id}</span>
+                  <span className="block text-sm font-semibold leading-tight">{item.title}</span>
+                </button>
+              );
+            })}
+          </div>
 
-              {selectedCliente && (
-                <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-                  <div className="flex items-center gap-2 text-sm text-blue-800">
-                    <PackageIcon className="h-4 w-4" />
-                    <span className="font-medium">Cliente seleccionado:</span>
-                  </div>
-                  <div className="mt-2 text-sm text-blue-700">
-                    <div><strong>Nombre:</strong> {selectedCliente.nombre_completo}</div>
-                    <div><strong>Teléfono:</strong> {selectedCliente.telefono}</div>
-                    {selectedCliente.email && <div><strong>Email:</strong> {selectedCliente.email}</div>}
-                    {selectedCliente.ciudad && (
-                      <div><strong>Ciudad:</strong> {selectedCliente.ciudad.nombre}, {selectedCliente.ciudad.departamento}</div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {step === 1 ? (
+            <div className="space-y-6">
+              <section className="space-y-4">
+                <h3 className="flex items-center gap-2 text-base font-semibold">
+                  <User className="h-4 w-4 text-primary" />
+                  Información del cliente
+                </h3>
                 <div className="space-y-2">
-                  <Label htmlFor="telefono_referencia">Teléfono de Referencia</Label>
-                  <Input
-                    id="telefono_referencia"
-                    value={formData.telefono_referencia}
-                    onChange={(e) => handleInputChange('telefono_referencia', e.target.value)}
-                    placeholder="+584121234567"
+                  <Label htmlFor="fkid_cliente">Cliente *</Label>
+                  <ClienteSelector
+                    value={formData.fkid_cliente || undefined}
+                    onValueChange={handleClientChange}
+                    placeholder="Buscar y seleccionar cliente..."
+                    disabled={loading}
                   />
                 </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="email_referencia">Email de Referencia</Label>
-                  <Input
-                    id="email_referencia"
-                    type="email"
-                    value={formData.email_referencia}
-                    onChange={(e) => handleInputChange('email_referencia', e.target.value)}
-                    placeholder="cliente@email.com"
-                  />
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="telefono_referencia">Teléfono de referencia</Label>
+                    <Input
+                      id="telefono_referencia"
+                      value={formData.telefono_referencia}
+                      onChange={(e) => handleInputChange("telefono_referencia", e.target.value)}
+                      placeholder="+584121234567"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="email_referencia">Email de referencia</Label>
+                    <Input
+                      id="email_referencia"
+                      type="email"
+                      value={formData.email_referencia}
+                      onChange={(e) => handleInputChange("email_referencia", e.target.value)}
+                      placeholder="cliente@email.com"
+                    />
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Información de Entrega */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <MapPin className="h-5 w-5" />
-                Información de Entrega
-              </CardTitle>
-              <CardDescription>
-                Dirección y detalles de entrega
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                  <Label htmlFor="direccion_entrega">Dirección de Entrega *</Label>
+              </section>
+              <section className="space-y-4">
+                <h3 className="flex items-center gap-2 text-base font-semibold">
+                  <MapPin className="h-4 w-4 text-primary" />
+                  Detalles de entrega
+                </h3>
+                <div className="space-y-2">
+                  <Label htmlFor="direccion_entrega">Dirección de entrega *</Label>
                   {direcciones.length > 0 ? (
                     <div className="flex flex-wrap gap-2">
                       {direcciones.map((direccion) => (
@@ -610,116 +685,50 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
                       ))}
                     </div>
                   ) : null}
-                <Textarea
-                  id="direccion_entrega"
-                  value={formData.direccion_entrega}
-                  onChange={(e) => handleInputChange('direccion_entrega', e.target.value)}
-                  placeholder="Av. Principal, Edificio ABC, Piso 2, Apartamento 201"
-                  rows={3}
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="fkid_ciudad">Ciudad *</Label>
-                  <Select value={formData.fkid_ciudad} onValueChange={(value) => handleInputChange('fkid_ciudad', value)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecciona una ciudad" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {cities.map((city) => (
-                        <SelectItem key={city.id} value={city.id.toString()}>
-                          {city.nombre} - {city.departamento}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="fecha_entrega_estimada">Fecha y hora de entrega</Label>
-                  <Input
-                    id="fecha_entrega_estimada"
-                    type="datetime-local"
-                    value={formData.fecha_entrega_estimada}
-                    onChange={(e) => handleInputChange('fecha_entrega_estimada', e.target.value)}
+                  <Textarea
+                    id="direccion_entrega"
+                    value={formData.direccion_entrega}
+                    onChange={(e) => handleInputChange("direccion_entrega", e.target.value)}
+                    placeholder="Av. Principal, Edificio ABC, Piso 2, Apartamento 201"
+                    rows={3}
                   />
-                  <p className="text-xs text-muted-foreground">De 9:30 a 17:00. Antes de las 14:00 queda en Mañana. Desde las 14:00 queda en Tarde.</p>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="fkid_ciudad">Ciudad *</Label>
+                    <Select value={formData.fkid_ciudad} onValueChange={(value) => handleInputChange("fkid_ciudad", value)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecciona una ciudad" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {cities.map((city) => (
+                          <SelectItem key={city.id} value={city.id.toString()}>
+                            {city.nombre} - {city.departamento}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="fecha_entrega_estimada">Fecha y hora de entrega</Label>
+                    <Input
+                      id="fecha_entrega_estimada"
+                      type="datetime-local"
+                      value={formData.fecha_entrega_estimada}
+                      onChange={(e) => handleInputChange("fecha_entrega_estimada", e.target.value)}
+                    />
+                    <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                      Horario de reparto de 9:30 a 17:00. Antes de las 14:00 queda en franja mañana. Desde las 14:00 queda en franja tarde.
+                    </p>
+                  </div>
+                </div>
+              </section>
+            </div>
+          ) : null}
 
-          {/* Información de Pago */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Phone className="h-5 w-5" />
-                Información de Pago
-              </CardTitle>
-              <CardDescription>
-                Método de pago y notas adicionales
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="metodo_pago">Método de Pago *</Label>
-                <Select value={formData.metodo_pago} onValueChange={(value) => handleInputChange('metodo_pago', value)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecciona método de pago" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="efectivo">Efectivo</SelectItem>
-                    <SelectItem value="tarjeta">Tarjeta</SelectItem>
-                    <SelectItem value="transferencia">Transferencia</SelectItem>
-                    <SelectItem value="pago_movil">Pago Móvil</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-               <div className="space-y-2">
-                 <Label htmlFor="codigo_promocion">Código de Promoción</Label>
-                 <PromotionSelector
-                   value={formData.codigo_promocion || undefined}
-                   onValueChange={handlePromotionSelect}
-                   placeholder="Buscar y seleccionar promoción..."
-                   disabled={loading}
-                 />
-                 {selectedPromotion && (
-                   <div className="p-3 bg-green-50 rounded-lg border border-green-200">
-                     <div className="flex items-center gap-2 text-sm text-green-800">
-                       <Tag className="h-4 w-4" />
-                       <span className="font-medium">Promoción seleccionada:</span>
-                     </div>
-                     <div className="mt-2 text-sm text-green-700">
-                       <div><strong>Nombre:</strong> {selectedPromotion.nombre}</div>
-                       <div><strong>Código:</strong> {selectedPromotion.codigo}</div>
-                       <div><strong>Descuento:</strong> {
-                         selectedPromotion.tipo_promocion === 'porcentaje' 
-                           ? `${selectedPromotion.valor_descuento}%`
-                           : `$${selectedPromotion.valor_descuento}`
-                       }</div>
-                       {selectedPromotion.compra_minima && (
-                         <div><strong>Compra mínima:</strong> ${selectedPromotion.compra_minima}</div>
-                       )}
-                     </div>
-                   </div>
-                 )}
-               </div>
-
-               <div className="space-y-2">
-                 <Label htmlFor="notas">Notas Adicionales</Label>
-                 <Textarea
-                   id="notas"
-                   value={formData.notas}
-                   onChange={(e) => handleInputChange('notas', e.target.value)}
-                   placeholder="Instrucciones especiales para la entrega..."
-                   rows={3}
-                 />
-               </div>
-            </CardContent>
-          </Card>
-
+          {step === 2 ? (
+            <div className="grid gap-4 lg:grid-cols-[1fr_240px]">
+              <div className="space-y-6">
           {/* Productos */}
           <Card>
             <CardHeader>
@@ -1042,6 +1051,63 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
               )}
             </CardContent>
           </Card>
+              </div>
+              {resumen}
+            </div>
+          ) : null}
+
+          {step === 3 ? (
+            <div className="grid gap-4 lg:grid-cols-[1fr_240px]">
+              <div className="space-y-4">
+                <h3 className="text-base font-semibold">Información de pago y notas</h3>
+                <div className="space-y-2">
+                  <Label htmlFor="metodo_pago">Método de pago *</Label>
+                  <Select value={formData.metodo_pago} onValueChange={(value) => handleInputChange("metodo_pago", value)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecciona método de pago" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="efectivo">Efectivo</SelectItem>
+                      <SelectItem value="tarjeta">Tarjeta</SelectItem>
+                      <SelectItem value="transferencia">Transferencia</SelectItem>
+                      <SelectItem value="pago_movil">Pago Móvil</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="codigo_promocion">Código de promoción</Label>
+                  <PromotionSelector
+                    value={formData.codigo_promocion || undefined}
+                    onValueChange={handlePromotionSelect}
+                    placeholder="Buscar y seleccionar promoción..."
+                    disabled={loading}
+                  />
+                  {selectedPromotion && (
+                    <div className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">
+                      <p className="font-medium">{selectedPromotion.nombre} · {selectedPromotion.codigo}</p>
+                      <p>
+                        Descuento: {selectedPromotion.tipo_promocion === "porcentaje"
+                          ? `${selectedPromotion.valor_descuento}%`
+                          : `$${selectedPromotion.valor_descuento}`}
+                        {selectedPromotion.compra_minima ? ` · Mínimo $${selectedPromotion.compra_minima}` : ""}
+                      </p>
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="notas">Instrucciones especiales y notas de entrega</Label>
+                  <Textarea
+                    id="notas"
+                    value={formData.notas}
+                    onChange={(e) => handleInputChange("notas", e.target.value)}
+                    placeholder="Instrucciones especiales para la entrega..."
+                    rows={3}
+                  />
+                </div>
+              </div>
+              {resumen}
+            </div>
+          ) : null}
 
           {pendingStripeOrderId != null && (
             <div className="rounded-md border border-destructive/40 bg-destructive/5 p-4 space-y-3">
@@ -1060,20 +1126,34 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
             </div>
           )}
 
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={loading || stripeRetryLoading}
-            >
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={loading || stripeRetryLoading}>
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Crear Pedido
-            </Button>
-          </DialogFooter>
+          <div className="flex items-center justify-between gap-3 border-t pt-4">
+            <p className="text-xs text-muted-foreground">
+              {step} de 3 · {step === 1 ? "Cliente y entrega" : step === 2 ? "Productos y paquetes" : "Pago y resumen"}
+            </p>
+            <div className="flex gap-2">
+              {step === 1 ? (
+                <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading || stripeRetryLoading}>
+                  Cancelar
+                </Button>
+              ) : (
+                <Button type="button" variant="outline" onClick={() => setStep(step - 1)} disabled={loading}>
+                  <ChevronLeft className="mr-1 h-4 w-4" />
+                  Volver
+                </Button>
+              )}
+              {step < 3 ? (
+                <Button type="submit" disabled={!canNext() || loading}>
+                  Siguiente
+                  <ChevronRight className="ml-1 h-4 w-4" />
+                </Button>
+              ) : (
+                <Button type="submit" disabled={loading || stripeRetryLoading || !formData.metodo_pago}>
+                  {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Crear pedido
+                </Button>
+              )}
+            </div>
+          </div>
         </form>
       </DialogContent>
     </Dialog>

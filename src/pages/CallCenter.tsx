@@ -94,9 +94,10 @@ function exportarHoja(paradas: PedidoDia[], nombre: string, modo: "salida" | "co
   descargarHoja(hojaDesdeParadas({ fecha, repartidor: nombre, ciudad, paradas }), modo);
 }
 
-function etiquetaDriver(driver: { nombre_completo: string; es_prueba?: boolean; paradas?: number }) {
+function etiquetaDriver(driver: { nombre_completo: string; es_prueba?: boolean; siniestro_completo?: boolean; paradas?: number }) {
   const bits = [driver.nombre_completo];
   if (driver.es_prueba) bits.push("Prueba");
+  if (driver.siniestro_completo === false) bits.push(driver.es_prueba ? "Completar datos de siniestro" : "Sin siniestro");
   if (driver.paradas != null) bits.push(textoCupo(driver.paradas));
   return bits.join(" · ");
 }
@@ -1019,6 +1020,7 @@ const CallCenter = () => {
   const [trabajando, setTrabajando] = useState("");
   const [reassignFor, setReassignFor] = useState<PedidoDia | null>(null);
   const [drivers, setDrivers] = useState<RepartidorOpcion[]>([]);
+  const [expediente, setExpediente] = useState<RepartidorOpcion[]>([]);
   const [targetDriver, setTargetDriver] = useState<string>("");
   const [nuevoEstado, setNuevoEstado] = useState<string>("");
   const [motivoCierre, setMotivoCierre] = useState("");
@@ -1086,12 +1088,15 @@ const CallCenter = () => {
     };
     const stillCurrent = () => generation === listGeneration.current && filtersStillMatch();
     try {
-      const [nextSolicitudes, nextPedidos, nextVelocidad, nextComprobantes, nextDepositos] = await Promise.all([
+      const [nextSolicitudes, nextPedidos, nextVelocidad, nextComprobantes, nextDepositos, nextExpediente] = await Promise.all([
         callCenterService.listSolicitudes(),
         callCenterService.listPedidos(filters),
         callCenterService.listarVelocidad().catch(() => [] as VelocidadDia[]),
         callCenterService.listarComprobantes().catch(() => [] as ComprobantePago[]),
         callCenterService.listarDepositos().catch(() => [] as DepositoRuta[]),
+        filters.ciudadId
+          ? callCenterService.listRepartidores(filters.ciudadId).catch(() => [] as RepartidorOpcion[])
+          : Promise.resolve([] as RepartidorOpcion[]),
       ]);
       if (!stillCurrent()) return;
       setSolicitudes(nextSolicitudes);
@@ -1099,6 +1104,7 @@ const CallCenter = () => {
       setVelocidades(nextVelocidad);
       setComprobantes(nextComprobantes);
       setDepositos(nextDepositos);
+      setExpediente(nextExpediente);
       setSelectedId((current) => keepSelection(current));
     } catch (error) {
       if (!stillCurrent()) return;
@@ -1424,6 +1430,11 @@ const CallCenter = () => {
           </p>
         </div>
       </div>
+      {expediente.some((driver) => !driver.es_prueba && driver.siniestro_completo === false) ? (
+        <div className="rounded-lg bg-amber-100 px-4 py-3 text-sm text-amber-950">
+          Hay repartidores sin el expediente de siniestro completo. No se les pueden asignar pedidos hasta completar vigencia y foto de la licencia, INE, seguro social, tipo de sangre y el comprobante. Los de prueba sí se pueden asignar, pero conviene completarlos.
+        </div>
+      ) : null}
       <Collapsible open={flujoAbierto} onOpenChange={setFlujoAbierto} className="rounded-lg bg-primary/10">
         <CollapsibleTrigger className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm font-semibold text-primary">
           <span className="inline-flex items-center gap-2"><Headphones className="h-4 w-4" />Cómo funciona Call Center</span>
@@ -1969,7 +1980,13 @@ const CallCenter = () => {
                     <SelectTrigger><SelectValue placeholder="Reasignar repartidor" /></SelectTrigger>
                     <SelectContent>
                       {drivers.filter((driver) => driver.id !== reassignFor.repartidor?.id).map((driver) => (
-                        <SelectItem key={driver.id} value={String(driver.id)}>{etiquetaDriver(driver)}</SelectItem>
+                        <SelectItem
+                          key={driver.id}
+                          value={String(driver.id)}
+                          disabled={!driver.es_prueba && driver.siniestro_completo === false}
+                        >
+                          {etiquetaDriver(driver)}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>

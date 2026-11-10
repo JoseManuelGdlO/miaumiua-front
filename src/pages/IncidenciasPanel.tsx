@@ -6,13 +6,28 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { TablePagination } from "@/components/TablePagination";
 import { callCenterService, type PedidoDia, type Solicitud } from "@/services/callCenterService";
+
+const PAGE_SIZE = 8;
 
 function fechaMexico(delta: number) {
   const hoy = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Mexico_City" }).format(new Date());
   const [y, m, d] = hoy.split("-").map(Number);
   const dt = new Date(Date.UTC(y, m - 1, d + delta));
   return dt.toISOString().slice(0, 10);
+}
+
+function diaDe(value: string | null | undefined) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  if (/^\d{4}-\d{2}-\d{2}T/.test(raw) || /T|\d{2}:\d{2}/.test(raw)) {
+    const date = new Date(raw);
+    if (!Number.isNaN(date.getTime())) {
+      return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Mexico_City" }).format(date);
+    }
+  }
+  return raw.slice(0, 10);
 }
 
 type Props = {
@@ -32,22 +47,31 @@ export default function IncidenciasPanel({ pedidos, solicitudes, superAdmin, onC
   const [q, setQ] = useState("");
   const [estado, setEstado] = useState("todos");
   const [dia, setDia] = useState("");
+  const [page, setPage] = useState(1);
   const texto = q.trim().toLowerCase();
   const problemas = solicitudes.filter((row) => {
     if (row.tipo !== "llamada_cliente" && row.tipo !== "soporte") return false;
     if (estado === "no_entregado") return false;
     if (estado === "soporte" && row.tipo !== "soporte") return false;
     if (estado === "llamada" && row.tipo !== "llamada_cliente") return false;
-    if (dia && !String(row.fecha || "").includes(dia)) return false;
+    if (dia && diaDe(row.fecha) !== dia) return false;
     if (texto && !`${row.repartidor?.nombre_completo || ""} ${row.motivo || ""}`.toLowerCase().includes(texto)) return false;
     return true;
   });
   const noEntregados = pedidos.filter((row) => {
     if (row.estado !== "no_entregado" && row.estado_entrega !== "fallido") return false;
     if (estado === "soporte" || estado === "llamada") return false;
+    if (dia && diaDe(row.fecha_incidencia || row.fecha_ruta) !== dia) return false;
     if (texto && !`${row.repartidor?.nombre_completo || ""} ${row.numero_pedido || ""} ${row.cliente || ""}`.toLowerCase().includes(texto)) return false;
     return true;
   }).sort((a, b) => Number(Boolean(a.fecha_propuesta)) - Number(Boolean(b.fecha_propuesta)));
+  const filas = [
+    ...problemas.map((row) => ({ kind: "solicitud" as const, row })),
+    ...noEntregados.map((row) => ({ kind: "pedido" as const, row })),
+  ];
+  const totalFilas = filas.length;
+  const safePage = Math.min(page, Math.max(1, Math.ceil(totalFilas / PAGE_SIZE) || 1));
+  const visibles = filas.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   const marcarLlamada = async (id: number) => {
     setBusy(true);
@@ -94,13 +118,13 @@ export default function IncidenciasPanel({ pedidos, solicitudes, superAdmin, onC
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-primary" />Problemas</CardTitle>
-          <CardDescription>Llamadas, soporte y pedidos no entregados</CardDescription>
+          <CardDescription>Llamadas, soporte y pedidos no entregados. Siguen aquí hasta que se reagenden o se atiendan.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
           <div className="flex flex-wrap gap-3">
-            <Input aria-label="Filtrar por repartidor" value={q} onChange={(event) => setQ(event.target.value)} placeholder="Filtrar por repartidor" className="w-56" />
-            <Input aria-label="Filtrar por fecha" type="date" value={dia} onChange={(event) => setDia(event.target.value)} className="w-56" />
-            <Select value={estado} onValueChange={setEstado}>
+            <Input aria-label="Filtrar por repartidor" value={q} onChange={(event) => { setQ(event.target.value); setPage(1); }} placeholder="Filtrar por repartidor" className="w-56" />
+            <Input aria-label="Día en que surgió la incidencia" type="date" value={dia} onChange={(event) => { setDia(event.target.value); setPage(1); }} className="w-56" />
+            <Select value={estado} onValueChange={(value) => { setEstado(value); setPage(1); }}>
               <SelectTrigger className="w-56" aria-label="Filtrar por estado"><SelectValue placeholder="Estado" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todos</SelectItem>
@@ -113,34 +137,36 @@ export default function IncidenciasPanel({ pedidos, solicitudes, superAdmin, onC
           {problemas.length === 0 && noEntregados.length === 0 ? (
             <p className="text-muted-foreground">No hay problemas abiertos</p>
           ) : null}
-          {problemas.map((row) => (
-            <div key={row.id} className={`${row.de_hoy === false ? "" : "aviso-borde "}flex items-start justify-between gap-3 rounded-md bg-background px-3 py-2`}>
-              <button type="button" className="text-left" onClick={() => { if (row.repartidor?.id) onAbrir(row.repartidor.id); }}>
-                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${row.tipo === "llamada_cliente" ? "bg-sky-100 text-sky-900" : "bg-amber-100 text-amber-900"}`}>{row.tipo === "llamada_cliente" ? "Llamada" : "Incidencia"}</span>
-                <span className="mt-1 block font-semibold">{row.repartidor?.nombre_completo || "Sin repartidor"} · {row.numero_pedido || "Sin pedido"}</span>
-                <span className="mt-1 block text-muted-foreground">{row.fecha} {row.hora} · {row.nota || row.motivo || "Sin motivo"}</span>
+          {visibles.map((item) => item.kind === "solicitud" ? (
+            <div key={`s-${item.row.id}`} className={`${item.row.de_hoy === false ? "" : "aviso-borde "}flex items-start justify-between gap-3 rounded-md bg-background px-3 py-2`}>
+              <button type="button" className="text-left" onClick={() => { if (item.row.repartidor?.id) onAbrir(item.row.repartidor.id); }}>
+                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${item.row.tipo === "llamada_cliente" ? "bg-sky-100 text-sky-900" : "bg-amber-100 text-amber-900"}`}>{item.row.tipo === "llamada_cliente" ? "Llamada" : "Incidencia"}</span>
+                <span className="mt-1 block font-semibold">{item.row.repartidor?.nombre_completo || "Sin repartidor"} · {item.row.numero_pedido || "Sin pedido"}</span>
+                <span className="mt-1 block text-muted-foreground">{item.row.fecha} {item.row.hora} · {item.row.nota || item.row.motivo || "Sin motivo"}</span>
               </button>
               <div className="flex flex-col gap-2">
-                {row.tipo === "llamada_cliente" && !row.llamada_atendida ? <Button size="sm" disabled={busy} onClick={() => void marcarLlamada(row.id)}>Ya llamé al cliente</Button> : null}
-                {row.tipo === "llamada_cliente" && row.llamada_atendida ? <Button size="sm" disabled={busy} onClick={() => void liberar(row.id)}>Liberar intento</Button> : null}
-                {(row.motivo === "averia" || row.motivo === "clima") && row.repartidor?.id ? <Button variant="outline" size="sm" onClick={() => onAbrir(row.repartidor.id)}>Elegir clientes</Button> : null}
-                {row.pedido_id && row.motivo !== "averia" && row.motivo !== "clima" ? <Button variant="outline" size="sm" onClick={() => { setPedidoId(row.pedido_id); setFecha(row.fecha_propuesta || fechaMexico(1)); setMotivo(row.fecha_propuesta ? "Cliente por WhatsApp" : ""); }}>Reagendar</Button> : null}
+                {item.row.tipo === "llamada_cliente" && !item.row.llamada_atendida ? <Button size="sm" disabled={busy} onClick={() => void marcarLlamada(item.row.id)}>Ya llamé al cliente</Button> : null}
+                {item.row.tipo === "llamada_cliente" && item.row.llamada_atendida ? <Button size="sm" disabled={busy} onClick={() => void liberar(item.row.id)}>Liberar intento</Button> : null}
+                {(item.row.motivo === "averia" || item.row.motivo === "clima") && item.row.repartidor?.id ? <Button variant="outline" size="sm" onClick={() => onAbrir(item.row.repartidor.id)}>Elegir clientes</Button> : null}
+                {item.row.pedido_id && item.row.motivo !== "averia" && item.row.motivo !== "clima" ? <Button variant="outline" size="sm" onClick={() => { setPedidoId(item.row.pedido_id); setFecha(item.row.fecha_propuesta || fechaMexico(1)); setMotivo(item.row.fecha_propuesta ? "Cliente por WhatsApp" : ""); }}>Reagendar</Button> : null}
               </div>
             </div>
-          ))}
-          {noEntregados.map((row) => (
-            <div key={row.id} data-aviso="1" className="aviso-borde flex items-start justify-between gap-3 rounded-md bg-background px-3 py-2">
-              <button type="button" className="text-left" onClick={() => { if (row.repartidor?.id) onAbrir(row.repartidor.id); }}>
+          ) : (
+            <div key={`p-${item.row.id}`} data-aviso="1" className="aviso-borde flex items-start justify-between gap-3 rounded-md bg-background px-3 py-2">
+              <button type="button" className="text-left" onClick={() => { if (item.row.repartidor?.id) onAbrir(item.row.repartidor.id); }}>
                 <span className="inline-flex items-center gap-2">
                   <span className="h-2 w-2 rounded-full bg-red-500" aria-hidden />
                   <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">No entregado</span>
                 </span>
-                <span className="mt-1 block font-semibold">{row.numero_pedido} · {row.cliente || "Sin cliente"}</span>
-                <span className="mt-1 block text-muted-foreground">{row.repartidor?.nombre_completo || "Sin repartidor"}{row.fecha_propuesta ? ` · Propone ${row.fecha_propuesta}` : " · Sin fecha confirmada"}</span>
+                <span className="mt-1 block font-semibold">{item.row.numero_pedido} · {item.row.cliente || "Sin cliente"}</span>
+                <span className="mt-1 block text-muted-foreground">{item.row.repartidor?.nombre_completo || "Sin repartidor"}{item.row.fecha_propuesta ? ` · Propone ${item.row.fecha_propuesta}` : " · Sin fecha confirmada"}</span>
               </button>
-              <Button variant="outline" size="sm" onClick={() => { setPedidoId(row.id); setFecha(row.fecha_propuesta || fechaMexico(1)); if (row.fecha_propuesta) setMotivo("Cliente por WhatsApp"); }}>Reagendar</Button>
+              <Button variant="outline" size="sm" onClick={() => { setPedidoId(item.row.id); setFecha(item.row.fecha_propuesta || fechaMexico(1)); if (item.row.fecha_propuesta) setMotivo("Cliente por WhatsApp"); }}>Reagendar</Button>
             </div>
           ))}
+          {totalFilas > PAGE_SIZE ? (
+            <TablePagination page={safePage} pageSize={PAGE_SIZE} total={totalFilas} label="incidencias" onPageChange={setPage} />
+          ) : null}
         </CardContent>
       </Card>
 

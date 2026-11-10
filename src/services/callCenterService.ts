@@ -78,6 +78,7 @@ export type PedidoDia = {
   codigo_oculto?: string | null;
   fecha_propuesta?: string | null;
   fecha_ruta?: string | null;
+  fecha_incidencia?: string | null;
   ruta_id?: number | null;
   lat?: number | null;
   lng?: number | null;
@@ -98,6 +99,7 @@ export type RepartidorOpcion = {
   nombre_completo: string;
   estado: string;
   es_prueba?: boolean;
+  siniestro_completo?: boolean;
   paradas?: number;
   max_paradas?: number;
   saturado?: boolean;

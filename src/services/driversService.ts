@@ -1,7 +1,17 @@
 import { authService } from './authService';
 import { getCurrentConfig } from '@/config/environment';
 
-// Tipos para los repartidores
+export type DriverEstado =
+  | 'activo'
+  | 'inactivo'
+  | 'ocupado'
+  | 'disponible'
+  | 'en_ruta'
+  | 'no_disponible'
+  | 'permiso_economico'
+  | 'incapacitado'
+  | 'baja';
+
 export interface Driver {
   id: number;
   codigo_repartidor: string;
@@ -12,7 +22,7 @@ export interface Driver {
   fkid_usuario?: number;
   tipo_vehiculo: 'moto' | 'bicicleta' | 'auto' | 'camioneta' | 'caminando';
   capacidad_carga: number;
-  estado: 'activo' | 'inactivo' | 'ocupado' | 'disponible' | 'en_ruta';
+  estado: DriverEstado;
   zona_cobertura?: {
     centro: {
       lat: number;
@@ -34,9 +44,16 @@ export interface Driver {
   documento_identidad: string;
   licencia_conducir: string;
   seguro_vehiculo: string;
+  licencia_vigencia?: string | null;
+  licencia_foto?: string | null;
+  seguro_social?: string | null;
+  tipo_sangre?: string | null;
+  consentimiento_at?: string | null;
+  consentimiento_archivo?: string | null;
+  ine_archivo?: string | null;
   notas?: string;
   es_prueba?: boolean;
-  calificacion_promedio?: number;
+  calificacion_promedio?: number | string;
   total_entregas?: number;
   total_km_recorridos?: number;
   fecha_ultima_entrega?: string;
@@ -84,16 +101,22 @@ export interface CreateDriverData {
   };
   tarifa_base: number;
   comision_porcentaje: number;
-  fecha_ingreso: string;
   fecha_nacimiento: string;
   direccion: string;
-  documento_identidad: string;
-  licencia_conducir: string;
-  seguro_vehiculo: string;
+  licencia_vigencia?: string;
+  seguro_social?: string;
+  tipo_sangre?: string;
+  consentimiento_at?: string;
   notas?: string;
   contrasena?: string;
   es_prueba?: boolean;
 }
+
+export type DriverSiniestroFiles = {
+  licencia_foto?: File | null;
+  consentimiento_archivo?: File | null;
+  ine_archivo?: File | null;
+};
 
 export interface UpdateDriverData {
   codigo_repartidor?: string;
@@ -120,18 +143,19 @@ export interface UpdateDriverData {
   };
   tarifa_base?: number;
   comision_porcentaje?: number;
-  fecha_ingreso?: string;
   fecha_nacimiento?: string;
   direccion?: string;
-  documento_identidad?: string;
-  licencia_conducir?: string;
-  seguro_vehiculo?: string;
+  licencia_vigencia?: string;
+  seguro_social?: string;
+  tipo_sangre?: string;
+  consentimiento_at?: string;
   notas?: string;
   contrasena?: string;
+  es_prueba?: boolean;
 }
 
 export interface ChangeDriverStatusData {
-  estado: 'activo' | 'inactivo' | 'ocupado' | 'disponible' | 'en_ruta';
+  estado: DriverEstado;
 }
 
 export interface UpdateDriverMetricsData {
@@ -232,6 +256,21 @@ export interface RepartidorLoginResponse {
     refreshToken: string;
   };
   error?: string;
+}
+
+function driverRequestBody(data: CreateDriverData | UpdateDriverData, files?: DriverSiniestroFiles) {
+  const hasFiles = Boolean(files?.licencia_foto || files?.consentimiento_archivo || files?.ine_archivo);
+  if (!hasFiles) return JSON.stringify(data);
+  const body = new FormData();
+  Object.entries(data).forEach(([key, value]) => {
+    if (value === undefined || value === null) return;
+    if (typeof value === "object") body.append(key, JSON.stringify(value));
+    else body.append(key, String(value));
+  });
+  if (files?.licencia_foto) body.append("licencia_foto", files.licencia_foto);
+  if (files?.consentimiento_archivo) body.append("consentimiento_archivo", files.consentimiento_archivo);
+  if (files?.ine_archivo) body.append("ine_archivo", files.ine_archivo);
+  return body;
 }
 
 // Clase para manejar los repartidores
@@ -360,11 +399,11 @@ class DriversService {
   }
 
   // Crear un nuevo repartidor
-  async createDriver(driverData: CreateDriverData): Promise<DriverResponse> {
+  async createDriver(driverData: CreateDriverData, files?: DriverSiniestroFiles): Promise<DriverResponse> {
     try {
       return await authService.authenticatedRequest<DriverResponse>('/repartidores', {
         method: 'POST',
-        body: JSON.stringify(driverData),
+        body: driverRequestBody(driverData, files),
       });
     } catch (error) {
       console.error('Error al crear repartidor:', error);
@@ -373,11 +412,11 @@ class DriversService {
   }
 
   // Actualizar un repartidor
-  async updateDriver(id: number, driverData: UpdateDriverData): Promise<DriverResponse> {
+  async updateDriver(id: number, driverData: UpdateDriverData, files?: DriverSiniestroFiles): Promise<DriverResponse> {
     try {
       return await authService.authenticatedRequest<DriverResponse>(`/repartidores/${id}`, {
         method: 'PUT',
-        body: JSON.stringify(driverData),
+        body: driverRequestBody(driverData, files),
       });
     } catch (error) {
       console.error('Error al actualizar repartidor:', error);
