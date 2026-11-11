@@ -151,6 +151,9 @@ const ValidacionCarga = ({ solicitudId: solicitudIdProp, embedded = false, onBac
   const pedidos = (solicitud?.cargas || []).filter((linea) => !linea.es_extra);
   const sumaCargada = pedidos.reduce((sum, linea) => sum + (Number(linea.cantidad) || 0), 0)
     + extras.reduce((sum, linea) => sum + (Number(linea.cantidad) || 0), 0);
+  const totalPedidos = pedidos.reduce((sum, linea) => sum + lineTotal(Number(linea.cantidad) || 0, Number(linea.precio_unitario) || 0), 0);
+  const totalExtras = extras.reduce((sum, linea) => sum + lineTotal(linea.cantidad, Number(linea.precio) || 0), 0);
+  const totalCarga = totalPedidos + totalExtras;
   const dinero = Number(solicitud?.dinero_esperado) || 0;
   const extrasCambiaron = firmaExtras(extras) !== firmaExtras(draftsFrom(solicitud?.cargas));
   const aprobarBloqueado = busy || extrasCambiaron || esperaReenvio;
@@ -284,7 +287,7 @@ const ValidacionCarga = ({ solicitudId: solicitudIdProp, embedded = false, onBac
         <div>
           <h1 className="text-2xl font-semibold">Validación de carga</h1>
           <p className="text-sm text-muted-foreground">
-            {solicitud.repartidor?.nombre_completo || "Repartidor"} · Dinero esperado ${formatMoney(dinero)} · Suma de productos cargados: {sumaCargada} · {esperaReenvio ? "Esperando el reenvío del repartidor" : "En espera de aprobación"}
+            {solicitud.repartidor?.nombre_completo || "Repartidor"} · Total de la carga ${formatMoney(totalCarga)} · Dinero esperado ${formatMoney(dinero)} · {sumaCargada} productos · {esperaReenvio ? "Esperando el reenvío del repartidor" : "En espera de aprobación"}
           </p>
         </div>
         <Button variant="outline" onClick={leave}>Volver</Button>
@@ -357,6 +360,9 @@ const ValidacionCarga = ({ solicitudId: solicitudIdProp, embedded = false, onBac
             </TableBody>
           </Table>
           </div>
+          {pedidos.length > 0 ? (
+            <p className="mt-3 text-base font-semibold">Total de la carga ${formatMoney(totalPedidos)}</p>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -420,6 +426,7 @@ const ValidacionCarga = ({ solicitudId: solicitudIdProp, embedded = false, onBac
                 : "Guarda el producto extra. Aprobar carga queda bloqueado y el repartidor podrá volver a enviarla."}
             </p>
           )}
+          <p className="text-base font-semibold">Total de la carga ${formatMoney(totalCarga)}</p>
           <div className="flex gap-3">
             <Button variant="outline" disabled={busy || esperaReenvio} onClick={() => void guardar()}>
               {accion === "guardar" ? <Loader2 className="animate-spin" /> : null}
