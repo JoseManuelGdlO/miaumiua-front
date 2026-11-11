@@ -51,6 +51,8 @@ export interface Driver {
   consentimiento_at?: string | null;
   consentimiento_archivo?: string | null;
   ine_archivo?: string | null;
+  poliza_seguro_archivo?: string | null;
+  foto?: string | null;
   notas?: string;
   es_prueba?: boolean;
   calificacion_promedio?: number | string;
@@ -72,6 +74,19 @@ export interface Driver {
     nombre_ruta: string;
     fecha_ruta: string;
     estado: string;
+    franja?: string;
+    distancia_estimada?: number | string;
+    pedidos?: Array<{
+      id: number;
+      orden_entrega?: number;
+      estado_entrega?: string;
+      pedido?: {
+        numero_pedido?: string;
+        direccion_entrega?: string;
+        estado?: string;
+        cliente?: { nombre_completo?: string };
+      };
+    }>;
   }>;
   created_at: string;
   updated_at: string;
@@ -116,6 +131,7 @@ export type DriverSiniestroFiles = {
   licencia_foto?: File | null;
   consentimiento_archivo?: File | null;
   ine_archivo?: File | null;
+  poliza_seguro_archivo?: File | null;
 };
 
 export interface UpdateDriverData {
@@ -259,7 +275,7 @@ export interface RepartidorLoginResponse {
 }
 
 function driverRequestBody(data: CreateDriverData | UpdateDriverData, files?: DriverSiniestroFiles) {
-  const hasFiles = Boolean(files?.licencia_foto || files?.consentimiento_archivo || files?.ine_archivo);
+  const hasFiles = Boolean(files?.licencia_foto || files?.consentimiento_archivo || files?.ine_archivo || files?.poliza_seguro_archivo);
   if (!hasFiles) return JSON.stringify(data);
   const body = new FormData();
   Object.entries(data).forEach(([key, value]) => {
@@ -270,6 +286,7 @@ function driverRequestBody(data: CreateDriverData | UpdateDriverData, files?: Dr
   if (files?.licencia_foto) body.append("licencia_foto", files.licencia_foto);
   if (files?.consentimiento_archivo) body.append("consentimiento_archivo", files.consentimiento_archivo);
   if (files?.ine_archivo) body.append("ine_archivo", files.ine_archivo);
+  if (files?.poliza_seguro_archivo) body.append("poliza_seguro_archivo", files.poliza_seguro_archivo);
   return body;
 }
 
@@ -420,6 +437,9 @@ class DriversService {
       });
     } catch (error) {
       console.error('Error al actualizar repartidor:', error);
+      if (error instanceof Error && error.message === 'Unexpected field') {
+        throw new Error('El servidor aún no acepta la póliza. Hay que actualizar el backend.');
+      }
       throw error;
     }
   }

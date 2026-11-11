@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import {
   Dialog,
   DialogContent,
@@ -125,6 +126,8 @@ const CreateDriverModal = ({ isOpen, onClose, onSuccess }: CreateDriverModalProp
   const [licenciaFoto, setLicenciaFoto] = useState<File | null>(null);
   const [ineArchivo, setIneArchivo] = useState<File | null>(null);
   const [consentimientoArchivo, setConsentimientoArchivo] = useState<File | null>(null);
+  const [polizaArchivo, setPolizaArchivo] = useState<File | null>(null);
+  const [descartar, setDescartar] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -159,13 +162,36 @@ const CreateDriverModal = ({ isOpen, onClose, onSuccess }: CreateDriverModalProp
     setLicenciaFoto(null);
     setIneArchivo(null);
     setConsentimientoArchivo(null);
+    setPolizaArchivo(null);
     setStep(1);
   };
 
-  const handleClose = () => {
+  const dirty = () =>
+    step > 1
+    || Boolean(licenciaFoto || ineArchivo || consentimientoArchivo || polizaArchivo)
+    || Boolean(formData.nombre_completo?.trim())
+    || Boolean(formData.telefono?.trim())
+    || Boolean(formData.email?.trim())
+    || Boolean(formData.direccion?.trim())
+    || Boolean(formData.contrasena?.trim())
+    || Boolean(formData.licencia_vigencia)
+    || Boolean(formData.seguro_social)
+    || Boolean(formData.tipo_sangre)
+    || Boolean(formData.notas?.trim())
+    || Boolean(formData.es_prueba)
+    || Boolean(formData.fkid_ciudad);
+
+  const cerrarYa = () => {
     if (loading) return;
+    setDescartar(false);
     onClose();
     resetForm();
+  };
+
+  const pedirCerrar = () => {
+    if (loading) return;
+    if (dirty()) setDescartar(true);
+    else cerrarYa();
   };
 
   const handleSubmit = async () => {
@@ -175,11 +201,12 @@ const CreateDriverModal = ({ isOpen, onClose, onSuccess }: CreateDriverModalProp
         licencia_foto: licenciaFoto,
         consentimiento_archivo: consentimientoArchivo,
         ine_archivo: ineArchivo,
+        poliza_seguro_archivo: polizaArchivo,
       });
       if (response.success) {
         toast({ title: "Éxito", description: "Repartidor creado correctamente" });
         onSuccess();
-        handleClose();
+        cerrarYa();
       } else {
         toast({ title: "Error", description: response.message || "No se pudo crear el repartidor", variant: "destructive" });
       }
@@ -197,7 +224,7 @@ const CreateDriverModal = ({ isOpen, onClose, onSuccess }: CreateDriverModalProp
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={handleClose}>
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) pedirCerrar(); }}>
       <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -217,16 +244,28 @@ const CreateDriverModal = ({ isOpen, onClose, onSuccess }: CreateDriverModalProp
           cities={cities}
           onChange={handleInputChange}
           onCity={(_id, city) => generateDriverCode(city)}
-          files={{ licencia: licenciaFoto, ine: ineArchivo, consentimiento: consentimientoArchivo }}
+          files={{ licencia: licenciaFoto, ine: ineArchivo, consentimiento: consentimientoArchivo, poliza: polizaArchivo }}
           onFile={(key, file) => {
             if (key === "licencia") setLicenciaFoto(file);
             if (key === "ine") setIneArchivo(file);
             if (key === "consentimiento") setConsentimientoArchivo(file);
+            if (key === "poliza") setPolizaArchivo(file);
           }}
-          onCancel={handleClose}
+          onCancel={pedirCerrar}
           onSubmit={handleSubmit}
         />
       </DialogContent>
+      <AlertDialog open={descartar} onOpenChange={setDescartar}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Descartar lo que ya llenaste?</AlertDialogTitle>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Seguir editando</AlertDialogCancel>
+            <AlertDialogAction onClick={cerrarYa}>Descartar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 };
