@@ -330,7 +330,9 @@ export function MapaRutaEnVivo({
           <p className="text-sm text-foreground">
             {apagada
               ? "Google Maps está apagado. Abre la ubicación en Maps."
-              : "Al poner VITE_GOOGLE_MAPS_API_KEY se ve aquí la ruta del repartidor al pedido actual."}
+              : !key
+                ? "Este build no trae VITE_GOOGLE_MAPS_API_KEY. En EasyPanel va como Build Arg del front, no en el .env de runtime, y hay que Rebuild."
+                : "Google no cargó el mapa. Revisa Maps JavaScript API, facturación y que el dominio del panel esté en los referrers de la key."}
           </p>
         </div>
       ) : (
