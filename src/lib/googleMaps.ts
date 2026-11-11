@@ -1,4 +1,5 @@
 type MapsWindow = Window & {
+  __MAPS_KEY__?: string;
   google?: {
     maps: {
       Map: new (el: HTMLElement, opts: Record<string, unknown>) => {
@@ -30,6 +31,12 @@ type MapsWindow = Window & {
 };
 
 let mapsPromise: Promise<void> | null = null;
+
+export function mapsKey() {
+  const runtime = String((window as MapsWindow).__MAPS_KEY__ || "").trim();
+  const baked = String(import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "").trim();
+  return runtime || baked;
+}
 
 export function loadMaps(key: string) {
   const current = window as MapsWindow;

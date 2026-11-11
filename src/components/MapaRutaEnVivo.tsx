@@ -3,7 +3,7 @@ import { callCenterService } from "@/services/callCenterService";
 import { authService } from "@/services/authService";
 import { siteSettingsService } from "@/services/siteSettingsService";
 import { config } from "@/config/environment";
-import { callCenterSocketUrl, loadMaps, mapsApi, pin } from "@/lib/googleMaps";
+import { callCenterSocketUrl, loadMaps, mapsApi, mapsKey, pin } from "@/lib/googleMaps";
 import { destPedido, pedirRutaCalles, selloRuta, splitRuta } from "@/lib/rutaCalles";
 
 const ROSA = "#E83E8C";
@@ -90,7 +90,7 @@ export function MapaRutaEnVivo({
   repartidorId?: number | null;
   gps?: Punto | null;
 }) {
-  const key = (import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined)?.trim();
+  const key = mapsKey();
   const node = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapHandle | null>(null);
   const hechoRef = useRef<LineHandle | null>(null);

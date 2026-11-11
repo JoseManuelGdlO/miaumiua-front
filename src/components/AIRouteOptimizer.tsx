@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Loader2, Sparkles, MapPin, Truck, Route } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { mapsService } from '@/services/mapsService';
-import { loadMaps, mapsApi } from '@/lib/googleMaps';
+import { loadMaps, mapsApi, mapsKey } from '@/lib/googleMaps';
 import { compareOneVsTwoDrivers, type Location } from '@/utils/vrpSolver';
 
 // Utilidades para cálculo de distancias
@@ -80,7 +80,7 @@ function limpiarCalle(texto: string) {
 }
 
 async function geocodeEnNavegador(query: string): Promise<(Coordinates & { aproximado: true }) | null> {
-  const key = (import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined)?.trim();
+  const key = mapsKey();
   const address = query.trim();
   if (!key || !address) return null;
   try {

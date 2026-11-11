@@ -17,6 +17,10 @@ docker builder prune -f
 
 # Construir la imagen
 echo "🔨 Construyendo imagen Docker..."
-docker build -f dockerizer/Dockerfile -t miau-miau-center:latest .
+docker build -f dockerizer/Dockerfile \
+  --build-arg VITE_API_BASE_URL \
+  --build-arg VITE_GOOGLE_MAPS_API_KEY \
+  --build-arg VITE_IMAGE_BASE_URL \
+  -t miau-miau-center:latest .
 
 echo "✅ Build completado con cache limpio!"
