@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import {
   Dialog,
   DialogContent,
@@ -100,6 +101,7 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
   
   const [formData, setFormData] = useState(EMPTY_ORDER_FORM);
   const [step, setStep] = useState(1);
+  const [descartar, setDescartar] = useState(false);
   const [wasOpen, setWasOpen] = useState(open);
 
   // Al pasar de cerrado a abierto, limpiar antes de pintar el contenido.
@@ -116,6 +118,7 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
       setPendingStripeOrderId(null);
       setStripeRetryLoading(false);
       setStep(1);
+      setDescartar(false);
     }
   }
 
@@ -540,6 +543,21 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
   const subtotal = subtotalProductos + subtotalPaquetes;
   const itemsCount = products.filter((p) => p.fkid_producto).length + packages.filter((p) => p.fkid_paquete).length;
 
+  const dirty = () =>
+    step > 1
+    || Boolean(selectedCliente)
+    || products.length > 0
+    || packages.length > 0
+    || Boolean(selectedPromotion)
+    || Boolean(pendingStripeOrderId)
+    || Object.entries(formData).some(([key, value]) => value && value !== EMPTY_ORDER_FORM[key as keyof typeof EMPTY_ORDER_FORM]);
+
+  const pedirCerrar = () => {
+    if (loading || stripeRetryLoading) return;
+    if (dirty()) setDescartar(true);
+    else onOpenChange(false);
+  };
+
   function canNext() {
     if (step === 1) return Boolean(formData.fkid_cliente && formData.direccion_entrega && formData.fkid_ciudad);
     if (step === 2) {
@@ -584,7 +602,7 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
   );
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(next) => { if (next) onOpenChange(true); else pedirCerrar(); }}>
       <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -1132,7 +1150,7 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
             </p>
             <div className="flex gap-2">
               {step === 1 ? (
-                <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading || stripeRetryLoading}>
+                <Button type="button" variant="outline" onClick={pedirCerrar} disabled={loading || stripeRetryLoading}>
                   Cancelar
                 </Button>
               ) : (
@@ -1156,6 +1174,17 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
           </div>
         </form>
       </DialogContent>
+      <AlertDialog open={descartar} onOpenChange={setDescartar}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Descartar lo que ya llenaste?</AlertDialogTitle>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Seguir editando</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setDescartar(false); onOpenChange(false); }}>Descartar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 };

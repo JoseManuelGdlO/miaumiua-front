@@ -29,6 +29,7 @@ import { useToast } from "@/hooks/use-toast";
 import CreateDriverModal from "@/components/modals/CreateDriverModal";
 import EditDriverModal from "@/components/modals/EditDriverModal";
 import ConfirmDeleteDriverModal from "@/components/modals/ConfirmDeleteDriverModal";
+import DriverProfileSheet from "@/components/DriverProfileSheet";
 import { ESTADOS_ADMIN, ESTADOS_LABEL } from "@/components/modals/DriverWizard";
 
 // Usar la interfaz Driver del servicio
@@ -44,6 +45,7 @@ const Drivers = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null);
+  const [profileDriver, setProfileDriver] = useState<Driver | null>(null);
   const itemsPerPage = 8;
   const { toast } = useToast();
 
@@ -246,7 +248,11 @@ const Drivers = () => {
                   paginatedDrivers.map((driver) => {
                     const status = getDriverStatus(driver);
                     return (
-                      <TableRow key={driver.id}>
+                      <TableRow
+                        key={driver.id}
+                        className="cursor-pointer"
+                        onClick={() => setProfileDriver(driver)}
+                      >
                         <TableCell>
                           <Badge variant="outline">{driver.codigo_repartidor}</Badge>
                         </TableCell>
@@ -297,7 +303,7 @@ const Drivers = () => {
                             <span className="text-muted-foreground">Nunca</span>
                           )}
                         </TableCell>
-                        <TableCell>
+                        <TableCell onClick={(event) => event.stopPropagation()}>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" className="h-8 w-8 p-0">
@@ -373,6 +379,17 @@ const Drivers = () => {
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         onSuccess={loadDrivers}
+      />
+
+      <DriverProfileSheet
+        driver={profileDriver}
+        onClose={() => setProfileDriver(null)}
+        onChanged={loadDrivers}
+        onEdit={(driver) => {
+          setProfileDriver(null);
+          setSelectedDriver(driver);
+          setIsEditModalOpen(true);
+        }}
       />
 
       {selectedDriver && (

@@ -2,10 +2,16 @@ import { useRef, useState } from "react";
 import { FileText, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-const ACCEPT = "image/jpeg,image/png,image/gif,image/webp,application/pdf";
+const MIME = ["image/jpeg", "image/jpg", "image/pjpeg", "image/png", "image/gif", "image/webp", "application/pdf"];
+const ACCEPT = [...MIME, ".jpg", ".jpeg", ".png", ".gif", ".webp", ".pdf"].join(",");
 
 function isImageFile(file: File) {
-  return file.type.startsWith("image/");
+  return file.type.startsWith("image/") || /\.jpe?g$/i.test(file.name);
+}
+
+function allowedFile(file: File) {
+  if (!file.type || MIME.includes(file.type)) return true;
+  return /\.(jpe?g|png|gif|webp|pdf)$/i.test(file.name);
 }
 
 function isPdfName(name?: string | null) {
@@ -32,7 +38,7 @@ export function FileDrop({ id, label, hint, required, file, existingUrl, existin
   const filled = Boolean(file || existingName);
 
   function take(next: File | null) {
-    if (next && next.type && !ACCEPT.split(",").includes(next.type)) return;
+    if (next && !allowedFile(next)) return;
     onFile(next);
   }
 

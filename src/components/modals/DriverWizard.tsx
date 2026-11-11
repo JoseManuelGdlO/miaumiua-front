@@ -77,12 +77,14 @@ type Props = {
     licencia: File | null;
     ine: File | null;
     consentimiento: File | null;
+    poliza: File | null;
   };
-  onFile: (key: "licencia" | "ine" | "consentimiento", file: File | null) => void;
+  onFile: (key: "licencia" | "ine" | "consentimiento" | "poliza", file: File | null) => void;
   existing?: {
     licencia_foto?: string | null;
     ine_archivo?: string | null;
     consentimiento_archivo?: string | null;
+    poliza_seguro_archivo?: string | null;
   };
   fotoSrc?: (name?: string | null) => string;
   fieldError?: (field: string) => string | undefined;
@@ -393,7 +395,7 @@ export function DriverWizard({
               </h3>
               <p className="text-xs text-muted-foreground">PDF, JPG o PNG, máximo 5 MB</p>
             </div>
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <FileDrop
                 id="licencia_foto"
                 label="Foto de la licencia"
@@ -412,6 +414,15 @@ export function DriverWizard({
                 existingName={existing?.ine_archivo}
                 existingUrl={fotoSrc?.(existing?.ine_archivo)}
                 onFile={(file) => onFile("ine", file)}
+              />
+              <FileDrop
+                id="poliza_seguro_archivo"
+                label="Póliza de seguro del auto"
+                hint="Póliza vehicular vigente, PDF o imagen"
+                file={files.poliza}
+                existingName={existing?.poliza_seguro_archivo}
+                existingUrl={fotoSrc?.(existing?.poliza_seguro_archivo)}
+                onFile={(file) => onFile("poliza", file)}
               />
               <FileDrop
                 id="consentimiento_archivo"

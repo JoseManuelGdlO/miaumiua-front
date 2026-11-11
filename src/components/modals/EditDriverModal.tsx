@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import {
   Dialog,
   DialogContent,
@@ -51,6 +52,9 @@ const EditDriverModal = ({ isOpen, onClose, onSuccess, driver }: EditDriverModal
   const [licenciaFoto, setLicenciaFoto] = useState<File | null>(null);
   const [ineArchivo, setIneArchivo] = useState<File | null>(null);
   const [consentimientoArchivo, setConsentimientoArchivo] = useState<File | null>(null);
+  const [polizaArchivo, setPolizaArchivo] = useState<File | null>(null);
+  const [inicial, setInicial] = useState("");
+  const [descartar, setDescartar] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -68,7 +72,7 @@ const EditDriverModal = ({ isOpen, onClose, onSuccess, driver }: EditDriverModal
       if (response.success) {
         setCities(response.data.cities || []);
         const ciudadId = parseInt(driver.ciudad?.id?.toString() || driver.fkid_ciudad?.toString() || "0");
-        setFormData({
+        const next = {
           codigo_repartidor: driver.codigo_repartidor || "",
           nombre_completo: driver.nombre_completo || "",
           telefono: driver.telefono || "",
@@ -89,10 +93,13 @@ const EditDriverModal = ({ isOpen, onClose, onSuccess, driver }: EditDriverModal
           consentimiento_at: toDatetimeLocal(driver.consentimiento_at),
           notas: driver.notas || "",
           es_prueba: Boolean(driver.es_prueba),
-        });
+        };
+        setFormData(next);
+        setInicial(JSON.stringify(next));
         setLicenciaFoto(null);
         setIneArchivo(null);
         setConsentimientoArchivo(null);
+        setPolizaArchivo(null);
         setFieldErrors({});
       }
     } catch (error) {
@@ -113,10 +120,21 @@ const EditDriverModal = ({ isOpen, onClose, onSuccess, driver }: EditDriverModal
     }
   };
 
-  const handleClose = () => {
+  const dirty = () =>
+    Boolean(licenciaFoto || ineArchivo || consentimientoArchivo || polizaArchivo)
+    || JSON.stringify(formData) !== inicial;
+
+  const cerrarYa = () => {
     if (loading) return;
+    setDescartar(false);
     onClose();
     setStep(1);
+  };
+
+  const pedirCerrar = () => {
+    if (loading) return;
+    if (dirty()) setDescartar(true);
+    else cerrarYa();
   };
 
   const handleSubmit = async () => {
@@ -130,11 +148,12 @@ const EditDriverModal = ({ isOpen, onClose, onSuccess, driver }: EditDriverModal
         licencia_foto: licenciaFoto,
         consentimiento_archivo: consentimientoArchivo,
         ine_archivo: ineArchivo,
+        poliza_seguro_archivo: polizaArchivo,
       });
       if (response.success) {
         toast({ title: "Éxito", description: "Repartidor actualizado correctamente" });
         onSuccess();
-        handleClose();
+        cerrarYa();
       } else if (response.errors && Array.isArray(response.errors)) {
         const errors: Record<string, string> = {};
         response.errors.forEach((error: any) => {
@@ -163,7 +182,7 @@ const EditDriverModal = ({ isOpen, onClose, onSuccess, driver }: EditDriverModal
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={handleClose}>
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) pedirCerrar(); }}>
       <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -187,24 +206,37 @@ const EditDriverModal = ({ isOpen, onClose, onSuccess, driver }: EditDriverModal
             formData={formData}
             cities={cities}
             onChange={handleInputChange}
-            files={{ licencia: licenciaFoto, ine: ineArchivo, consentimiento: consentimientoArchivo }}
+            files={{ licencia: licenciaFoto, ine: ineArchivo, consentimiento: consentimientoArchivo, poliza: polizaArchivo }}
             onFile={(key, file) => {
               if (key === "licencia") setLicenciaFoto(file);
               if (key === "ine") setIneArchivo(file);
               if (key === "consentimiento") setConsentimientoArchivo(file);
+              if (key === "poliza") setPolizaArchivo(file);
             }}
             existing={{
               licencia_foto: driver?.licencia_foto,
               ine_archivo: driver?.ine_archivo,
               consentimiento_archivo: driver?.consentimiento_archivo,
+              poliza_seguro_archivo: driver?.poliza_seguro_archivo,
             }}
             fotoSrc={fotoSrc}
             fieldError={(field) => fieldErrors[field]}
-            onCancel={handleClose}
+            onCancel={pedirCerrar}
             onSubmit={handleSubmit}
           />
         )}
       </DialogContent>
+      <AlertDialog open={descartar} onOpenChange={setDescartar}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Descartar lo que ya llenaste?</AlertDialogTitle>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Seguir editando</AlertDialogCancel>
+            <AlertDialogAction onClick={cerrarYa}>Descartar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 };
