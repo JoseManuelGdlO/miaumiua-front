@@ -406,8 +406,10 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
       return;
     }
 
-    // Validar que haya al menos un producto o paquete
-    if (products.length === 0 && packages.length === 0) {
+    const productosValidos = products.filter((p) => p.fkid_producto && p.producto);
+    const paquetesValidos = packages.filter((p) => p.fkid_paquete && p.paquete);
+
+    if (productosValidos.length === 0 && paquetesValidos.length === 0) {
       toast({
         title: "Error",
         description: "Debes agregar al menos un producto o paquete al pedido",
@@ -416,19 +418,8 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
       return;
     }
 
-    // Validar cada producto
-    for (let i = 0; i < products.length; i++) {
-      const product = products[i];
-      
-      if (!product.fkid_producto || !product.producto) {
-        toast({
-          title: "Error",
-          description: `El producto ${i + 1} debe tener un producto seleccionado`,
-          variant: "destructive"
-        });
-        return;
-      }
-      
+    for (let i = 0; i < productosValidos.length; i++) {
+      const product = productosValidos[i];
       if (product.cantidad <= 0) {
         toast({
           title: "Error",
@@ -437,8 +428,7 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
         });
         return;
       }
-      
-      if (Number(product.producto.precio_venta || 0) <= 0) {
+      if (Number(product.producto?.precio_venta || 0) <= 0) {
         toast({
           title: "Error",
           description: `El producto ${i + 1} no tiene un precio válido del inventario`,
@@ -448,19 +438,8 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
       }
     }
 
-    // Validar paquetes
-    for (let i = 0; i < packages.length; i++) {
-      const pkg = packages[i];
-      
-      if (!pkg.fkid_paquete || !pkg.paquete) {
-        toast({
-          title: "Error",
-          description: `El paquete ${i + 1} debe tener un paquete seleccionado`,
-          variant: "destructive"
-        });
-        return;
-      }
-
+    for (let i = 0; i < paquetesValidos.length; i++) {
+      const pkg = paquetesValidos[i];
       if (pkg.cantidad <= 0) {
         toast({
           title: "Error",
@@ -469,8 +448,7 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
         });
         return;
       }
-
-      if (pkg.precio_unidad <= 0) {
+      if (Number(pkg.paquete?.precio_final || pkg.precio_unidad || 0) <= 0) {
         toast({
           title: "Error",
           description: `El paquete ${i + 1} debe tener un precio válido`,
@@ -494,7 +472,7 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
         metodo_pago: formData.metodo_pago,
         notas: formData.notas || undefined,
         codigo_promocion: formData.codigo_promocion || undefined,
-        productos: products.map(product => ({
+        productos: productosValidos.map(product => ({
           id: product.id, // Incluir ID para actualización
           fkid_producto: product.fkid_producto,
           cantidad: product.cantidad,
@@ -502,11 +480,10 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
           descuento_producto: product.descuento_producto,
           notas_producto: product.notas_producto || undefined
         })),
-        paquetes: packages.map(pkg => ({
+        paquetes: paquetesValidos.map(pkg => ({
           id: pkg.id, // Incluir ID para actualización
           fkid_paquete: pkg.fkid_paquete,
           cantidad: pkg.cantidad,
-          precio_unidad: pkg.precio_unidad,
           descuento_paquete: pkg.descuento_paquete,
           notas_paquete: pkg.notas_paquete || undefined
         }))
@@ -779,7 +756,7 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
                 Productos
               </CardTitle>
               <CardDescription>
-                Agrega los productos que incluye este pedido
+                Sueltos, si los hay. Un combo basta para el pedido.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -890,7 +867,7 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
                     Paquetes
                   </CardTitle>
                   <CardDescription>
-                    Agrega paquetes al pedido (opcional)
+                    Se cobra el precio del combo, no la suma de las piezas.
                   </CardDescription>
                 </div>
                 <Button

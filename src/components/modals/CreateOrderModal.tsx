@@ -325,8 +325,10 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
       return;
     }
 
-    // Validar que haya al menos un producto o paquete
-    if (products.length === 0 && packages.length === 0) {
+    const productosValidos = products.filter((p) => p.fkid_producto && p.producto);
+    const paquetesValidos = packages.filter((p) => p.fkid_paquete && p.paquete);
+
+    if (productosValidos.length === 0 && paquetesValidos.length === 0) {
       toast({
         title: "Error",
         description: "Debes agregar al menos un producto o paquete al pedido",
@@ -335,30 +337,8 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
       return;
     }
 
-    // Validar cada producto
-    for (let i = 0; i < products.length; i++) {
-      const product = products[i];
-      
-      // Debug: mostrar estado del producto
-      console.log(`Producto ${i + 1}:`, {
-        fkid_producto: product.fkid_producto,
-        cantidad: product.cantidad,
-        precio_unidad: product.precio_unidad,
-        producto: product.producto,
-        hasProducto: !!product.producto
-      });
-      
-      // Validar que tenga un producto seleccionado
-      if (!product.fkid_producto || !product.producto) {
-        toast({
-          title: "Error",
-          description: `El producto ${i + 1} debe tener un producto seleccionado`,
-          variant: "destructive"
-        });
-        return;
-      }
-      
-      // Validar cantidad
+    for (let i = 0; i < productosValidos.length; i++) {
+      const product = productosValidos[i];
       if (product.cantidad <= 0) {
         toast({
           title: "Error",
@@ -367,9 +347,7 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
         });
         return;
       }
-      
-      // Validar que el precio sea válido (debe venir del inventario)
-      if (Number(product.producto.precio_venta || 0) <= 0) {
+      if (Number(product.producto?.precio_venta || 0) <= 0) {
         toast({
           title: "Error",
           description: `El producto ${i + 1} no tiene un precio válido del inventario`,
@@ -379,19 +357,8 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
       }
     }
 
-    // Validar paquetes
-    for (let i = 0; i < packages.length; i++) {
-      const pkg = packages[i];
-      
-      if (!pkg.fkid_paquete || !pkg.paquete) {
-        toast({
-          title: "Error",
-          description: `El paquete ${i + 1} debe tener un paquete seleccionado`,
-          variant: "destructive"
-        });
-        return;
-      }
-
+    for (let i = 0; i < paquetesValidos.length; i++) {
+      const pkg = paquetesValidos[i];
       if (pkg.cantidad <= 0) {
         toast({
           title: "Error",
@@ -400,8 +367,7 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
         });
         return;
       }
-
-      if (pkg.precio_unidad <= 0) {
+      if (Number(pkg.paquete?.precio_final || pkg.precio_unidad || 0) <= 0) {
         toast({
           title: "Error",
           description: `El paquete ${i + 1} debe tener un precio válido`,
@@ -436,17 +402,16 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
          metodo_pago: formData.metodo_pago as any,
          notas: formData.notas || undefined,
          codigo_promocion: formData.codigo_promocion || undefined,
-         productos: products.length > 0 ? products.map(p => ({
+         productos: productosValidos.length > 0 ? productosValidos.map(p => ({
            fkid_producto: p.fkid_producto,
            cantidad: p.cantidad,
            precio_unidad: p.precio_unidad,
            descuento_producto: p.descuento_producto,
            notas_producto: p.notas_producto || undefined
          })) : undefined,
-         paquetes: packages.length > 0 ? packages.map(p => ({
+         paquetes: paquetesValidos.length > 0 ? paquetesValidos.map(p => ({
            fkid_paquete: p.fkid_paquete,
            cantidad: p.cantidad,
-           precio_unidad: p.precio_unidad,
            descuento_paquete: p.descuento_paquete,
            notas_paquete: p.notas_paquete || undefined
          })) : undefined
@@ -575,8 +540,14 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
         <span className="text-xs text-muted-foreground">{itemsCount} ítems</span>
       </div>
       <div className="space-y-1 text-sm">
-        <div className="flex justify-between"><span>Subtotal productos</span><span>{money(subtotalProductos)}</span></div>
-        <div className="flex justify-between"><span>Subtotal paquetes</span><span>{money(subtotalPaquetes)}</span></div>
+        {packages.filter((p) => p.paquete && p.fkid_paquete).map((p, i) => (
+          <div key={`pkg-${p.fkid_paquete}-${i}`} className="flex justify-between">
+            <span>{p.paquete?.nombre} × {p.cantidad}</span>
+            <span>{money(lineTotal(p.cantidad, Number(p.paquete?.precio_final || 0), p.descuento_paquete))}</span>
+          </div>
+        ))}
+        {subtotalProductos > 0 ? <div className="flex justify-between"><span>Subtotal productos</span><span>{money(subtotalProductos)}</span></div> : null}
+        {subtotalPaquetes > 0 && packages.every((p) => !p.paquete) ? <div className="flex justify-between"><span>Subtotal paquetes</span><span>{money(subtotalPaquetes)}</span></div> : null}
         {selectedPromotion ? (
           <div className="flex justify-between text-emerald-700">
             <span>Promo {selectedPromotion.codigo}</span>
@@ -757,7 +728,7 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
                     Productos
                   </CardTitle>
                   <CardDescription>
-                    Agrega los productos al pedido
+                    Sueltos, si los hay. Un combo basta para el pedido.
                   </CardDescription>
                 </div>
                 <Button
@@ -922,7 +893,7 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
                     Paquetes
                   </CardTitle>
                   <CardDescription>
-                    Agrega paquetes al pedido (opcional)
+                    Se cobra el precio del combo, no la suma de las piezas.
                   </CardDescription>
                 </div>
                 <Button
