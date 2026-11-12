@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle, CalendarClock, Pencil, Phone, Users } from "lucide-react";
+import { AlertTriangle, Archive, CalendarClock, Pencil, Phone, Users } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,6 +10,13 @@ import { TablePagination } from "@/components/TablePagination";
 import { callCenterService, type PedidoDia, type Solicitud } from "@/services/callCenterService";
 
 const PAGE_SIZE = 8;
+const INCIDENCIAS_DESDE = "2026-11-12";
+
+type Confirmacion = {
+  kind: "solicitud" | "pedido";
+  id: number;
+  accion: "archivar" | "solucionar";
+};
 
 function fechaMexico(delta: number) {
   const hoy = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Mexico_City" }).format(new Date());
@@ -48,8 +55,23 @@ export default function IncidenciasPanel({ pedidos, solicitudes, superAdmin, onC
   const [estado, setEstado] = useState("todos");
   const [dia, setDia] = useState("");
   const [page, setPage] = useState(1);
+  const [abierto, setAbierto] = useState<string | null>(null);
+  const [verArchivadas, setVerArchivadas] = useState(false);
+  const [archivadas, setArchivadas] = useState<Solicitud[]>([]);
+  const [archivadosPedidos, setArchivadosPedidos] = useState<PedidoDia[]>([]);
+  const [confirmacion, setConfirmacion] = useState<Confirmacion | null>(null);
   const texto = q.trim().toLowerCase();
-  const problemas = solicitudes.filter((row) => {
+  const alertaPedido = (fecha?: string | null) => {
+    const dia = diaDe(fecha);
+    if (!dia) return true;
+    const hoy = fechaMexico(0);
+    const start = Date.parse(`${dia}T00:00:00.000Z`);
+    const today = Date.parse(`${hoy}T00:00:00.000Z`);
+    if (Number.isNaN(start) || Number.isNaN(today)) return true;
+    const days = Math.round((today - start) / 86400000);
+    return days >= 0 && days < 5;
+  };
+  const problemas = (verArchivadas ? archivadas : solicitudes).filter((row) => {
     if (row.tipo !== "llamada_cliente" && row.tipo !== "soporte") return false;
     if (estado === "no_entregado") return false;
     if (estado === "soporte" && row.tipo !== "soporte") return false;
@@ -58,10 +80,30 @@ export default function IncidenciasPanel({ pedidos, solicitudes, superAdmin, onC
     if (texto && !`${row.repartidor?.nombre_completo || ""} ${row.motivo || ""}`.toLowerCase().includes(texto)) return false;
     return true;
   });
-  const noEntregados = pedidos.filter((row) => {
-    if (row.estado !== "no_entregado" && row.estado_entrega !== "fallido") return false;
+  useEffect(() => {
+    if (!verArchivadas) return;
+    let vivo = true;
+    callCenterService.listarIncidenciasArchivadas().then((data) => {
+      if (!vivo) return;
+      if (Array.isArray(data)) {
+        setArchivadas(data);
+        setArchivadosPedidos([]);
+        return;
+      }
+      setArchivadas(data.solicitudes || []);
+      setArchivadosPedidos(data.pedidos || []);
+    }).catch(onError);
+    return () => { vivo = false; };
+  }, [verArchivadas, onError]);
+
+  const noEntregados = (verArchivadas ? archivadosPedidos : pedidos).filter((row) => {
+    if (!verArchivadas && row.incidencia) return false;
+    if (!verArchivadas && (row.estado !== "no_entregado" && row.estado_entrega !== "fallido")) return false;
     if (estado === "soporte" || estado === "llamada") return false;
-    if (dia && diaDe(row.fecha_incidencia || row.fecha_ruta) !== dia) return false;
+    const surgio = diaDe(row.fecha_incidencia || row.fecha_ruta);
+    if (!verArchivadas && surgio && surgio < INCIDENCIAS_DESDE) return false;
+    if (!verArchivadas && !row.repartidor && !surgio) return false;
+    if (dia && surgio !== dia) return false;
     if (texto && !`${row.repartidor?.nombre_completo || ""} ${row.numero_pedido || ""} ${row.cliente || ""}`.toLowerCase().includes(texto)) return false;
     return true;
   }).sort((a, b) => Number(Boolean(a.fecha_propuesta)) - Number(Boolean(b.fecha_propuesta)));
@@ -98,6 +140,33 @@ export default function IncidenciasPanel({ pedidos, solicitudes, superAdmin, onC
   };
   const modificados = pedidos.filter((row) => row.modificado);
 
+  const confirmarAccion = async (elegida: Confirmacion) => {
+    setBusy(true);
+    try {
+      if (elegida.kind === "solicitud") {
+        await callCenterService.archivar(elegida.id, elegida.accion);
+      } else {
+        await callCenterService.cerrarIncidenciaPedido(elegida.id, elegida.accion);
+      }
+      setConfirmacion(null);
+      if (verArchivadas) {
+        const data = await callCenterService.listarIncidenciasArchivadas();
+        if (Array.isArray(data)) {
+          setArchivadas(data);
+          setArchivadosPedidos([]);
+        } else {
+          setArchivadas(data.solicitudes || []);
+          setArchivadosPedidos(data.pedidos || []);
+        }
+      }
+      onChanged();
+    } catch (error) {
+      onError(error);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const reagendar = async () => {
     if (pedidoId == null || !fecha || !motivo.trim()) return;
     setBusy(true);
@@ -116,9 +185,14 @@ export default function IncidenciasPanel({ pedidos, solicitudes, superAdmin, onC
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-primary" />Problemas</CardTitle>
-          <CardDescription>Llamadas, soporte y pedidos no entregados. Siguen aquí hasta que se reagenden o se atiendan.</CardDescription>
+        <CardHeader className="flex flex-row items-start justify-between space-y-0">
+          <div>
+            <CardTitle className="flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-primary" />Problemas</CardTitle>
+            <CardDescription>{verArchivadas ? "Incidencias archivadas." : "Llamadas, soporte y pedidos no entregados. El aviso dura 5 días. Archiva cuando ya no aplique."}</CardDescription>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => { setVerArchivadas((v) => !v); setPage(1); setAbierto(null); }}>
+            <Archive className="mr-2 h-4 w-4" />{verArchivadas ? "Ver abiertas" : "Ver archivadas"}
+          </Button>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
           <div className="flex flex-wrap gap-3">
@@ -130,38 +204,70 @@ export default function IncidenciasPanel({ pedidos, solicitudes, superAdmin, onC
                 <SelectItem value="todos">Todos</SelectItem>
                 <SelectItem value="soporte">Soporte</SelectItem>
                 <SelectItem value="llamada">Llamada</SelectItem>
-                <SelectItem value="no_entregado">No entregado</SelectItem>
+                {verArchivadas ? null : <SelectItem value="no_entregado">No entregado</SelectItem>}
               </SelectContent>
             </Select>
           </div>
           {problemas.length === 0 && noEntregados.length === 0 ? (
-            <p className="text-muted-foreground">No hay problemas abiertos</p>
+            <p className="text-muted-foreground">{verArchivadas ? "No hay incidencias archivadas" : "No hay problemas abiertos"}</p>
           ) : null}
           {visibles.map((item) => item.kind === "solicitud" ? (
-            <div key={`s-${item.row.id}`} className={`${item.row.de_hoy === false ? "" : "aviso-borde "}flex items-start justify-between gap-3 rounded-md bg-background px-3 py-2`}>
-              <button type="button" className="text-left" onClick={() => { if (item.row.repartidor?.id) onAbrir(item.row.repartidor.id); }}>
+            <div key={`s-${item.row.id}`} className={`${verArchivadas || item.row.alerta === false ? "" : "aviso-borde "}flex items-start justify-between gap-3 rounded-md bg-background px-3 py-2`}>
+              <button type="button" className="text-left" onClick={() => setAbierto((current) => current === `s-${item.row.id}` ? null : `s-${item.row.id}`)}>
                 <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${item.row.tipo === "llamada_cliente" ? "bg-sky-100 text-sky-900" : "bg-amber-100 text-amber-900"}`}>{item.row.tipo === "llamada_cliente" ? "Llamada" : "Incidencia"}</span>
                 <span className="mt-1 block font-semibold">{item.row.repartidor?.nombre_completo || "Sin repartidor"} · {item.row.numero_pedido || "Sin pedido"}</span>
                 <span className="mt-1 block text-muted-foreground">{item.row.fecha} {item.row.hora} · {item.row.nota || item.row.motivo || "Sin motivo"}</span>
+                {abierto === `s-${item.row.id}` ? (
+                  <span className="mt-2 block space-y-1 text-muted-foreground">
+                    {item.row.descripcion ? <span className="block">{item.row.descripcion}</span> : null}
+                    {item.row.cliente ? <span className="block">{item.row.cliente}</span> : null}
+                    {item.row.telefono ? <span className="block">{item.row.telefono}</span> : null}
+                    {item.row.direccion ? <span className="block">{item.row.direccion}</span> : null}
+                    {item.row.ayuda ? <span className="block">Ayuda: {item.row.ayuda}</span> : null}
+                    {!item.row.descripcion && !item.row.cliente && !item.row.telefono && !item.row.direccion && !item.row.ayuda ? <span className="block">Sin más detalles</span> : null}
+                  </span>
+                ) : null}
               </button>
               <div className="flex flex-col gap-2">
-                {item.row.tipo === "llamada_cliente" && !item.row.llamada_atendida ? <Button size="sm" disabled={busy} onClick={() => void marcarLlamada(item.row.id)}>Ya llamé al cliente</Button> : null}
-                {item.row.tipo === "llamada_cliente" && item.row.llamada_atendida ? <Button size="sm" disabled={busy} onClick={() => void liberar(item.row.id)}>Liberar intento</Button> : null}
+                {verArchivadas ? (item.row.solucionada ? <span className="text-xs font-semibold text-muted-foreground">Solucionada</span> : <span className="text-xs font-semibold text-muted-foreground">Archivada</span>) : (
+                  <>
+                    <Button variant="outline" size="sm" disabled={busy} onClick={() => setConfirmacion({ kind: "solicitud", id: item.row.id, accion: "archivar" })}>Archivar</Button>
+                    <Button size="sm" disabled={busy} onClick={() => setConfirmacion({ kind: "solicitud", id: item.row.id, accion: "solucionar" })}>Solucionado</Button>
+                  </>
+                )}
+                {item.row.tipo === "llamada_cliente" && !item.row.llamada_atendida && !verArchivadas ? <Button size="sm" disabled={busy} onClick={() => void marcarLlamada(item.row.id)}>Ya llamé al cliente</Button> : null}
+                {item.row.tipo === "llamada_cliente" && item.row.llamada_atendida && !verArchivadas ? <Button size="sm" disabled={busy} onClick={() => void liberar(item.row.id)}>Liberar intento</Button> : null}
                 {(item.row.motivo === "averia" || item.row.motivo === "clima") && item.row.repartidor?.id ? <Button variant="outline" size="sm" onClick={() => onAbrir(item.row.repartidor.id)}>Elegir clientes</Button> : null}
-                {item.row.pedido_id && item.row.motivo !== "averia" && item.row.motivo !== "clima" ? <Button variant="outline" size="sm" onClick={() => { setPedidoId(item.row.pedido_id); setFecha(item.row.fecha_propuesta || fechaMexico(1)); setMotivo(item.row.fecha_propuesta ? "Cliente por WhatsApp" : ""); }}>Reagendar</Button> : null}
+                {item.row.pedido_id && item.row.motivo !== "averia" && item.row.motivo !== "clima" && !verArchivadas ? <Button variant="outline" size="sm" onClick={() => { setPedidoId(item.row.pedido_id); setFecha(item.row.fecha_propuesta || fechaMexico(1)); setMotivo(item.row.fecha_propuesta ? "Cliente por WhatsApp" : ""); }}>Reagendar</Button> : null}
               </div>
             </div>
           ) : (
-            <div key={`p-${item.row.id}`} data-aviso="1" className="aviso-borde flex items-start justify-between gap-3 rounded-md bg-background px-3 py-2">
-              <button type="button" className="text-left" onClick={() => { if (item.row.repartidor?.id) onAbrir(item.row.repartidor.id); }}>
+            <div key={`p-${item.row.id}`} data-aviso={!verArchivadas && alertaPedido(item.row.fecha_incidencia || item.row.fecha_ruta) ? "1" : undefined} className={`${!verArchivadas && alertaPedido(item.row.fecha_incidencia || item.row.fecha_ruta) ? "aviso-borde " : ""}flex items-start justify-between gap-3 rounded-md bg-background px-3 py-2`}>
+              <button type="button" className="text-left" onClick={() => setAbierto((current) => current === `p-${item.row.id}` ? null : `p-${item.row.id}`)}>
                 <span className="inline-flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-red-500" aria-hidden />
+                  {alertaPedido(item.row.fecha_incidencia || item.row.fecha_ruta) ? <span className="h-2 w-2 rounded-full bg-red-500" aria-hidden /> : null}
                   <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">No entregado</span>
                 </span>
                 <span className="mt-1 block font-semibold">{item.row.numero_pedido} · {item.row.cliente || "Sin cliente"}</span>
                 <span className="mt-1 block text-muted-foreground">{item.row.repartidor?.nombre_completo || "Sin repartidor"}{item.row.fecha_propuesta ? ` · Propone ${item.row.fecha_propuesta}` : " · Sin fecha confirmada"}</span>
+                {abierto === `p-${item.row.id}` ? (
+                  <span className="mt-2 block space-y-1 text-muted-foreground">
+                    {item.row.telefono ? <span className="block">{item.row.telefono}</span> : null}
+                    {item.row.direccion ? <span className="block">{item.row.direccion}</span> : null}
+                    {item.row.notas ? <span className="block">{item.row.notas}</span> : null}
+                    {!item.row.telefono && !item.row.direccion && !item.row.notas ? <span className="block">Sin más detalles</span> : null}
+                  </span>
+                ) : null}
               </button>
-              <Button variant="outline" size="sm" onClick={() => { setPedidoId(item.row.id); setFecha(item.row.fecha_propuesta || fechaMexico(1)); if (item.row.fecha_propuesta) setMotivo("Cliente por WhatsApp"); }}>Reagendar</Button>
+              <div className="flex flex-col gap-2">
+                {verArchivadas ? (item.row.incidencia === "solucionada" ? <span className="text-xs font-semibold text-muted-foreground">Solucionada</span> : <span className="text-xs font-semibold text-muted-foreground">Archivada</span>) : (
+                  <>
+                    <Button variant="outline" size="sm" disabled={busy} onClick={() => setConfirmacion({ kind: "pedido", id: item.row.id, accion: "archivar" })}>Archivar</Button>
+                    <Button size="sm" disabled={busy} onClick={() => setConfirmacion({ kind: "pedido", id: item.row.id, accion: "solucionar" })}>Solucionado</Button>
+                    <Button variant="outline" size="sm" onClick={() => { setPedidoId(item.row.id); setFecha(item.row.fecha_propuesta || fechaMexico(1)); if (item.row.fecha_propuesta) setMotivo("Cliente por WhatsApp"); }}>Reagendar</Button>
+                  </>
+                )}
+              </div>
             </div>
           ))}
           {totalFilas > PAGE_SIZE ? (
@@ -201,6 +307,27 @@ export default function IncidenciasPanel({ pedidos, solicitudes, superAdmin, onC
           {superAdmin ? <p className="text-sm text-muted-foreground">Como super admin puedes elegir la fecha de hoy.</p> : null}
         </CardContent>
       </Card>
+
+      <AlertDialog open={confirmacion != null} onOpenChange={(open) => { if (!open) setConfirmacion(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirmacion?.accion === "solucionar"
+                ? "¿Marcar esta incidencia como solucionada?"
+                : "¿Archivar esta incidencia?"}
+            </AlertDialogTitle>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction disabled={busy} onClick={(event) => {
+              event.preventDefault();
+              if (confirmacion) void confirmarAccion(confirmacion);
+            }}>
+              {confirmacion?.accion === "solucionar" ? "Sí, solucionada" : "Sí, archivar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <ContactosIncidencia superAdmin={superAdmin} onError={onError} />
     </div>
