@@ -459,7 +459,7 @@ function MonitorRepartidores({
     const telefonoRepartidor = paradas.find((pedido) => pedido.repartidor?.telefono)?.repartidor?.telefono || null;
     const fallos = paradas.filter((pedido) => pedido.estado === "no_entregado" || pedido.estado_entrega === "fallido");
     const enRuta = paradas.some((pedido) => pedido.estado_entrega !== "entregado" && pedido.estado !== "entregado");
-    const pideAtencion = solicitudes.some((solicitud) => solicitud.tipo === "soporte" && solicitud.repartidor?.id === id);
+    const pideAtencion = solicitudes.some((solicitud) => solicitud.tipo === "soporte" && solicitud.alerta !== false && solicitud.repartidor?.id === id);
     const ciudadNombre = cities.find((city) => city.id === paradas.find((pedido) => pedido.ciudad_id)?.ciudad_id)?.nombre;
     return { paradas, actual, checkIn, aprobaciones, velocidad, fotos, cierres, agente, telefonoRepartidor, fallos, enRuta, pideAtencion, ciudadNombre };
   };
@@ -1221,7 +1221,7 @@ const CallCenter = () => {
         ? solicitudes.filter((row) => row.tipo === "soporte").length
         : tab === "checkout"
           ? solicitudes.filter((row) => row.tipo === "cierre_dia").length
-          : pedidos.filter((row) => row.estado === "no_entregado" || row.estado_entrega === "fallido").length;
+          : pedidos.filter((row) => (row.estado === "no_entregado" || row.estado_entrega === "fallido") && !row.incidencia && String(row.fecha_incidencia || row.fecha_ruta || "").slice(0, 10) >= "2026-11-12").length;
   useEffect(() => {
     if (!marcas) return;
     document.querySelector("[data-aviso='1']")?.scrollIntoView({ block: "nearest" });
@@ -1462,7 +1462,7 @@ const CallCenter = () => {
             <TabsTrigger value="despacho" className="rounded-none border-b-4 border-transparent bg-transparent px-4 py-3 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"><TabAviso n={solicitudes.filter((row) => row.tipo === "llamada_cliente").length}><Package className="h-4 w-4" /> Operación</TabAviso></TabsTrigger>
             <TabsTrigger value="soporte" className="rounded-none border-b-4 border-transparent bg-transparent px-4 py-3 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"><TabAviso n={solicitudes.filter((row) => row.tipo === "soporte").length}><LifeBuoy className="h-4 w-4" /> Soporte en Ruta</TabAviso></TabsTrigger>
             <TabsTrigger value="checkout" className="rounded-none border-b-4 border-transparent bg-transparent px-4 py-3 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"><TabAviso rojo n={solicitudes.filter((row) => row.tipo === "cierre_dia").length}><LogOut className="h-4 w-4" /> Check-out (Cierres)</TabAviso></TabsTrigger>
-            <TabsTrigger value="incidencias" className="rounded-none border-b-4 border-transparent bg-transparent px-4 py-3 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"><TabAviso n={solicitudes.filter((row) => row.tipo === "soporte" || row.tipo === "llamada_cliente").length + pedidos.filter((row) => row.estado === "no_entregado" || row.estado_entrega === "fallido").length}><AlertTriangle className="h-4 w-4" /> Incidencias</TabAviso></TabsTrigger>
+            <TabsTrigger value="incidencias" className="rounded-none border-b-4 border-transparent bg-transparent px-4 py-3 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"><TabAviso n={solicitudes.filter((row) => row.tipo === "soporte" || row.tipo === "llamada_cliente").length + pedidos.filter((row) => (row.estado === "no_entregado" || row.estado_entrega === "fallido") && !row.incidencia && String(row.fecha_incidencia || row.fecha_ruta || "").slice(0, 10) >= "2026-11-12").length}><AlertTriangle className="h-4 w-4" /> Incidencias</TabAviso></TabsTrigger>
           </TabsList>
         </div>
         <div className="rounded-xl bg-white p-6 shadow-sm">
@@ -1493,7 +1493,7 @@ const CallCenter = () => {
                 </TableRow>
               ) : solicitudes.filter((row) => row.tipo !== "cierre_dia").map((row) => {
                 const fresco = avisosCola.some((aviso) => aviso.id === String(row.id));
-                const historico = row.de_hoy === false && (row.tipo === "llamada_cliente" || row.tipo === "soporte");
+                const historico = row.alerta === false && (row.tipo === "llamada_cliente" || row.tipo === "soporte");
                 const rojo = row.tipo === "check_in";
                 const alerta = !historico && (fresco || row.tipo === "soporte" || row.tipo === "llamada_cliente");
                 return (

@@ -42,6 +42,10 @@ export type Solicitud = {
   fecha: string;
   hora: string;
   de_hoy?: boolean;
+  alerta?: boolean;
+  archivada?: boolean;
+  solucionada?: boolean;
+  descripcion?: string | null;
   espera_desde?: string;
   prioridad: string;
   dinero_esperado?: number;
@@ -79,6 +83,7 @@ export type PedidoDia = {
   fecha_propuesta?: string | null;
   fecha_ruta?: string | null;
   fecha_incidencia?: string | null;
+  incidencia?: string | null;
   ruta_id?: number | null;
   lat?: number | null;
   lng?: number | null;
@@ -261,6 +266,15 @@ export const callCenterService = {
   cierreDirecto: (repartidorId: number) => request<{ cerrada: boolean; cerrado_por_nombre: string | null }>(`/call-center/repartidores/${repartidorId}/cierre-directo`, {
     method: 'POST',
   }),
+  archivar: (id: number, accion?: "archivar" | "solucionar") => request<{ archivada: boolean; solucionada?: boolean }>(`/call-center/solicitudes/${id}/archivar`, {
+    method: 'POST',
+    body: JSON.stringify({ accion: accion || "archivar" }),
+  }),
+  cerrarIncidenciaPedido: (id: number, accion: "archivar" | "solucionar") => request<{ incidencia: string }>(`/call-center/pedidos/${id}/incidencia`, {
+    method: 'POST',
+    body: JSON.stringify({ accion }),
+  }),
+  listarIncidenciasArchivadas: () => request<{ solicitudes: Solicitud[]; pedidos: PedidoDia[] } | Solicitud[]>('/call-center/solicitudes?archivadas=1'),
   listContactos: () => request<{ personas: { id: number; nombre: string; telefono: string; repartidor_ids: number[]; numeros?: { telefono: string; repartidor_ids: number[] }[] }[]; repartidores: { id: number; nombre: string }[] }>('/call-center/contactos'),
   guardarContacto: (usuarioId: number, numeros: { telefono: string; repartidor_ids: number[] }[]) => request<{ guardado: boolean }>(`/call-center/contactos/${usuarioId}`, {
     method: 'PUT',
