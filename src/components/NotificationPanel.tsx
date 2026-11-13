@@ -213,7 +213,7 @@ const NotificationPanel = () => {
         </Button>
       </PopoverTrigger>
       <PopoverContent 
-        className="flex w-[420px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden p-0 max-h-[min(560px,85vh)]" 
+        className="flex w-[560px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden p-0 max-h-[min(560px,85vh)]" 
         align="end"
         sideOffset={5}
       >
@@ -251,7 +251,7 @@ const NotificationPanel = () => {
               <p className="text-sm">No hay notificaciones</p>
             </div>
           ) : (
-            <div className="p-2">
+            <div className="p-2 pr-3">
               {notifications.map((notification, index) => (
                 <div key={notification.id}>
                   <Card 
@@ -271,19 +271,19 @@ const NotificationPanel = () => {
                   >
                     <CardContent className="p-3">
                       <div className="flex items-start gap-3">
-                        <div className={cn("mt-0.5", getTypeColor(notification.type))}>
+                        <div className={cn("mt-0.5 shrink-0", getTypeColor(notification.type))}>
                           {getNotificationIcon(notification.type)}
                         </div>
                         
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between mb-1">
+                        <div className="min-w-0 flex-1">
+                          <div className="mb-1 flex items-start justify-between gap-2">
                             <h4 className={cn(
-                              "text-sm font-medium truncate",
+                              "text-sm font-medium leading-snug",
                               !notification.read && "font-semibold"
                             )}>
                               {notification.title}
                             </h4>
-                            <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                            <div className="flex shrink-0 items-center gap-2">
                               <span className="text-xs text-muted-foreground">
                                 {getRelativeTime(notification.timestamp)}
                               </span>

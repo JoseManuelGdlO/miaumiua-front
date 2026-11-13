@@ -44,6 +44,7 @@ import PromotionSelector from "@/components/ui/PromotionSelector";
 import ClienteSelector from "@/components/ui/ClienteSelector";
 import { packagesService } from "@/services/packagesService";
 import type { Package } from "@/services/packagesService";
+import { mapsService, AVISO_SIN_UBICAR, direccionConCp } from "@/services/mapsService";
 
 interface ProductFormData {
   id?: number;
@@ -87,6 +88,7 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
     email_referencia: "",
     fkid_ciudad: "",
     direccion_entrega: "",
+    codigo_postal: "",
     fecha_entrega_estimada: "",
     metodo_pago: "efectivo" as "efectivo" | "tarjeta" | "transferencia" | "pago_movil",
     notas: "",
@@ -116,6 +118,7 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
         email_referencia: "",
         fkid_ciudad: "",
         direccion_entrega: "",
+        codigo_postal: "",
         fecha_entrega_estimada: "",
         metodo_pago: "efectivo",
         notas: "",
@@ -151,6 +154,7 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
       email_referencia: order.email_referencia || "",
       fkid_ciudad: ciudadId != null ? String(ciudadId) : "",
       direccion_entrega: order.direccion_entrega,
+      codigo_postal: (order.direccion_entrega || "").match(/\b(\d{5})\b/)?.[1] || "",
       fecha_entrega_estimada: order.fecha_entrega_estimada ? 
         new Date(order.fecha_entrega_estimada).toISOString().slice(0, 16) : "",
       metodo_pago: order.metodo_pago,
@@ -354,7 +358,8 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
         fkid_ciudad: cliente.fkid_ciudad != null
           ? String(cliente.fkid_ciudad)
           : (cliente.ciudad?.id != null ? String(cliente.ciudad.id) : prev.fkid_ciudad),
-        direccion_entrega: cliente.direccion_entrega || ""
+        direccion_entrega: cliente.direccion_entrega || "",
+        codigo_postal: (cliente.direccion_entrega || "").match(/\b(\d{5})\b/)?.[1] || prev.codigo_postal,
       }));
     } else {
       setSelectedCliente(null);
@@ -364,7 +369,8 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
         telefono_referencia: "",
         email_referencia: "",
         fkid_ciudad: "",
-        direccion_entrega: ""
+        direccion_entrega: "",
+        codigo_postal: "",
       }));
     }
   };
@@ -402,6 +408,16 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
         title: "Error",
         description: "Por favor completa los campos obligatorios: Cliente, Dirección, Ciudad y Método de Pago",
         variant: "destructive"
+      });
+      return;
+    }
+
+    const codigoPostal = formData.codigo_postal.replace(/\D/g, "").slice(0, 5);
+    if (codigoPostal.length !== 5) {
+      toast({
+        title: "Código postal",
+        description: "Agrega el código postal de 5 dígitos para ubicar la casa.",
+        variant: "destructive",
       });
       return;
     }
@@ -461,11 +477,28 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
     setLoading(true);
 
     try {
+      const ciudad = cities.find((row) => String(row.id) === formData.fkid_ciudad) || order.ciudad;
+      const direccion = direccionConCp(formData.direccion_entrega, codigoPostal);
+      try {
+        await mapsService.geocodeAddress(
+          direccion,
+          ciudad?.nombre,
+          undefined,
+          codigoPostal,
+          ciudad?.departamento,
+        );
+      } catch {
+        toast({
+          title: "Dirección sin ubicar",
+          description: `${AVISO_SIN_UBICAR} El pedido se guarda sin pin en el mapa.`,
+        });
+      }
+
       const updateData: UpdateOrderData = {
         fkid_cliente: parseInt(formData.fkid_cliente),
         telefono_referencia: formData.telefono_referencia || undefined,
         email_referencia: formData.email_referencia || undefined,
-        direccion_entrega: formData.direccion_entrega,
+        direccion_entrega: direccion,
         fkid_ciudad: parseInt(formData.fkid_ciudad),
         fecha_entrega_estimada: formData.fecha_entrega_estimada ? 
           new Date(formData.fecha_entrega_estimada).toISOString() : undefined,
@@ -651,6 +684,17 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
                     placeholder="Dirección completa de entrega"
                   />
                 </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="codigo_postal">Código postal *</Label>
+                <Input
+                  id="codigo_postal"
+                  inputMode="numeric"
+                  maxLength={5}
+                  value={formData.codigo_postal}
+                  onChange={(e) => setFormData(prev => ({ ...prev, codigo_postal: e.target.value.replace(/\D/g, "").slice(0, 5) }))}
+                  placeholder="34000"
+                />
               </div>
             </CardContent>
           </Card>
