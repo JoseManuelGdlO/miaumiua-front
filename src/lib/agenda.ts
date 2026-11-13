@@ -1,4 +1,4 @@
-export const MAX_PARADAS_DIA = 25;
+export const MAX_PARADAS_DIA = 30;
 
 export function textoCupo(n: number) {
   const total = Number(n) || 0;
