@@ -25,6 +25,7 @@ import { clientesService, Cliente, UpdateClienteData } from "@/services/clientes
 import { petsService, Pet, CreatePetData, UpdatePetData } from "@/services/petsService";
 import { citiesService } from "@/services/citiesService";
 import { Loader2, Plus, Trash2, Heart, Edit, Save, X } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface EditCustomerModalProps {
   open: boolean;
@@ -58,7 +59,8 @@ const EditCustomerModal = ({ open, onOpenChange, cliente, onClienteUpdated }: Ed
     fkid_ciudad: "",
     canal_contacto: "",
     direccion_entrega: "",
-    notas_especiales: ""
+    notas_especiales: "",
+    es_distribuidor: false,
   });
 
   // Cargar ciudades y mascotas al abrir el modal
@@ -88,7 +90,8 @@ const EditCustomerModal = ({ open, onOpenChange, cliente, onClienteUpdated }: Ed
         fkid_ciudad: ciudadValue,
         canal_contacto: cliente.canal_contacto || "",
         direccion_entrega: cliente.direccion_entrega || "",
-        notas_especiales: cliente.notas_especiales || ""
+        notas_especiales: cliente.notas_especiales || "",
+        es_distribuidor: Boolean(cliente.es_distribuidor),
       });
     }
   }, [cliente, open]);
@@ -195,7 +198,8 @@ const EditCustomerModal = ({ open, onOpenChange, cliente, onClienteUpdated }: Ed
         fkid_ciudad: parseInt(formData.fkid_ciudad),
         canal_contacto: formData.canal_contacto || undefined,
         direccion_entrega: formData.direccion_entrega || undefined,
-        notas_especiales: formData.notas_especiales || undefined
+        notas_especiales: formData.notas_especiales || undefined,
+        es_distribuidor: formData.es_distribuidor,
       };
 
       const response = await clientesService.updateCliente(cliente.id, updateData);
@@ -485,6 +489,14 @@ const EditCustomerModal = ({ open, onOpenChange, cliente, onClienteUpdated }: Ed
                 />
               </div>
 
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="es_distribuidor"
+                  checked={formData.es_distribuidor}
+                  onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, es_distribuidor: checked === true }))}
+                />
+                <Label htmlFor="es_distribuidor" className="font-normal cursor-pointer">Este cliente es distribuidor (veterinaria)</Label>
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="notas_especiales">Notas Especiales</Label>
                 <Textarea

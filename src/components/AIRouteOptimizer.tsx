@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Sparkles, MapPin, Truck, Route } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { mapsService, AVISO_SIN_UBICAR } from '@/services/mapsService';
 import { compareOneVsTwoDrivers, type Location } from '@/utils/vrpSolver';
 
@@ -349,8 +349,11 @@ interface AIRouteOptimizerProps {
   };
   date: string;
   driversAvailable: number;
-  onRoutesGenerated: (routes: { [key: string]: Order[] }) => void;
+  drivers?: { id: number; nombre_completo: string }[];
+  onRoutesGenerated: (routes: { [key: string]: Order[] }, opts?: { driverId?: number }) => void;
 }
+
+const UN_SOLO_HASTA = 8;
 
 const AIRouteOptimizer: React.FC<AIRouteOptimizerProps> = ({
   orders,
@@ -358,9 +361,12 @@ const AIRouteOptimizer: React.FC<AIRouteOptimizerProps> = ({
   cityInfo,
   date,
   driversAvailable,
+  drivers = [],
   onRoutesGenerated
 }) => {
   const [isOptimizing, setIsOptimizing] = useState(false);
+  const [driverId, setDriverId] = useState("auto");
+  const [error, setError] = useState("");
   const [lastOptimization, setLastOptimization] = useState<{
     routes: { [key: string]: Order[] };
     summary: string;
@@ -368,15 +374,16 @@ const AIRouteOptimizer: React.FC<AIRouteOptimizerProps> = ({
 
   const optimizeRoutes = async () => {
     if (orders.length === 0) {
-      alert('No hay pedidos para optimizar en esta ciudad/fecha');
+      setError('No hay pedidos para optimizar en esta ciudad/fecha');
       return;
     }
 
     if (!cityInfo || !cityInfo.direccion_operaciones) {
-      alert('No se encontró la dirección de la bodega para esta ciudad');
+      setError('No se encontró la dirección de la bodega para esta ciudad');
       return;
     }
 
+    setError("");
     setIsOptimizing(true);
 
     try {
@@ -448,7 +455,8 @@ const AIRouteOptimizer: React.FC<AIRouteOptimizerProps> = ({
 
       // Determinar cuántos repartidores usar realmente según disponibilidad
       const recommendedDrivers = comparison.recommendation === '2 drivers' ? 2 : 1;
-      const driversToUse = Math.min(driversAvailable, recommendedDrivers);
+      const forceOne = ordersWithCoordinates.length <= UN_SOLO_HASTA || driverId !== 'auto';
+      const driversToUse = forceOne ? 1 : Math.min(driversAvailable, recommendedDrivers);
 
       if (comparison.recommendation === '2 drivers' && driversAvailable < 2) {
         console.warn('[AI ROUTES] La IA recomienda 2 repartidores, pero solo hay 1 disponible. Se usará 1 repartidor.');
@@ -513,11 +521,12 @@ const AIRouteOptimizer: React.FC<AIRouteOptimizerProps> = ({
         summary: summary
       });
 
-      onRoutesGenerated(optimizedRoutes);
+      const chosen = driverId === 'auto' ? undefined : Number(driverId);
+      onRoutesGenerated(optimizedRoutes, chosen ? { driverId: chosen } : undefined);
 
     } catch (error) {
       console.error('Error optimizando rutas:', error);
-      alert(`Error al optimizar rutas: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+      setError(`Error al optimizar rutas: ${error instanceof Error ? error.message : 'Error desconocido'}`);
     } finally {
       setIsOptimizing(false);
     }
@@ -553,9 +562,28 @@ const AIRouteOptimizer: React.FC<AIRouteOptimizerProps> = ({
           </div>
         </div>
 
+        <div className="space-y-2">
+          <Label>Repartidor</Label>
+          <Select value={driverId} onValueChange={setDriverId}>
+            <SelectTrigger><SelectValue placeholder="Automático" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="auto">Automático</SelectItem>
+              {drivers.map((driver) => (
+                <SelectItem key={driver.id} value={String(driver.id)}>{driver.nombre_completo}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">Si hay 8 pedidos o menos, salen en una sola ruta.</p>
+        </div>
+        {error ? (
+          <Alert>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        ) : null}
+
         {/* Optimization Button */}
-        <Button 
-          onClick={optimizeRoutes} 
+        <Button
+          onClick={optimizeRoutes}
           disabled={orders.length === 0 || driversAvailable === 0 || isOptimizing}
           className="w-full gap-2"
           title={driversAvailable === 0 ? "No hay repartidores disponibles" : orders.length === 0 ? "No hay pedidos para optimizar" : ""}

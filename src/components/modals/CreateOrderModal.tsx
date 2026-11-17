@@ -26,7 +26,7 @@ import { ordersService, CreateOrderData } from "@/services/ordersService";
 import { clientesService, Cliente } from "@/services/clientesService";
 import { citiesService } from "@/services/citiesService";
 import { Inventario } from "@/services/inventariosService";
-import { Promotion } from "@/services/promotionsService";
+import { promotionsService, Promotion } from "@/services/promotionsService";
 import ProductSelector from "@/components/ui/ProductSelector";
 import PackageSelector from "@/components/ui/PackageSelector";
 import PromotionSelector from "@/components/ui/PromotionSelector";
@@ -72,6 +72,19 @@ function money(n: number) {
 
 function lineTotal(cantidad: number, precio: number, descuento: number) {
   return cantidad * Number(precio || 0) * (1 - Number(descuento || 0) / 100);
+}
+
+function montoPromo(promo: Promotion | null, subtotal: number) {
+  if (!promo || subtotal <= 0) return 0;
+  if (promo.compra_minima && subtotal < Number(promo.compra_minima)) return 0;
+  let monto = 0;
+  if (promo.tipo_promocion === "porcentaje" || promo.tipo_promocion === "descuento_especial") {
+    monto = subtotal * (Number(promo.valor_descuento) / 100);
+  } else if (promo.tipo_promocion === "monto_fijo") {
+    monto = Number(promo.valor_descuento);
+  }
+  if (promo.descuento_maximo) monto = Math.min(monto, Number(promo.descuento_maximo));
+  return Math.round(Math.min(monto, subtotal) * 100) / 100;
 }
 
 const EMPTY_ORDER_FORM = {
@@ -256,6 +269,12 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
         direccion_entrega: cliente.direccion_entrega || "",
         codigo_postal: (cliente.direccion_entrega || "").match(/\b(\d{5})\b/)?.[1] || prev.codigo_postal,
       }));
+      if (cliente.es_distribuidor) {
+        void promotionsService.paraCliente(cliente.telefono).then((response) => {
+          const promo = response.data?.promotion;
+          if (promo) handlePromotionSelect(promo);
+        }).catch(() => {});
+      }
       void ordersService.getOrdersByClient(cliente.id).then((response) => {
         const previas = (response.data?.pedidos || []).map((row) => row.direccion_entrega).filter(Boolean);
         const unicas = [...new Set([cliente.direccion_entrega || "", ...previas].map((row) => row.trim()).filter((row) => row.length >= 10))];
@@ -263,6 +282,7 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
       }).catch(() => setDirecciones(cliente.direccion_entrega ? [cliente.direccion_entrega] : []));
     } else {
       setSelectedCliente(null);
+      handlePromotionSelect(null);
       setFormData(prev => ({
         ...prev,
         fkid_cliente: "",
@@ -537,6 +557,8 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
     0
   );
   const subtotal = subtotalProductos + subtotalPaquetes;
+  const descuentoPromo = montoPromo(selectedPromotion, subtotal);
+  const totalConPromo = Math.max(0, subtotal - descuentoPromo);
   const itemsCount = products.filter((p) => p.fkid_producto).length + packages.filter((p) => p.fkid_paquete).length;
 
   const dirty = () =>
@@ -582,17 +604,13 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
         {selectedPromotion ? (
           <div className="flex justify-between text-emerald-700">
             <span>Promo {selectedPromotion.codigo}</span>
-            <span>
-              {selectedPromotion.tipo_promocion === "porcentaje"
-                ? `-${selectedPromotion.valor_descuento}%`
-                : `-$${selectedPromotion.valor_descuento}`}
-            </span>
+            <span>-{money(descuentoPromo)}</span>
           </div>
         ) : null}
       </div>
       <div className="flex justify-between text-base font-semibold">
         <span>Total</span>
-        <span className="text-primary">{money(subtotal)}</span>
+        <span className="text-primary">{money(totalConPromo)}</span>
       </div>
       {selectedCliente ? (
         <p className="text-xs text-muted-foreground">
@@ -1106,16 +1124,19 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
                       <SelectItem value="tarjeta">Tarjeta</SelectItem>
                       <SelectItem value="transferencia">Transferencia</SelectItem>
                       <SelectItem value="pago_movil">Pago Móvil</SelectItem>
+                      <SelectItem value="mixto">Mixto</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="codigo_promocion">Código de promoción</Label>
+                  <Label htmlFor="codigo_promocion">Aplicar promoción</Label>
                   <PromotionSelector
                     value={formData.codigo_promocion || undefined}
                     onValueChange={handlePromotionSelect}
                     placeholder="Buscar y seleccionar promoción..."
                     disabled={loading}
+                    cityId={formData.fkid_ciudad ? parseInt(formData.fkid_ciudad, 10) : undefined}
+                    esDistribuidor={Boolean(selectedCliente?.es_distribuidor)}
                   />
                   {selectedPromotion && (
                     <div className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">

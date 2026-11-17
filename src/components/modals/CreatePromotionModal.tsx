@@ -55,6 +55,8 @@ const CreatePromotionModal = ({ isOpen, onClose, onSuccess }: CreatePromotionMod
     compra_minima: "",
     descuento_maximo: "",
     ciudades: [] as number[],
+    aplica_a: "todos" as "todos" | "retail" | "distribuidor",
+    departamento: "",
   });
 
   // Cargar ciudades
@@ -88,6 +90,8 @@ const CreatePromotionModal = ({ isOpen, onClose, onSuccess }: CreatePromotionMod
         compra_minima: "",
         descuento_maximo: "",
         ciudades: [],
+        aplica_a: "todos",
+        departamento: "",
       });
     }
   }, [isOpen]);
@@ -128,6 +132,7 @@ const CreatePromotionModal = ({ isOpen, onClose, onSuccess }: CreatePromotionMod
         compra_minima: formData.compra_minima ? parseFloat(formData.compra_minima) : undefined,
         descuento_maximo: formData.descuento_maximo ? parseFloat(formData.descuento_maximo) : undefined,
         ciudades: formData.ciudades,
+        aplica_a: formData.aplica_a,
       };
 
       await promotionsService.createPromotion(createData);
@@ -330,6 +335,38 @@ const CreatePromotionModal = ({ isOpen, onClose, onSuccess }: CreatePromotionMod
             />
           </div>
 
+          <div className="space-y-2">
+            <Label>Aplica a</Label>
+            <Select value={formData.aplica_a} onValueChange={(value: "todos" | "retail" | "distribuidor") => setFormData((prev) => ({ ...prev, aplica_a: value }))}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos</SelectItem>
+                <SelectItem value="retail">Clientes finales</SelectItem>
+                <SelectItem value="distribuidor">Solo distribuidores</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Estado (rellena las ciudades)</Label>
+            <Select
+              value={formData.departamento || "none"}
+              onValueChange={(value) => {
+                const departamento = value === "none" ? "" : value;
+                const ids = departamento
+                  ? cities.filter((city) => city.departamento === departamento).map((city) => city.id)
+                  : [];
+                setFormData((prev) => ({ ...prev, departamento, ciudades: ids.length ? ids : prev.ciudades }));
+              }}
+            >
+              <SelectTrigger><SelectValue placeholder="Elegir estado" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Sin filtro de estado</SelectItem>
+                {[...new Set(cities.map((city) => city.departamento).filter(Boolean))].map((departamento) => (
+                  <SelectItem key={departamento} value={departamento}>{departamento}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <div className="space-y-2">
             <Label>Ciudades Aplicables</Label>
             <Card>

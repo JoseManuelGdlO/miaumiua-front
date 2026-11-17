@@ -54,6 +54,15 @@ function sinPrueba<T extends { es_prueba?: boolean }>(rows: T[] | undefined) {
   return (rows || []).filter((row) => !row.es_prueba);
 }
 import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { canCreate, canEdit, canDelete, canViewStats } from "@/utils/permissions";
 
 function claseEstadoRuta(estado?: string) {
@@ -96,6 +105,7 @@ function irAlMapa(rutaId: number) {
 
 const RouteManagement = () => {
   const { toast } = useToast();
+  const [borrarRuta, setBorrarRuta] = useState<string | null>(null);
   const [searchParams] = useSearchParams();
   const [selectedCity, setSelectedCity] = useState(searchParams.get("ciudad") || "");
   const [selectedDate, setSelectedDate] = useState(searchParams.get("fecha") || new Date().toISOString().split("T")[0]);
@@ -438,7 +448,13 @@ const RouteManagement = () => {
   };
 
   const deleteRoute = async (routeId: string) => {
-    if (!window.confirm("¿Estás seguro de que deseas eliminar esta ruta?")) return;
+    setBorrarRuta(routeId);
+  };
+
+  const confirmarBorrarRuta = async () => {
+    if (!borrarRuta) return;
+    const routeId = borrarRuta;
+    setBorrarRuta(null);
     try {
       const response = await routesService.deleteRoute(parseInt(routeId));
       
@@ -856,7 +872,8 @@ const RouteManagement = () => {
             } : undefined}
             date={selectedDate}
             driversAvailable={drivers.length}
-            onRoutesGenerated={async (newRoutes) => {
+            drivers={drivers.map((driver) => ({ id: driver.id, nombre_completo: driver.nombre_completo }))}
+            onRoutesGenerated={async (newRoutes, opts) => {
               try {
                 setLoading(true);
                 
@@ -881,9 +898,9 @@ const RouteManagement = () => {
                   if (orders.length === 0) continue;
                   
                   try {
-                    // Seleccionar repartidor (distribuir entre los disponibles)
-                    const selectedDriver = drivers[driverIndex % drivers.length];
-                    driverIndex++;
+                    const chosen = opts?.driverId ? drivers.find((driver) => driver.id === opts.driverId) : null;
+                    const selectedDriver = chosen || drivers[driverIndex % drivers.length];
+                    if (!chosen) driverIndex++;
                     
                     // Crear la ruta con repartidor asignado
                     const routeResponse = await routesService.createRoute({
@@ -1592,6 +1609,17 @@ const RouteManagement = () => {
          ) : null}
        </DragOverlay>
     </DndContext>
+    <AlertDialog open={borrarRuta != null} onOpenChange={(open) => { if (!open) setBorrarRuta(null); }}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>¿Eliminar esta ruta?</AlertDialogTitle>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          <AlertDialogAction onClick={() => void confirmarBorrarRuta()}>Eliminar</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 };
 
