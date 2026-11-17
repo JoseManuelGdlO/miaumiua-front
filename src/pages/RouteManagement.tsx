@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 // import RouteMap from "@/components/RouteMap";
 import AIRouteOptimizer from "@/components/AIRouteOptimizer";
+import { MapaRutaPlaneada } from "@/components/MapaRutaPlaneada";
 import { DraggableOrderCard } from "@/components/DraggableOrderCard";
 import { DraggableAssignedOrderCard } from "@/components/DraggableAssignedOrderCard";
 import { DraggableDriverCard } from "@/components/DraggableDriverCard";
@@ -80,6 +81,17 @@ function textoEstadoEntrega(estado?: string) {
   if (estado === "en_camino") return "En camino";
   if (estado === "fallido") return "Fallido";
   return "Pendiente";
+}
+
+function puntoCliente(cliente?: { lat?: number | null; lng?: number | null } | null) {
+  const lat = Number(cliente?.lat);
+  const lng = Number(cliente?.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || (lat === 0 && lng === 0)) return undefined;
+  return { lat, lng };
+}
+
+function irAlMapa(rutaId: number) {
+  document.getElementById(`mapa-ruta-${rutaId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
 const RouteManagement = () => {
@@ -505,14 +517,13 @@ const RouteManagement = () => {
         : 0;
       const nextOrder = maxOrder + 1;
 
+      const punto = puntoCliente(order.cliente);
       const response = await routesService.assignOrdersToRoute(parseInt(routeId), {
         pedidos: [{
           fkid_pedido: orderId,
           orden_entrega: nextOrder,
-          lat: order.cliente?.lat || 0,
-          lng: order.cliente?.lng || 0,
-          link_ubicacion: order.cliente?.lat && order.cliente?.lng ? 
-            `https://maps.google.com/?q=${order.cliente.lat},${order.cliente.lng}` : undefined,
+          ...(punto || {}),
+          link_ubicacion: punto ? `https://maps.google.com/?q=${punto.lat},${punto.lng}` : undefined,
           notas_entrega: "Asignado desde planeación de rutas"
         }]
       });
@@ -1072,34 +1083,40 @@ const RouteManagement = () => {
                          route.estado === 'completada' ? 'Completada' : 'Cancelada'}
                       </Badge>
                     </div>
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <Select value={route.repartidor ? String(route.repartidor.id) : undefined} onValueChange={(value) => void assignDriverToRoute(String(route.id), Number(value), true)}>
-                        <SelectTrigger className="h-9 w-56"><SelectValue placeholder="Elige un repartidor" /></SelectTrigger>
-                        <SelectContent>
-                          {(route.repartidor && !drivers.some((driver) => driver.id === route.repartidor?.id) ? [route.repartidor, ...drivers] : drivers).map((driver) => (
-                            <SelectItem key={driver.id} value={String(driver.id)}>{driver.nombre_completo}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <div className="flex items-center gap-2">
-                        <Button size="sm" className="gap-2" onClick={() => setRutaModal(route.id)}>
-                          <Plus className="h-4 w-4" />
-                          Agregar pedidos
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={() => downloadRoutePDF(route)}>
-                          <Download className="h-4 w-4" /> Hoja de salida
-                        </Button>
-                        {canDelete("routes") && (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button variant="outline" size="icon" className="text-destructive" onClick={() => void deleteRoute(String(route.id))} aria-label="Eliminar ruta">
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Eliminar ruta</TooltipContent>
-                          </Tooltip>
-                        )}
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <Select value={route.repartidor ? String(route.repartidor.id) : undefined} onValueChange={(value) => void assignDriverToRoute(String(route.id), Number(value), true)}>
+                          <SelectTrigger className="h-9 w-56"><SelectValue placeholder="Elige un repartidor" /></SelectTrigger>
+                          <SelectContent>
+                            {(route.repartidor && !drivers.some((driver) => driver.id === route.repartidor?.id) ? [route.repartidor, ...drivers] : drivers).map((driver) => (
+                              <SelectItem key={driver.id} value={String(driver.id)}>{driver.nombre_completo}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <div className="flex items-center gap-2">
+                          <Button size="sm" className="gap-2" onClick={() => setRutaModal(route.id)}>
+                            <Plus className="h-4 w-4" />
+                            Agregar pedidos
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={() => downloadRoutePDF(route)}>
+                            <Download className="h-4 w-4" /> Hoja de salida
+                          </Button>
+                          {canDelete("routes") && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button variant="outline" size="icon" className="text-destructive" onClick={() => void deleteRoute(String(route.id))} aria-label="Eliminar ruta">
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Eliminar ruta</TooltipContent>
+                            </Tooltip>
+                          )}
+                        </div>
                       </div>
+                      <Button variant="outline" size="sm" className="gap-2" onClick={() => irAlMapa(route.id)}>
+                        <MapPin className="h-4 w-4" />
+                        Ver mapa
+                      </Button>
                     </div>
                     <p className={collapsedRoutes.has(route.id) ? "text-lg font-semibold text-foreground" : "text-sm text-muted-foreground"}>
                       <MapPin className="mr-1 inline h-4 w-4" />
@@ -1411,6 +1428,24 @@ const RouteManagement = () => {
                     </div>
                   )}
 
+                  <div id={`mapa-ruta-${route.id}`} className="scroll-mt-24">
+                    <MapaRutaPlaneada
+                      ciudad={route.ciudad?.nombre || null}
+                      paradas={(route.pedidos || []).map((parada) => {
+                        const punto = puntoCliente({ lat: parada.lat, lng: parada.lng })
+                          || puntoCliente(parada.pedido?.cliente);
+                        return {
+                          lat: punto?.lat,
+                          lng: punto?.lng,
+                          orden_entrega: parada.orden_entrega,
+                          numero: parada.pedido?.numero_pedido,
+                          direccion: parada.pedido?.direccion_entrega,
+                        };
+                      })}
+                      polylineEncoded={route.polyline_encoded}
+                    />
+                  </div>
+
                   {/* Estadísticas de la Ruta */}
                   {(route.distancia_estimada || route.tiempo_estimado) && (
                     <div className="flex items-center gap-4 text-xs text-muted-foreground pt-2 border-t">
@@ -1523,11 +1558,11 @@ const RouteManagement = () => {
           void routesService.assignOrdersToRoute(route.id, {
             pedidos: ids.map((id, index) => {
               const order = availableOrders.find((item) => item.id === id);
+              const punto = puntoCliente(order?.cliente);
               return {
                 fkid_pedido: id,
                 orden_entrega: maximo + index + 1,
-                lat: order?.cliente?.lat || 0,
-                lng: order?.cliente?.lng || 0,
+                ...(punto || {}),
                 notas_entrega: "Asignado desde planeación de rutas",
               };
             }),
@@ -1535,6 +1570,7 @@ const RouteManagement = () => {
             toast({ title: "Pedidos agregados a la ruta" });
             setRutaModal(null);
             loadRouteDataSilently();
+            window.setTimeout(() => irAlMapa(route.id), 80);
           }).catch((error) => {
             toast({ title: "Planeación", description: error instanceof Error ? error.message : "No se pudieron agregar", variant: "destructive" });
           }).finally(() => setAsignando(false));

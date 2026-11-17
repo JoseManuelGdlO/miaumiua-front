@@ -15,6 +15,7 @@ export interface Route {
   total_entregados: number;
   distancia_estimada: number;
   tiempo_estimado: number;
+  polyline_encoded?: string | null;
   notas?: string;
   orden_prioridad?: number;
   baja_logica?: boolean;
@@ -66,6 +67,8 @@ export interface RouteOrder {
       id: number;
       nombre_completo: string;
       telefono: string;
+      lat?: number;
+      lng?: number;
     };
     cobro_entrega?: {
       metodo?: string;

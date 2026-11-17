@@ -4,6 +4,16 @@ import { authService } from './authService';
 
 const API_BASE_URL = config.apiBaseUrl;
 
+export const AVISO_SIN_UBICAR = 'Esa dirección no se encontró en el mapa de esa ciudad. Comunícate a soporte para confirmarla.';
+
+export function direccionConCp(direccion: string, cp?: string) {
+  const d = String(direccion || '').trim();
+  const c = String(cp || '').replace(/\D/g, '').slice(0, 5);
+  if (!c) return d;
+  if (d.includes(c)) return d;
+  return `${d}, ${c}`;
+}
+
 interface Coordinates {
   lat: number;
   lng: number;

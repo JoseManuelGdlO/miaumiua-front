@@ -67,6 +67,35 @@ export function callCenterSocketUrl(apiBaseUrl: string) {
   return `${wsBase}/api/call-center/ws`;
 }
 
+export function decodePolyline(encoded: string): { lat: number; lng: number }[] {
+  const points: { lat: number; lng: number }[] = [];
+  let index = 0;
+  let lat = 0;
+  let lng = 0;
+  const text = String(encoded || "");
+  while (index < text.length) {
+    let shift = 0;
+    let result = 0;
+    let byte: number;
+    do {
+      byte = text.charCodeAt(index++) - 63;
+      result |= (byte & 31) << shift;
+      shift += 5;
+    } while (byte >= 32);
+    lat += (result & 1) ? ~(result >> 1) : (result >> 1);
+    shift = 0;
+    result = 0;
+    do {
+      byte = text.charCodeAt(index++) - 63;
+      result |= (byte & 31) << shift;
+      shift += 5;
+    } while (byte >= 32);
+    lng += (result & 1) ? ~(result >> 1) : (result >> 1);
+    points.push({ lat: lat / 1e5, lng: lng / 1e5 });
+  }
+  return points;
+}
+
 export function pin(maps: NonNullable<ReturnType<typeof mapsApi>>, fill: string, label: string, ink = "#FFFFFF") {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28"><circle cx="14" cy="14" r="12" fill="${fill}" stroke="#111111" stroke-width="2"/><text x="14" y="18" text-anchor="middle" font-size="11" font-family="sans-serif" font-weight="700" fill="${ink}">${label}</text></svg>`;
   return {

@@ -33,6 +33,7 @@ import PromotionSelector from "@/components/ui/PromotionSelector";
 import ClienteSelector from "@/components/ui/ClienteSelector";
 import { packagesService } from "@/services/packagesService";
 import type { Package } from "@/services/packagesService";
+import { mapsService, AVISO_SIN_UBICAR, direccionConCp } from "@/services/mapsService";
 import { Loader2, Plus, Trash2, Package as PackageIcon, Package2, ChevronLeft, ChevronRight, MapPin, ShoppingBag, Tag, User } from "lucide-react";
 
 interface CreateOrderModalProps {
@@ -78,6 +79,7 @@ const EMPTY_ORDER_FORM = {
   telefono_referencia: "",
   email_referencia: "",
   direccion_entrega: "",
+  codigo_postal: "",
   fkid_ciudad: "",
   fecha_entrega_estimada: "",
   horario_preferente: "",
@@ -251,7 +253,8 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
         telefono_referencia: cliente.telefono,
         email_referencia: cliente.email || "",
         fkid_ciudad: cliente.fkid_ciudad.toString(),
-        direccion_entrega: cliente.direccion_entrega || ""
+        direccion_entrega: cliente.direccion_entrega || "",
+        codigo_postal: (cliente.direccion_entrega || "").match(/\b(\d{5})\b/)?.[1] || prev.codigo_postal,
       }));
       void ordersService.getOrdersByClient(cliente.id).then((response) => {
         const previas = (response.data?.pedidos || []).map((row) => row.direccion_entrega).filter(Boolean);
@@ -266,7 +269,8 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
         telefono_referencia: "",
         email_referencia: "",
         fkid_ciudad: "",
-        direccion_entrega: ""
+        direccion_entrega: "",
+        codigo_postal: "",
       }));
       setDirecciones([]);
     }
@@ -321,6 +325,16 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
         title: "Error",
         description: "Por favor completa los campos obligatorios: Cliente, Dirección, Ciudad y Método de Pago",
         variant: "destructive"
+      });
+      return;
+    }
+
+    const codigoPostal = formData.codigo_postal.replace(/\D/g, "").slice(0, 5);
+    if (codigoPostal.length !== 5) {
+      toast({
+        title: "Código postal",
+        description: "Agrega el código postal de 5 dígitos para ubicar la casa.",
+        variant: "destructive",
       });
       return;
     }
@@ -391,11 +405,28 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
       setLoading(true);
       setPendingStripeOrderId(null);
 
+      const ciudad = cities.find((row) => String(row.id) === formData.fkid_ciudad);
+      const direccion = direccionConCp(formData.direccion_entrega, codigoPostal);
+      try {
+        await mapsService.geocodeAddress(
+          direccion,
+          ciudad?.nombre,
+          undefined,
+          codigoPostal,
+          ciudad?.departamento,
+        );
+      } catch {
+        toast({
+          title: "Dirección sin ubicar",
+          description: `${AVISO_SIN_UBICAR} El pedido se guarda sin pin en el mapa.`,
+        });
+      }
+
        const orderData: CreateOrderData = {
          fkid_cliente: parseInt(formData.fkid_cliente),
          telefono_referencia: formData.telefono_referencia || undefined,
          email_referencia: formData.email_referencia || undefined,
-         direccion_entrega: formData.direccion_entrega,
+         direccion_entrega: direccion,
          fkid_ciudad: parseInt(formData.fkid_ciudad),
          fecha_entrega_estimada: formData.fecha_entrega_estimada || undefined,
          horario_preferente: (formData.fecha_entrega_estimada.split('T')[1] || '').slice(0, 5) || undefined,
@@ -524,7 +555,7 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
   };
 
   function canNext() {
-    if (step === 1) return Boolean(formData.fkid_cliente && formData.direccion_entrega && formData.fkid_ciudad);
+    if (step === 1) return Boolean(formData.fkid_cliente && formData.direccion_entrega && formData.fkid_ciudad && formData.codigo_postal.replace(/\D/g, "").length === 5);
     if (step === 2) {
       const hayProducto = products.some((p) => p.fkid_producto && p.producto && p.cantidad > 0);
       const hayPaquete = packages.some((p) => p.fkid_paquete && p.paquete && p.cantidad > 0);
@@ -670,7 +701,11 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
                   {direcciones.length > 0 ? (
                     <div className="flex flex-wrap gap-2">
                       {direcciones.map((direccion) => (
-                        <button key={direccion} type="button" className="rounded-md bg-muted px-2 py-1 text-left text-sm" onClick={() => handleInputChange("direccion_entrega", direccion)}>{direccion}</button>
+                        <button key={direccion} type="button" className="rounded-md bg-muted px-2 py-1 text-left text-sm" onClick={() => {
+                          handleInputChange("direccion_entrega", direccion);
+                          const cp = direccion.match(/\b(\d{5})\b/)?.[1];
+                          if (cp) handleInputChange("codigo_postal", cp);
+                        }}>{direccion}</button>
                       ))}
                     </div>
                   ) : null}
@@ -683,6 +718,17 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
                   />
                 </div>
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="codigo_postal">Código postal *</Label>
+                    <Input
+                      id="codigo_postal"
+                      inputMode="numeric"
+                      maxLength={5}
+                      value={formData.codigo_postal}
+                      onChange={(e) => handleInputChange("codigo_postal", e.target.value.replace(/\D/g, "").slice(0, 5))}
+                      placeholder="34000"
+                    />
+                  </div>
                   <div className="space-y-2">
                     <Label htmlFor="fkid_ciudad">Ciudad *</Label>
                     <Select value={formData.fkid_ciudad} onValueChange={(value) => handleInputChange("fkid_ciudad", value)}>

@@ -6,8 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Sparkles, MapPin, Truck, Route } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { mapsService } from '@/services/mapsService';
-import { loadMaps, mapsApi, mapsKey } from '@/lib/googleMaps';
+import { mapsService, AVISO_SIN_UBICAR } from '@/services/mapsService';
 import { compareOneVsTwoDrivers, type Location } from '@/utils/vrpSolver';
 
 // Utilidades para cálculo de distancias
@@ -61,14 +60,9 @@ function estadoParaGeo(nombre?: string, departamento?: string) {
   return dep;
 }
 
-function centroDeCiudad(nombre?: string): (Coordinates & { aproximado: true }) | null {
-  const key = String(nombre || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim();
-  if (key === "durango") return { lat: 24.0277, lng: -104.6532, aproximado: true };
-  return null;
+function esCentroCiudad(coords?: Coordinates | null) {
+  if (!coords) return false;
+  return Math.abs(coords.lat - 24.0277) < 0.0003 && Math.abs(coords.lng + 104.6532) < 0.0003;
 }
 
 function limpiarCalle(texto: string) {
@@ -77,26 +71,6 @@ function limpiarCalle(texto: string) {
     .replace(/\b(chedraui|walmart|soriana|bodega aurrera|colonia|col\.|local|-?sa\d+)\b/gi, " ")
     .replace(/\s+/g, " ")
     .trim();
-}
-
-async function geocodeEnNavegador(query: string): Promise<(Coordinates & { aproximado: true }) | null> {
-  const key = mapsKey();
-  const address = query.trim();
-  if (!key || !address) return null;
-  try {
-    await loadMaps(key);
-    const maps = mapsApi();
-    if (!maps?.Geocoder) return null;
-    return await new Promise((resolve) => {
-      new maps.Geocoder().geocode({ address: `${address}, México` }, (results, status) => {
-        const loc = results?.[0]?.geometry?.location;
-        if (status !== "OK" || !loc) return resolve(null);
-        resolve({ lat: loc.lat(), lng: loc.lng(), aproximado: true });
-      });
-    });
-  } catch {
-    return null;
-  }
 }
 
 async function geocodeAddress(
@@ -139,11 +113,10 @@ async function ubicarDireccion(opts: {
   const calle = limpiarCalle(opts.address);
   const estado = opts.estado;
   const ciudad = opts.ciudad;
-  return await geocodeAddress(calle, ciudad, opts.colonia, opts.codigo_postal, estado)
-    || await geocodeAddress(opts.address, ciudad, opts.colonia, opts.codigo_postal, estado)
-    || await geocodeEnNavegador([calle, opts.colonia, ciudad, estado, opts.codigo_postal].filter(Boolean).join(", "))
-    || await geocodeEnNavegador([opts.colonia, ciudad, opts.codigo_postal].filter(Boolean).join(", "))
-    || centroDeCiudad(ciudad);
+  const hit = await geocodeAddress(calle, ciudad, opts.colonia, opts.codigo_postal, estado)
+    || await geocodeAddress(opts.address, ciudad, opts.colonia, opts.codigo_postal, estado);
+  if (!hit || hit.aproximado || esCentroCiudad(hit)) return null;
+  return hit;
 }
 
 // Calcular matriz de distancias usando el backend
@@ -417,20 +390,15 @@ const AIRouteOptimizer: React.FC<AIRouteOptimizerProps> = ({
       });
 
       if (!warehouseCoords) {
-        throw new Error(`No se pudo ubicar la bodega ni la ciudad (${cityInfo.direccion_operaciones}, ${cityInfo.nombre}). Revisa ese dato en Ciudades.`);
+        throw new Error(`No se pudo ubicar la bodega (${cityInfo.direccion_operaciones}, ${cityInfo.nombre}). Revisa ese dato en Ciudades.`);
       }
 
-      console.log('Coordenadas de bodega:', warehouseCoords);
-
-      // Paso 1: Geocodificar direcciones de pedidos para obtener coordenadas
       const ordersWithCoordinates: Order[] = [];
-      let aproximados = warehouseCoords.aproximado ? 1 : 0;
-      
+      const sinUbicar: string[] = [];
+
       for (const order of orders) {
         let coords = order.coordinates;
-        
-        // Si no tiene coordenadas o son (0,0), geocodificar
-        if (!coords || (coords.lat === 0 && coords.lng === 0)) {
+        if (!coords || (coords.lat === 0 && coords.lng === 0) || esCentroCiudad(coords)) {
           const { streetAddress, colonia, codigo_postal } = parseAddressParts(order.address);
           const geocoded = await ubicarDireccion({
             address: streetAddress || order.address,
@@ -439,14 +407,13 @@ const AIRouteOptimizer: React.FC<AIRouteOptimizerProps> = ({
             codigo_postal,
             estado: estadoParaGeo(order.ciudad || cityInfo.nombre, order.estado),
           });
-          if (geocoded) {
-            coords = geocoded;
-            if (geocoded.aproximado) aproximados += 1;
-          } else {
-            continue;
-          }
+          coords = geocoded || undefined;
         }
-        
+        if (!coords || esCentroCiudad(coords)) {
+          sinUbicar.push(order.orderNumber || String(order.id));
+          continue;
+        }
+
         ordersWithCoordinates.push({
           ...order,
           coordinates: coords
@@ -454,7 +421,9 @@ const AIRouteOptimizer: React.FC<AIRouteOptimizerProps> = ({
       }
 
       if (ordersWithCoordinates.length === 0) {
-        throw new Error('No se pudieron obtener coordenadas para los pedidos');
+        throw new Error(sinUbicar.length
+          ? `${AVISO_SIN_UBICAR} Pedidos: ${sinUbicar.join(', ')}.`
+          : 'No se pudieron obtener coordenadas para los pedidos');
       }
 
       // Paso 2: Construir arreglo de ubicaciones para el solver VRP
@@ -535,7 +504,9 @@ const AIRouteOptimizer: React.FC<AIRouteOptimizerProps> = ({
         `Se optimizaron ${totalOrdersOptimized} pedidos usando ${driversToUse} repartidor(es). ` +
         `Recomendación de IA: ${comparison.recommendation}. ` +
         `Motivo: ${comparison.reason}` +
-        (aproximados > 0 ? ` ${aproximados} dirección(es) no tenían calle en el mapa y se ubicaron en la ciudad.` : '');
+        (sinUbicar.length
+          ? ` ${sinUbicar.length} pedido(s) no se ubicaron (${sinUbicar.join(', ')}). ${AVISO_SIN_UBICAR}`
+          : '');
 
       setLastOptimization({
         routes: optimizedRoutes,
