@@ -565,15 +565,15 @@ const AIRouteOptimizer: React.FC<AIRouteOptimizerProps> = ({
         <div className="space-y-2">
           <Label>Repartidor</Label>
           <Select value={driverId} onValueChange={setDriverId}>
-            <SelectTrigger><SelectValue placeholder="Automático" /></SelectTrigger>
+            <SelectTrigger><SelectValue placeholder="Sin asignar" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="auto">Automático</SelectItem>
+              <SelectItem value="auto">Sin asignar · elige en la tarjeta</SelectItem>
               {drivers.map((driver) => (
                 <SelectItem key={driver.id} value={String(driver.id)}>{driver.nombre_completo}</SelectItem>
               ))}
             </SelectContent>
           </Select>
-          <p className="text-xs text-muted-foreground">Si hay 8 pedidos o menos, salen en una sola ruta.</p>
+          <p className="text-xs text-muted-foreground">Si no eliges uno, la ruta queda sin repartidor. 8 pedidos o menos salen en una sola ruta.</p>
         </div>
         {error ? (
           <Alert>
@@ -584,9 +584,9 @@ const AIRouteOptimizer: React.FC<AIRouteOptimizerProps> = ({
         {/* Optimization Button */}
         <Button
           onClick={optimizeRoutes}
-          disabled={orders.length === 0 || driversAvailable === 0 || isOptimizing}
+          disabled={orders.length === 0 || isOptimizing}
           className="w-full gap-2"
-          title={driversAvailable === 0 ? "No hay repartidores disponibles" : orders.length === 0 ? "No hay pedidos para optimizar" : ""}
+          title={orders.length === 0 ? "No hay pedidos para optimizar" : ""}
         >
           {isOptimizing ? (
             <>
@@ -632,8 +632,7 @@ const AIRouteOptimizer: React.FC<AIRouteOptimizerProps> = ({
           <Alert className="border-warning/20 bg-warning/5">
             <Truck className="h-4 w-4" />
             <AlertDescription className="text-sm">
-              <strong>Advertencia:</strong> No hay repartidores disponibles. Debe haber al menos un repartidor 
-              disponible para crear rutas optimizadas.
+              No hay repartidores en la lista. La ruta se crea igual; asígnalo después en la tarjeta.
             </AlertDescription>
           </Alert>
         )}
