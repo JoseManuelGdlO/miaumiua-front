@@ -349,9 +349,9 @@ const CreatePromotionModal = ({ isOpen, onClose, onSuccess }: CreatePromotionMod
           <div className="space-y-2">
             <Label>Estado (rellena las ciudades)</Label>
             <Select
-              value={formData.departamento || "none"}
+              value={formData.departamento ? encodeURIComponent(formData.departamento) : "none"}
               onValueChange={(value) => {
-                const departamento = value === "none" ? "" : value;
+                const departamento = value === "none" ? "" : decodeURIComponent(value);
                 const ids = departamento
                   ? cities.filter((city) => city.departamento === departamento).map((city) => city.id)
                   : [];
@@ -362,7 +362,7 @@ const CreatePromotionModal = ({ isOpen, onClose, onSuccess }: CreatePromotionMod
               <SelectContent>
                 <SelectItem value="none">Sin filtro de estado</SelectItem>
                 {[...new Set(cities.map((city) => city.departamento).filter(Boolean))].map((departamento) => (
-                  <SelectItem key={departamento} value={departamento}>{departamento}</SelectItem>
+                  <SelectItem key={departamento} value={encodeURIComponent(departamento)}>{departamento}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -383,7 +383,7 @@ const CreatePromotionModal = ({ isOpen, onClose, onSuccess }: CreatePromotionMod
                         htmlFor={`city-${city.id}`}
                         className="text-sm font-normal cursor-pointer"
                       >
-                        {city.nombre}
+                        {city.nombre}{city.departamento ? ` · ${city.departamento}` : ""}
                       </Label>
                     </div>
                   ))}

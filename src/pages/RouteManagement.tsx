@@ -740,6 +740,7 @@ const RouteManagement = () => {
   };
 
   return (
+    <>
     <DndContext
       collisionDetection={closestCenter}
       onDragStart={handleDragStart}
@@ -1620,6 +1621,7 @@ const RouteManagement = () => {
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+    </>
   );
 };
 
