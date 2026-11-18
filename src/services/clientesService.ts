@@ -13,6 +13,7 @@ export interface Cliente {
   puntos_lealtad: number;
   notas_especiales?: string;
   es_distribuidor?: boolean;
+  tipo_cuenta?: 'general' | 'veterinaria' | 'distribuidor';
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -43,6 +44,7 @@ export interface CreateClienteData {
   direccion_entrega?: string;
   notas_especiales?: string;
   es_distribuidor?: boolean;
+  tipo_cuenta?: 'general' | 'veterinaria' | 'distribuidor';
 }
 
 export interface UpdateClienteData {
@@ -54,6 +56,7 @@ export interface UpdateClienteData {
   direccion_entrega?: string;
   notas_especiales?: string;
   es_distribuidor?: boolean;
+  tipo_cuenta?: 'general' | 'veterinaria' | 'distribuidor';
 }
 
 export interface ClienteResponse {
