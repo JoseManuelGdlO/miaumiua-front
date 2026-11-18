@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -72,9 +72,11 @@ const Inventarios = () => {
   const [selectedInventario, setSelectedInventario] = useState<Inventario | null>(null);
   const itemsPerPage = 8;
   const { toast } = useToast();
+  const loadSeq = useRef(0);
 
   // Cargar inventarios
   const loadInventarios = async () => {
+    const seq = ++loadSeq.current;
     try {
       setLoading(true);
       const response = await inventariosService.getAllInventarios({
@@ -84,6 +86,7 @@ const Inventarios = () => {
         activos: showArchived ? "false" : "true",
         ciudad: ciudadFiltro !== "todos" ? ciudadFiltro : undefined,
       });
+      if (seq !== loadSeq.current) return;
 
       const pag = response.data?.pagination ?? {};
       setInventarios(response.data?.inventarios ?? []);
@@ -91,13 +94,14 @@ const Inventarios = () => {
       setTotalPages(pag.totalPages || 1);
     } catch (error) {
       console.error('Error al cargar inventarios:', error);
+      if (seq !== loadSeq.current) return;
       toast({
         title: "Error",
         description: "No se pudieron cargar los inventarios",
         variant: "destructive",
       });
     } finally {
-      setLoading(false);
+      if (seq === loadSeq.current) setLoading(false);
     }
   };
 
@@ -347,6 +351,11 @@ const Inventarios = () => {
                             <div className="text-muted-foreground">
                               Mín: {formatCount(inventario.stock_minimo)}
                             </div>
+                            {Number(inventario.compra_minima) > 0 ? (
+                              <div className="text-muted-foreground">
+                                Compra: {formatCount(Number(inventario.compra_minima))}
+                              </div>
+                            ) : null}
                           </div>
                         </TableCell>
                         <TableCell className="text-center">
@@ -461,7 +470,14 @@ const Inventarios = () => {
             setIsEditModalOpen(false);
             setSelectedInventario(null);
           }}
-          onSuccess={loadInventarios}
+          onSuccess={(saved) => {
+            if (!saved) {
+              void loadInventarios();
+              return;
+            }
+            loadSeq.current += 1;
+            setInventarios((rows) => rows.map((row) => (row.id === saved.id ? { ...row, ...saved } : row)));
+          }}
           inventario={selectedInventario}
         />
       )}

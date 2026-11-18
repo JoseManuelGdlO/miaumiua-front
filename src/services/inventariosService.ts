@@ -173,7 +173,7 @@ class InventariosService {
       },
     };
 
-    return fetch(`${config.apiBaseUrl}${endpoint}`, requestConfig)
+    return fetch(`${config.apiBaseUrl}${endpoint}`, { ...requestConfig, cache: "no-store" })
       .then(async response => {
         if (!response.ok) {
           // Manejar errores de autenticación (401/403) y desloguear automáticamente
