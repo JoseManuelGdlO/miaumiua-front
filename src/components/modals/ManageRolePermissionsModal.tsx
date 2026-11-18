@@ -18,6 +18,7 @@ import { Shield, AlertTriangle, Loader2, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { rolesService, Permission } from "@/services/rolesService";
 import { permissionsService } from "@/services/permissionsService";
+import { ConfirmCloseDialog, formDirty, useConfirmClose } from "@/components/ConfirmClose";
 
 interface ManageRolePermissionsModalProps {
   open: boolean;
@@ -41,6 +42,7 @@ const ManageRolePermissionsModal = ({
   const [rolePermissions, setRolePermissions] = useState<Permission[]>([]);
   const [selectedPermissions, setSelectedPermissions] = useState<number[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [baseline, setBaseline] = useState<number[]>([]);
 
   // Cargar datos cuando se abre el modal
   useEffect(() => {
@@ -67,7 +69,9 @@ const ManageRolePermissionsModal = ({
       const rolePermissionsResponse = await rolesService.getRolePermissions(parseInt(roleId));
       if (rolePermissionsResponse.success) {
         setRolePermissions(rolePermissionsResponse.data.permissions);
-        setSelectedPermissions(rolePermissionsResponse.data.permissions.map(p => p.id));
+        const ids = rolePermissionsResponse.data.permissions.map(p => p.id);
+        setSelectedPermissions(ids);
+        setBaseline(ids);
       }
     } catch (error) {
       console.error('Error al cargar datos:', error);
@@ -178,8 +182,14 @@ const ManageRolePermissionsModal = ({
     return icons[categoryName] || "📋";
   };
 
+  const { ask, setAsk, requestClose, confirm, onOpenChange: guardClose } = useConfirmClose(
+    () => onOpenChange(false),
+    formDirty([...selectedPermissions].sort(), [...baseline].sort()),
+    saving,
+  );
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={guardClose}>
       <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -335,7 +345,7 @@ const ManageRolePermissionsModal = ({
           <Button 
             type="button" 
             variant="outline" 
-            onClick={() => onOpenChange(false)}
+            onClick={requestClose}
             disabled={saving}
           >
             Cancelar
@@ -355,6 +365,7 @@ const ManageRolePermissionsModal = ({
           </Button>
         </DialogFooter>
       </DialogContent>
+      <ConfirmCloseDialog open={ask} onOpenChange={setAsk} onConfirm={confirm} />
     </Dialog>
   );
 };

@@ -14,6 +14,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { clientesService, Cliente } from "@/services/clientesService";
 import { Loader2 } from "lucide-react";
+import { ConfirmCloseDialog, formDirty, useConfirmClose } from "@/components/ConfirmClose";
+
+const EMPTY_PORTAL_PASSWORD = { newPassword: "", confirmPassword: "" };
 
 interface ChangeClientePortalPasswordModalProps {
   open: boolean;
@@ -30,11 +33,13 @@ const ChangeClientePortalPasswordModal = ({
 }: ChangeClientePortalPasswordModalProps) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState({
-    newPassword: "",
-    confirmPassword: "",
-  });
+  const [formData, setFormData] = useState(EMPTY_PORTAL_PASSWORD);
   const [forcePasswordChange, setForcePasswordChange] = useState(true);
+  const { ask, setAsk, requestClose, confirm, onOpenChange: guardClose } = useConfirmClose(
+    () => onOpenChange(false),
+    formDirty(formData, EMPTY_PORTAL_PASSWORD) || !forcePasswordChange,
+    loading,
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,7 +86,7 @@ const ChangeClientePortalPasswordModal = ({
           description: `El cliente "${cliente.nombre_completo}" podrá iniciar sesión en la tienda con la nueva contraseña.`,
         });
 
-        setFormData({ newPassword: "", confirmPassword: "" });
+        setFormData(EMPTY_PORTAL_PASSWORD);
         setForcePasswordChange(true);
         onOpenChange(false);
         onPasswordChanged?.();
@@ -101,7 +106,7 @@ const ChangeClientePortalPasswordModal = ({
   if (!cliente) return null;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={guardClose}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Contraseña portal (tienda web)</DialogTitle>
@@ -148,7 +153,7 @@ const ChangeClientePortalPasswordModal = ({
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
+            <Button type="button" variant="outline" onClick={requestClose} disabled={loading}>
               Cancelar
             </Button>
             <Button type="submit" disabled={loading}>
@@ -164,6 +169,7 @@ const ChangeClientePortalPasswordModal = ({
           </DialogFooter>
         </form>
       </DialogContent>
+      <ConfirmCloseDialog open={ask} onOpenChange={setAsk} onConfirm={confirm} />
     </Dialog>
   );
 };

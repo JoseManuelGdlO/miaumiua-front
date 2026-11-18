@@ -4,6 +4,7 @@ import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ConfirmCloseDialog, useConfirmClose } from "@/components/ConfirmClose";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
@@ -86,6 +87,15 @@ const ValidacionCarga = ({ solicitudId: solicitudIdProp, embedded = false, onBac
   const [picked, setPicked] = useState<InventarioHit | null>(null);
   const [cantidad, setCantidad] = useState("1");
   const [esperaReenvio, setEsperaReenvio] = useState(false);
+  const { ask, setAsk, requestClose: requestModalClose, confirm: confirmModal, onOpenChange: guardModal } = useConfirmClose(
+    () => {
+      setModalOpen(false);
+      setPicked(null);
+      setQuery("");
+      setCantidad("1");
+    },
+    Boolean(picked) || cantidad !== "1" || Boolean(query.trim()),
+  );
 
   useEffect(() => {
     if (!Number.isFinite(solicitudId)) {
@@ -440,7 +450,7 @@ const ValidacionCarga = ({ solicitudId: solicitudIdProp, embedded = false, onBac
         </CardContent>
       </Card>
 
-      <Dialog open={modalOpen} onOpenChange={setModalOpen}>
+      <Dialog open={modalOpen} onOpenChange={guardModal}>
         <DialogContent>
           <DialogHeader><DialogTitle>Agregar producto extra</DialogTitle></DialogHeader>
           <div className="space-y-3">
@@ -496,6 +506,7 @@ const ValidacionCarga = ({ solicitudId: solicitudIdProp, embedded = false, onBac
             <Button disabled={!picked} onClick={addExtra}>Aceptar</Button>
           </div>
         </DialogContent>
+        <ConfirmCloseDialog open={ask} onOpenChange={setAsk} onConfirm={confirmModal} />
       </Dialog>
     </div>
   );

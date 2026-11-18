@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +27,14 @@ import CreateInventarioModal from "@/components/modals/CreateInventarioModal";
 import EditInventarioModal from "@/components/modals/EditInventarioModal";
 import ConfirmDeleteModal from "@/components/modals/ConfirmDeleteModal";
 import { inventariosService, Inventario } from "@/services/inventariosService";
+import { citiesService } from "@/services/citiesService";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { formatCount, formatMoney } from "@/utils/format";
 
@@ -52,6 +60,8 @@ const Inventarios = () => {
   const [inventarios, setInventarios] = useState<Inventario[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [ciudadFiltro, setCiudadFiltro] = useState("todos");
+  const [ciudades, setCiudades] = useState<Array<{ id: number; nombre: string; departamento: string }>>([]);
   const [showArchived, setShowArchived] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -62,9 +72,11 @@ const Inventarios = () => {
   const [selectedInventario, setSelectedInventario] = useState<Inventario | null>(null);
   const itemsPerPage = 8;
   const { toast } = useToast();
+  const loadSeq = useRef(0);
 
   // Cargar inventarios
   const loadInventarios = async () => {
+    const seq = ++loadSeq.current;
     try {
       setLoading(true);
       const response = await inventariosService.getAllInventarios({
@@ -72,7 +84,9 @@ const Inventarios = () => {
         limit: itemsPerPage,
         search: searchTerm || undefined,
         activos: showArchived ? "false" : "true",
+        ciudad: ciudadFiltro !== "todos" ? ciudadFiltro : undefined,
       });
+      if (seq !== loadSeq.current) return;
 
       const pag = response.data?.pagination ?? {};
       setInventarios(response.data?.inventarios ?? []);
@@ -80,19 +94,26 @@ const Inventarios = () => {
       setTotalPages(pag.totalPages || 1);
     } catch (error) {
       console.error('Error al cargar inventarios:', error);
+      if (seq !== loadSeq.current) return;
       toast({
         title: "Error",
         description: "No se pudieron cargar los inventarios",
         variant: "destructive",
       });
     } finally {
-      setLoading(false);
+      if (seq === loadSeq.current) setLoading(false);
     }
   };
 
   useEffect(() => {
     loadInventarios();
-  }, [currentPage, searchTerm, showArchived]);
+  }, [currentPage, searchTerm, showArchived, ciudadFiltro]);
+
+  useEffect(() => {
+    void citiesService.getAllCities({ activos: "true" }).then((response) => {
+      setCiudades(response.data?.cities || []);
+    }).catch(() => {});
+  }, []);
 
   // Manejar búsqueda
   const handleSearch = (value: string) => {
@@ -231,7 +252,7 @@ const Inventarios = () => {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center space-x-2 mb-4">
+          <div className="mb-4 flex items-center gap-2">
             <div className="relative flex-1">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
@@ -241,6 +262,25 @@ const Inventarios = () => {
                 className="pl-8"
               />
             </div>
+            <Select
+              value={ciudadFiltro}
+              onValueChange={(value) => {
+                setCiudadFiltro(value);
+                setCurrentPage(1);
+              }}
+            >
+              <SelectTrigger className="w-72">
+                <SelectValue placeholder="Ciudad" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todas las ciudades</SelectItem>
+                {ciudades.map((city) => (
+                  <SelectItem key={city.id} value={String(city.id)}>
+                    {city.nombre} — {city.departamento}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Table */}
@@ -253,6 +293,7 @@ const Inventarios = () => {
                   <TableHead>Categoría</TableHead>
                   <TableHead>Stock</TableHead>
                   <TableHead>Precio</TableHead>
+                  <TableHead>Precio distribuidor</TableHead>
                   <TableHead>Ciudad</TableHead>
                   <TableHead>Proveedor</TableHead>
                   <TableHead>Estado</TableHead>
@@ -263,14 +304,14 @@ const Inventarios = () => {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center py-8">
+                    <TableCell colSpan={11} className="text-center py-8">
                       <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
                       Cargando inventarios...
                     </TableCell>
                   </TableRow>
                 ) : inventarios.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={11} className="text-center py-8 text-muted-foreground">
                       No se encontraron inventarios
                     </TableCell>
                   </TableRow>
@@ -310,6 +351,11 @@ const Inventarios = () => {
                             <div className="text-muted-foreground">
                               Mín: {formatCount(inventario.stock_minimo)}
                             </div>
+                            {Number(inventario.compra_minima) > 0 ? (
+                              <div className="text-muted-foreground">
+                                Compra: {formatCount(Number(inventario.compra_minima))}
+                              </div>
+                            ) : null}
                           </div>
                         </TableCell>
                         <TableCell className="text-center">
@@ -318,13 +364,22 @@ const Inventarios = () => {
                               <span className="text-muted-foreground">Venta: </span>
                               <span className="font-bold text-foreground">{formatMoney(inventario.precio_venta)}</span>
                             </div>
-                            <div className="text-muted-foreground">
-                              Costo: {formatMoney(inventario.costo_unitario)}
-                            </div>
                           </div>
                         </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          {formatMoney(
+                            inventario.precio_distribuidor != null && Number(inventario.precio_distribuidor) > 0
+                              ? inventario.precio_distribuidor
+                              : inventario.precio_venta,
+                          )}
+                        </TableCell>
                         <TableCell>
-                          {inventario.ciudad?.nombre || 'N/A'}
+                          <div>
+                            {inventario.ciudad?.nombre || 'N/A'}
+                            {inventario.ciudad?.departamento && (
+                              <div className="text-xs text-muted-foreground">{inventario.ciudad.departamento}</div>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell>
                           {inventario.proveedor?.nombre || 'N/A'}
@@ -415,7 +470,14 @@ const Inventarios = () => {
             setIsEditModalOpen(false);
             setSelectedInventario(null);
           }}
-          onSuccess={loadInventarios}
+          onSuccess={(saved) => {
+            if (!saved) {
+              void loadInventarios();
+              return;
+            }
+            loadSeq.current += 1;
+            setInventarios((rows) => rows.map((row) => (row.id === saved.id ? { ...row, ...saved } : row)));
+          }}
           inventario={selectedInventario}
         />
       )}

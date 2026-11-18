@@ -15,6 +15,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Loader2, Tag } from "lucide-react";
 import { flagsService, Flag } from "@/services/flagsService";
 import { useToast } from "@/hooks/use-toast";
+import { ConfirmCloseDialog, formDirty, useConfirmClose } from "@/components/ConfirmClose";
 
 interface AssignFlagsModalProps {
   open: boolean;
@@ -34,6 +35,7 @@ const AssignFlagsModal = ({
   const [selectedFlagIds, setSelectedFlagIds] = useState<number[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [baseline, setBaseline] = useState<number[]>([]);
 
   useEffect(() => {
     if (open && conversacionId) {
@@ -49,6 +51,7 @@ const AssignFlagsModal = ({
       const assignedFlags = conversationFlagsResponse.data.flags || [];
       const assignedFlagIds = assignedFlags.map((f) => f.id);
       setSelectedFlagIds(assignedFlagIds);
+      setBaseline(assignedFlagIds);
 
       // Cargar todos los flags activos
       const flagsResponse = await flagsService.getFlags({
@@ -126,8 +129,14 @@ const AssignFlagsModal = ({
     }
   };
 
+  const { ask, setAsk, requestClose, confirm, onOpenChange: guardClose } = useConfirmClose(
+    () => onOpenChange(false),
+    formDirty([...selectedFlagIds].sort(), [...baseline].sort()),
+    saving,
+  );
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={guardClose}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -208,7 +217,7 @@ const AssignFlagsModal = ({
         <DialogFooter>
           <Button
             variant="outline"
-            onClick={() => onOpenChange(false)}
+            onClick={requestClose}
             disabled={saving}
           >
             Cancelar
@@ -219,6 +228,7 @@ const AssignFlagsModal = ({
           </Button>
         </DialogFooter>
       </DialogContent>
+      <ConfirmCloseDialog open={ask} onOpenChange={setAsk} onConfirm={confirm} />
     </Dialog>
   );
 };

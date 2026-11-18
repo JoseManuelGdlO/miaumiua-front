@@ -71,6 +71,11 @@ function MoneyInput({ className, ...props }: ComponentProps<typeof Input>) {
   );
 }
 
+function listed<T extends { id: number }>(items: T[], current?: T | null) {
+  if (!current?.id || items.some((item) => item.id === current.id)) return items;
+  return [current, ...items];
+}
+
 function optionalNumber(value: string) {
   const trimmed = value.trim();
   if (!trimmed) return null;
@@ -81,7 +86,7 @@ function optionalNumber(value: string) {
 interface InventarioFormModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (saved?: Inventario) => void;
   inventario?: Inventario | null;
 }
 
@@ -99,6 +104,7 @@ const InventarioFormModal = ({ isOpen, onClose, onSuccess, inventario }: Inventa
   const [formData, setFormData] = useState(EMPTY);
   const [baseline, setBaseline] = useState(EMPTY);
   const [showErrors, setShowErrors] = useState(false);
+  const productId = inventario?.id ?? null;
 
   useEffect(() => {
     if (!isOpen) return;
@@ -148,11 +154,18 @@ const InventarioFormModal = ({ isOpen, onClose, onSuccess, inventario }: Inventa
     };
     setFormData(next);
     setBaseline(next);
-  }, [isOpen, inventario, toast]);
+  }, [isOpen, productId]);
 
   const setField = (key: keyof typeof EMPTY, value: string | boolean) => {
     setFormData((prev) => ({ ...prev, [key]: value }));
   };
+  const categoriasLista = listed(categorias, inventario?.categoria);
+  const pesosLista = listed(pesos, inventario?.peso);
+  const proveedoresLista = listed(proveedores, inventario?.proveedor);
+  const ciudadesLista = listed(ciudades, inventario?.ciudad);
+  const label = (items: { id: number; nombre?: string }[], id: string, fallback?: string) =>
+    items.find((item) => String(item.id) === id)?.nombre || fallback;
+  const pesoActual = pesosLista.find((item) => String(item.id) === formData.fkid_peso) || inventario?.peso;
 
   const margen = useMemo(() => {
     const costo = Number(formData.costo_unitario) || 0;
@@ -177,14 +190,14 @@ const InventarioFormModal = ({ isOpen, onClose, onSuccess, inventario }: Inventa
   const payload = () => ({
     sku: formData.sku,
     nombre: formData.nombre,
-    descripcion: formData.descripcion || undefined,
+    descripcion: formData.descripcion || null,
     stock_inicial: parseInt(formData.stock_inicial, 10),
     stock_minimo: parseInt(formData.stock_minimo, 10),
     stock_maximo: parseInt(formData.stock_maximo, 10),
     precio_venta: parseFloat(formData.precio_venta),
-    precio_distribuidor: optionalNumber(formData.precio_distribuidor) ?? undefined,
-    umbral_mayoreo: optionalNumber(formData.umbral_mayoreo) ?? undefined,
-    descuento_proveedor_pct: optionalNumber(formData.descuento_proveedor_pct) ?? undefined,
+    precio_distribuidor: optionalNumber(formData.precio_distribuidor),
+    umbral_mayoreo: optionalNumber(formData.umbral_mayoreo),
+    descuento_proveedor_pct: optionalNumber(formData.descuento_proveedor_pct),
     costo_unitario: parseFloat(formData.costo_unitario),
     fkid_peso: parseInt(formData.fkid_peso, 10),
     fkid_categoria: parseInt(formData.fkid_categoria, 10),
@@ -245,15 +258,17 @@ const InventarioFormModal = ({ isOpen, onClose, onSuccess, inventario }: Inventa
     try {
       setLoading(true);
       const data = payload();
+      let saved: Inventario | undefined;
       if (editing && inventario) {
         if (imageFile) await inventariosService.uploadInventarioImage(inventario.id, imageFile);
-        await inventariosService.updateInventario(inventario.id, data);
+        saved = (await inventariosService.updateInventario(inventario.id, data)).data.inventario;
       } else {
         const created = await inventariosService.createInventario(data);
-        if (imageFile) await inventariosService.uploadInventarioImage(created.data.inventario.id, imageFile);
+        saved = created.data.inventario;
+        if (imageFile) await inventariosService.uploadInventarioImage(saved.id, imageFile);
       }
       toast({ title: "Éxito", description: editing ? "Producto actualizado" : "Producto creado" });
-      onSuccess();
+      onSuccess(saved);
       onClose();
     } catch (error: any) {
       toast({
@@ -331,10 +346,12 @@ const InventarioFormModal = ({ isOpen, onClose, onSuccess, inventario }: Inventa
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Categoría *</Label>
-                  <Select value={formData.fkid_categoria || undefined} onValueChange={(value) => setField("fkid_categoria", value)}>
-                    <SelectTrigger className={mark("fkid_categoria")}><SelectValue placeholder="Categoría" /></SelectTrigger>
+                  <Select value={formData.fkid_categoria || undefined} onValueChange={(value) => value && setField("fkid_categoria", value)}>
+                    <SelectTrigger className={mark("fkid_categoria")}>
+                      <SelectValue placeholder="Categoría">{label(categoriasLista, formData.fkid_categoria, inventario?.categoria?.nombre)}</SelectValue>
+                    </SelectTrigger>
                     <SelectContent>
-                      {categorias.map((item) => (
+                      {categoriasLista.map((item) => (
                         <SelectItem key={item.id} value={item.id.toString()}>{item.nombre}</SelectItem>
                       ))}
                     </SelectContent>
@@ -342,10 +359,12 @@ const InventarioFormModal = ({ isOpen, onClose, onSuccess, inventario }: Inventa
                 </div>
                 <div className="space-y-2">
                   <Label>Peso *</Label>
-                  <Select value={formData.fkid_peso || undefined} onValueChange={(value) => setField("fkid_peso", value)}>
-                    <SelectTrigger className={mark("fkid_peso")}><SelectValue placeholder="Peso" /></SelectTrigger>
+                  <Select value={formData.fkid_peso || undefined} onValueChange={(value) => value && setField("fkid_peso", value)}>
+                    <SelectTrigger className={mark("fkid_peso")}>
+                      <SelectValue placeholder="Peso">{pesoActual ? `${pesoActual.cantidad} ${pesoActual.unidad_medida}` : undefined}</SelectValue>
+                    </SelectTrigger>
                     <SelectContent>
-                      {pesos.map((item) => (
+                      {pesosLista.map((item) => (
                         <SelectItem key={item.id} value={item.id.toString()}>{item.cantidad} {item.unidad_medida}</SelectItem>
                       ))}
                     </SelectContent>
@@ -355,10 +374,12 @@ const InventarioFormModal = ({ isOpen, onClose, onSuccess, inventario }: Inventa
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Proveedor *</Label>
-                  <Select value={formData.fkid_proveedor || undefined} onValueChange={(value) => setField("fkid_proveedor", value)}>
-                    <SelectTrigger className={mark("fkid_proveedor")}><SelectValue placeholder="Proveedor" /></SelectTrigger>
+                  <Select value={formData.fkid_proveedor || undefined} onValueChange={(value) => value && setField("fkid_proveedor", value)}>
+                    <SelectTrigger className={mark("fkid_proveedor")}>
+                      <SelectValue placeholder="Proveedor">{label(proveedoresLista, formData.fkid_proveedor, inventario?.proveedor?.nombre)}</SelectValue>
+                    </SelectTrigger>
                     <SelectContent>
-                      {proveedores.map((item) => (
+                      {proveedoresLista.map((item) => (
                         <SelectItem key={item.id} value={item.id.toString()}>{item.nombre}</SelectItem>
                       ))}
                     </SelectContent>
@@ -366,10 +387,14 @@ const InventarioFormModal = ({ isOpen, onClose, onSuccess, inventario }: Inventa
                 </div>
                 <div className="space-y-2">
                   <Label>Ciudad *</Label>
-                  <Select value={formData.fkid_ciudad || undefined} onValueChange={(value) => setField("fkid_ciudad", value)}>
-                    <SelectTrigger className={mark("fkid_ciudad")}><SelectValue placeholder="Ciudad de este inventario" /></SelectTrigger>
+                  <Select value={formData.fkid_ciudad || undefined} onValueChange={(value) => value && setField("fkid_ciudad", value)}>
+                    <SelectTrigger className={mark("fkid_ciudad")}>
+                      <SelectValue placeholder="Ciudad de este inventario">
+                        {label(ciudadesLista, formData.fkid_ciudad, inventario?.ciudad ? `${inventario.ciudad.nombre} — ${inventario.ciudad.departamento}` : undefined)}
+                      </SelectValue>
+                    </SelectTrigger>
                     <SelectContent>
-                      {ciudades.map((item) => (
+                      {ciudadesLista.map((item) => (
                         <SelectItem key={item.id} value={item.id.toString()}>{item.nombre} — {item.departamento}</SelectItem>
                       ))}
                     </SelectContent>
@@ -445,11 +470,11 @@ const InventarioFormModal = ({ isOpen, onClose, onSuccess, inventario }: Inventa
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="costo_unitario">Costo unitario *</Label>
-                  <MoneyInput id="costo_unitario" type="number" min="0" step="10" value={formData.costo_unitario} onChange={(e) => setField("costo_unitario", e.target.value)} required className={mark("costo_unitario")} />
+                  <MoneyInput id="costo_unitario" type="number" min="0" step="any" value={formData.costo_unitario} onChange={(e) => setField("costo_unitario", e.target.value)} required className={mark("costo_unitario")} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="precio_venta">Precio venta (cliente general) *</Label>
-                  <MoneyInput id="precio_venta" type="number" min="0" step="10" value={formData.precio_venta} onChange={(e) => setField("precio_venta", e.target.value)} required className={mark("precio_venta")} />
+                  <MoneyInput id="precio_venta" type="number" min="0" step="any" value={formData.precio_venta} onChange={(e) => setField("precio_venta", e.target.value)} required className={mark("precio_venta")} />
                 </div>
               </div>
               {margen != null && (
@@ -465,7 +490,7 @@ const InventarioFormModal = ({ isOpen, onClose, onSuccess, inventario }: Inventa
                     id="precio_distribuidor"
                     type="number"
                     min="0"
-                    step="10"
+                    step="any"
                     value={formData.precio_distribuidor}
                     onChange={(e) => setField("precio_distribuidor", e.target.value)}
                     placeholder="Si vacío, usa el de venta"

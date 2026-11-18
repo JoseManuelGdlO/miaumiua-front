@@ -13,6 +13,7 @@ import { Upload, FileSpreadsheet, X, CheckCircle2, AlertCircle, Loader2 } from "
 import { useToast } from "@/hooks/use-toast";
 import { vistaDeError } from "@/lib/api-error";
 import { clientesService } from "@/services/clientesService";
+import { ConfirmCloseDialog, useConfirmClose } from "@/components/ConfirmClose";
 
 interface BulkUploadCustomersModalProps {
   open: boolean;
@@ -121,18 +122,22 @@ export default function BulkUploadCustomersModal({
     }
   };
 
-  const handleClose = () => {
-    if (!uploading) {
-      setFile(null);
-      setError(null);
-      setResult(null);
-      setProgress(0);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-      onOpenChange(false);
+  const closeAlready = () => {
+    setFile(null);
+    setError(null);
+    setResult(null);
+    setProgress(0);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
+    onOpenChange(false);
   };
+
+  const { ask, setAsk, requestClose, confirm } = useConfirmClose(
+    closeAlready,
+    Boolean(file) && !result,
+    uploading,
+  );
 
   const handleDownloadTemplate = async () => {
     try {
@@ -160,12 +165,7 @@ export default function BulkUploadCustomersModal({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => {
-      // Solo permitir cerrar si no está cargando
-      if (!uploading && !isOpen) {
-        handleClose();
-      }
-    }}>
+    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) requestClose(); }}>
       <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Carga Masiva de Clientes</DialogTitle>
@@ -332,7 +332,7 @@ export default function BulkUploadCustomersModal({
           <div className="flex justify-end gap-2">
             <Button
               variant="outline"
-              onClick={handleClose}
+              onClick={result ? closeAlready : requestClose}
               disabled={uploading}
             >
               {result ? 'Cerrar' : 'Cancelar'}
@@ -377,6 +377,7 @@ export default function BulkUploadCustomersModal({
           </div>
         </div>
       </DialogContent>
+      <ConfirmCloseDialog open={ask} onOpenChange={setAsk} onConfirm={confirm} />
     </Dialog>
   );
 }
