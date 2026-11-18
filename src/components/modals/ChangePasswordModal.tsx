@@ -13,6 +13,9 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { usersService, User } from "@/services/usersService";
 import { Loader2 } from "lucide-react";
+import { ConfirmCloseDialog, formDirty, useConfirmClose } from "@/components/ConfirmClose";
+
+const EMPTY_PASSWORD = { newPassword: "", confirmPassword: "" };
 
 interface ChangePasswordModalProps {
   open: boolean;
@@ -24,10 +27,12 @@ interface ChangePasswordModalProps {
 const ChangePasswordModal = ({ open, onOpenChange, user, onPasswordChanged }: ChangePasswordModalProps) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState({
-    newPassword: "",
-    confirmPassword: ""
-  });
+  const [formData, setFormData] = useState(EMPTY_PASSWORD);
+  const { ask, setAsk, requestClose, confirm, onOpenChange: guardClose } = useConfirmClose(
+    () => onOpenChange(false),
+    formDirty(formData, EMPTY_PASSWORD),
+    loading,
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,10 +80,7 @@ const ChangePasswordModal = ({ open, onOpenChange, user, onPasswordChanged }: Ch
         });
 
         // Reset form
-        setFormData({
-          newPassword: "",
-          confirmPassword: ""
-        });
+        setFormData(EMPTY_PASSWORD);
 
         onOpenChange(false);
         onPasswordChanged?.();
@@ -98,7 +100,7 @@ const ChangePasswordModal = ({ open, onOpenChange, user, onPasswordChanged }: Ch
   if (!user) return null;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={guardClose}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Cambiar Contraseña</DialogTitle>
@@ -131,7 +133,7 @@ const ChangePasswordModal = ({ open, onOpenChange, user, onPasswordChanged }: Ch
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
+            <Button type="button" variant="outline" onClick={requestClose} disabled={loading}>
               Cancelar
             </Button>
             <Button type="submit" disabled={loading}>
@@ -147,6 +149,7 @@ const ChangePasswordModal = ({ open, onOpenChange, user, onPasswordChanged }: Ch
           </DialogFooter>
         </form>
       </DialogContent>
+      <ConfirmCloseDialog open={ask} onOpenChange={setAsk} onConfirm={confirm} />
     </Dialog>
   );
 };
