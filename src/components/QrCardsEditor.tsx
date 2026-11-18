@@ -21,6 +21,7 @@ import {
   type QrCardSize,
 } from "@/services/siteSettingsService";
 import { QrCardSizePreview } from "@/components/QrLinkCardGrid";
+import { ConfirmCloseDialog, useConfirmClose } from "@/components/ConfirmClose";
 
 type SiteLinks = {
   mercadolibreUrl: string;
@@ -148,6 +149,11 @@ export default function QrCardsEditor({
   onPersist?: () => void;
 }) {
   const [draft, setDraft] = useState<Draft | null>(null);
+  const { ask, setAsk, requestClose, confirm, onOpenChange: guardDraft } = useConfirmClose(
+    () => setDraft(null),
+    Boolean(draft),
+    saving,
+  );
   const [error, setError] = useState("");
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
@@ -363,7 +369,7 @@ export default function QrCardsEditor({
         <Plus className="h-4 w-4" />
         Añadir enlace
       </Button>
-      <Dialog open={draft !== null} onOpenChange={(open) => { if (!open) setDraft(null); }}>
+      <Dialog open={draft !== null} onOpenChange={guardDraft}>
         <DialogContent className="max-h-[90vh] w-[min(100%-1.5rem,1100px)] max-w-[1100px] overflow-y-auto sm:max-w-[1100px]">
           <DialogHeader>
             <DialogTitle>{draft && actions.links.some((link) => link.id === draft.id) || (draft && draft.kind !== "link") ? "Editar card" : "Nueva card"}</DialogTitle>
@@ -460,13 +466,14 @@ export default function QrCardsEditor({
             </div>
           ) : null}
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setDraft(null)} disabled={saving}>Cancelar</Button>
+            <Button type="button" variant="outline" onClick={requestClose} disabled={saving}>Cancelar</Button>
             <Button type="button" onClick={saveDraft} disabled={saving}>
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               Guardar
             </Button>
           </DialogFooter>
         </DialogContent>
+        <ConfirmCloseDialog open={ask} onOpenChange={setAsk} onConfirm={confirm} />
       </Dialog>
       <AlertDialog open={pendingDelete !== null} onOpenChange={(open) => { if (!open) setPendingDelete(null); }}>
         <AlertDialogContent>

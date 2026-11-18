@@ -20,6 +20,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { pesosService, UpdatePesoData, Peso } from "@/services/pesosService";
 import { Loader2 } from "lucide-react";
+import { ConfirmCloseDialog, formDirty, useConfirmClose } from "@/components/ConfirmClose";
 
 interface EditPesoModalProps {
   open: boolean;
@@ -40,14 +41,17 @@ const EditPesoModal = ({
     cantidad: 0,
     unidad_medida: "kg"
   });
+  const [baseline, setBaseline] = useState(formData);
 
   // Actualizar el formulario cuando cambie el peso
   useEffect(() => {
     if (peso) {
-      setFormData({
+      const next = {
         cantidad: peso.cantidad,
         unidad_medida: peso.unidad_medida
-      });
+      };
+      setFormData(next);
+      setBaseline(next);
     }
   }, [peso]);
 
@@ -125,8 +129,14 @@ const EditPesoModal = ({
     }));
   };
 
+  const { ask, setAsk, requestClose, confirm, onOpenChange: guardClose } = useConfirmClose(
+    () => onOpenChange(false),
+    formDirty(formData, baseline),
+    loading,
+  );
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={guardClose}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Editar Peso</DialogTitle>
@@ -179,7 +189,7 @@ const EditPesoModal = ({
             <Button
               type="button"
               variant="outline"
-              onClick={() => onOpenChange(false)}
+              onClick={requestClose}
               disabled={loading}
             >
               Cancelar
@@ -191,6 +201,7 @@ const EditPesoModal = ({
           </DialogFooter>
         </form>
       </DialogContent>
+      <ConfirmCloseDialog open={ask} onOpenChange={setAsk} onConfirm={confirm} />
     </Dialog>
   );
 };

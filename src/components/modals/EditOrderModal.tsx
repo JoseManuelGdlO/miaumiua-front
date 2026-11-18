@@ -45,6 +45,7 @@ import ClienteSelector from "@/components/ui/ClienteSelector";
 import { packagesService } from "@/services/packagesService";
 import type { Package } from "@/services/packagesService";
 import { mapsService, AVISO_SIN_UBICAR, direccionConCp } from "@/services/mapsService";
+import { ConfirmCloseDialog, useConfirmClose } from "@/components/ConfirmClose";
 
 interface ProductFormData {
   id?: number;
@@ -94,6 +95,7 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
     notas: "",
     codigo_promocion: ""
   });
+  const [baseline, setBaseline] = useState("");
 
   // Cargar datos iniciales
   useEffect(() => {
@@ -148,7 +150,7 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
     const ciudadId = order.fkid_ciudad ?? order.ciudad?.id;
 
     // Cargar datos del formulario
-    setFormData({
+    const nextForm = {
       fkid_cliente: order.fkid_cliente != null ? String(order.fkid_cliente) : "",
       telefono_referencia: order.telefono_referencia || "",
       email_referencia: order.email_referencia || "",
@@ -160,7 +162,8 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
       metodo_pago: order.metodo_pago,
       notas: order.notas || "",
       codigo_promocion: order.codigo_promocion || ""
-    });
+    };
+    setFormData(nextForm);
 
     // Cargar cliente seleccionado
     if (order.fkid_cliente) {
@@ -175,8 +178,9 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
     }
 
     // Cargar productos del pedido
+    let orderProducts: ProductFormData[] = [];
     if (order.productos && order.productos.length > 0) {
-      const orderProducts: ProductFormData[] = order.productos.map(product => ({
+      orderProducts = order.productos.map(product => ({
         id: product.id,
         fkid_producto: product.fkid_producto,
         cantidad: product.cantidad,
@@ -208,8 +212,9 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
     }
 
     // Cargar paquetes del pedido
+    let orderPackages: PackageFormData[] = [];
     if (order.paquetes && order.paquetes.length > 0) {
-      const orderPackages: PackageFormData[] = order.paquetes.map(pkg => ({
+      orderPackages = order.paquetes.map(pkg => ({
         id: pkg.id,
         fkid_paquete: pkg.fkid_paquete,
         cantidad: pkg.cantidad,
@@ -234,13 +239,8 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
       setPackages([]);
     }
 
-    // Cargar promoción si existe
-    if (order.codigo_promocion) {
-      // Aquí podrías cargar la promoción específica si es necesario
-      setSelectedPromotion(null);
-    } else {
-      setSelectedPromotion(null);
-    }
+    setSelectedPromotion(null);
+    setBaseline(JSON.stringify({ form: nextForm, products: orderProducts, packages: orderPackages }));
   };
 
   const addProduct = () => {
@@ -544,7 +544,7 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
   };
 
   const handleClose = () => {
-    onOpenChange(false);
+    requestClose();
   };
 
   const cityOptions = cities.map((city) => ({
@@ -566,10 +566,16 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
     });
   }
 
+  const { ask, setAsk, requestClose, confirm, onOpenChange: guardClose } = useConfirmClose(
+    () => onOpenChange(false),
+    JSON.stringify({ form: formData, products, packages }) !== baseline,
+    loading,
+  );
+
   if (!order) return null;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={guardClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -1106,6 +1112,7 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
           </div>
         </form>
       </DialogContent>
+      <ConfirmCloseDialog open={ask} onOpenChange={setAsk} onConfirm={confirm} />
     </Dialog>
   );
 };

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { ConfirmCloseDialog, useConfirmClose } from "@/components/ConfirmClose";
 import {
   Dialog,
   DialogContent,
@@ -54,7 +54,6 @@ const EditDriverModal = ({ isOpen, onClose, onSuccess, driver }: EditDriverModal
   const [consentimientoArchivo, setConsentimientoArchivo] = useState<File | null>(null);
   const [polizaArchivo, setPolizaArchivo] = useState<File | null>(null);
   const [inicial, setInicial] = useState("");
-  const [descartar, setDescartar] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -125,17 +124,11 @@ const EditDriverModal = ({ isOpen, onClose, onSuccess, driver }: EditDriverModal
     || JSON.stringify(formData) !== inicial;
 
   const cerrarYa = () => {
-    if (loading) return;
-    setDescartar(false);
     onClose();
     setStep(1);
   };
 
-  const pedirCerrar = () => {
-    if (loading) return;
-    if (dirty()) setDescartar(true);
-    else cerrarYa();
-  };
+  const { ask, setAsk, requestClose, confirm, onOpenChange } = useConfirmClose(cerrarYa, dirty(), loading);
 
   const handleSubmit = async () => {
     if (!driver) return;
@@ -182,7 +175,7 @@ const EditDriverModal = ({ isOpen, onClose, onSuccess, driver }: EditDriverModal
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) pedirCerrar(); }}>
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -221,22 +214,12 @@ const EditDriverModal = ({ isOpen, onClose, onSuccess, driver }: EditDriverModal
             }}
             fotoSrc={fotoSrc}
             fieldError={(field) => fieldErrors[field]}
-            onCancel={pedirCerrar}
+            onCancel={requestClose}
             onSubmit={handleSubmit}
           />
         )}
       </DialogContent>
-      <AlertDialog open={descartar} onOpenChange={setDescartar}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>¿Descartar lo que ya llenaste?</AlertDialogTitle>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Seguir editando</AlertDialogCancel>
-            <AlertDialogAction onClick={cerrarYa}>Descartar</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmCloseDialog open={ask} onOpenChange={setAsk} onConfirm={confirm} />
     </Dialog>
   );
 };

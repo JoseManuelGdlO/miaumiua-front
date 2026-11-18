@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { ConfirmCloseDialog, useConfirmClose } from "@/components/ConfirmClose";
 import {
   Dialog,
   DialogContent,
@@ -25,7 +25,7 @@ import { ToastAction } from "@/components/ui/toast";
 import { ordersService, CreateOrderData } from "@/services/ordersService";
 import { clientesService, Cliente } from "@/services/clientesService";
 import { citiesService } from "@/services/citiesService";
-import { Inventario } from "@/services/inventariosService";
+import { Inventario, precioLista } from "@/services/inventariosService";
 import { promotionsService, Promotion } from "@/services/promotionsService";
 import ProductSelector from "@/components/ui/ProductSelector";
 import PackageSelector from "@/components/ui/PackageSelector";
@@ -116,7 +116,6 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
   
   const [formData, setFormData] = useState(EMPTY_ORDER_FORM);
   const [step, setStep] = useState(1);
-  const [descartar, setDescartar] = useState(false);
   const [wasOpen, setWasOpen] = useState(open);
 
   // Al pasar de cerrado a abierto, limpiar antes de pintar el contenido.
@@ -133,7 +132,6 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
       setPendingStripeOrderId(null);
       setStripeRetryLoading(false);
       setStep(1);
-      setDescartar(false);
     }
   }
 
@@ -173,6 +171,12 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
   const updateProduct = (index: number, field: keyof ProductFormData, value: string | number | Inventario) => {
     const updatedProducts = [...products];
     updatedProducts[index] = { ...updatedProducts[index], [field]: value };
+    if (field === "cantidad" && updatedProducts[index].producto) {
+      updatedProducts[index].precio_unidad = precioLista(updatedProducts[index].producto, {
+        es_distribuidor: Boolean(selectedCliente?.es_distribuidor),
+        cantidad: Number(value) || 0,
+      });
+    }
     setProducts(updatedProducts);
   };
 
@@ -180,11 +184,15 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
     const updatedProducts = [...products];
     
     if (product) {
+      const cantidad = Number(product.compra_minima) > 0 ? Number(product.compra_minima) : 1;
       updatedProducts[index] = {
         ...updatedProducts[index],
         fkid_producto: product.id,
-        precio_unidad: Number(product.precio_venta || 0),
-        cantidad: Number(product.compra_minima) > 0 ? Number(product.compra_minima) : 1,
+        cantidad,
+        precio_unidad: precioLista(product, {
+          es_distribuidor: Boolean(selectedCliente?.es_distribuidor),
+          cantidad,
+        }),
         producto: product
       };
     } else {
@@ -549,7 +557,7 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
   };
 
   const subtotalProductos = products.reduce(
-    (sum, p) => sum + lineTotal(p.cantidad, Number(p.producto?.precio_venta || p.precio_unidad || 0), p.descuento_producto),
+    (sum, p) => sum + lineTotal(p.cantidad, Number(p.precio_unidad || 0), p.descuento_producto),
     0
   );
   const subtotalPaquetes = packages.reduce(
@@ -570,11 +578,11 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
     || Boolean(pendingStripeOrderId)
     || Object.entries(formData).some(([key, value]) => value && value !== EMPTY_ORDER_FORM[key as keyof typeof EMPTY_ORDER_FORM]);
 
-  const pedirCerrar = () => {
-    if (loading || stripeRetryLoading) return;
-    if (dirty()) setDescartar(true);
-    else onOpenChange(false);
-  };
+  const { ask, setAsk, requestClose, confirm, onOpenChange: guardClose } = useConfirmClose(
+    () => onOpenChange(false),
+    dirty(),
+    loading || stripeRetryLoading,
+  );
 
   function canNext() {
     if (step === 1) return Boolean(formData.fkid_cliente && formData.direccion_entrega && formData.fkid_ciudad && formData.codigo_postal.replace(/\D/g, "").length === 5);
@@ -622,7 +630,7 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
   );
 
   return (
-    <Dialog open={open} onOpenChange={(next) => { if (next) onOpenChange(true); else pedirCerrar(); }}>
+    <Dialog open={open} onOpenChange={guardClose}>
       <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -868,10 +876,12 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
                           {product.producto ? (
                             <div className="p-2 bg-gray-50 rounded border">
                               <div className="text-sm font-medium">
-                                ${Number(product.producto.precio_venta || 0).toFixed(2)}
+                                ${Number(product.precio_unidad || 0).toFixed(2)}
                               </div>
                               <div className="text-xs text-muted-foreground">
-                                Precio fijo del inventario
+                                {selectedCliente?.es_distribuidor
+                                  ? "Precio distribuidor"
+                                  : "Precio de lista"}
                               </div>
                             </div>
                           ) : (
@@ -928,11 +938,11 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
                             <div className="flex justify-between items-center mb-1">
                               <span><strong>Subtotal:</strong></span>
                               <span className="font-bold text-blue-800">
-                                ${(product.cantidad * Number(product.producto.precio_venta || 0) * (1 - product.descuento_producto / 100)).toFixed(2)}
+                                ${(product.cantidad * Number(product.precio_unidad || 0) * (1 - product.descuento_producto / 100)).toFixed(2)}
                               </span>
                             </div>
                             <div className="text-xs text-blue-700">
-                              {product.cantidad} × ${Number(product.producto.precio_venta || 0).toFixed(2)}
+                              {product.cantidad} × ${Number(product.precio_unidad || 0).toFixed(2)}
                               {product.descuento_producto > 0 && (
                                 <span> - {product.descuento_producto}% descuento</span>
                               )}
@@ -1188,7 +1198,7 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
             </p>
             <div className="flex gap-2">
               {step === 1 ? (
-                <Button type="button" variant="outline" onClick={pedirCerrar} disabled={loading || stripeRetryLoading}>
+                <Button type="button" variant="outline" onClick={requestClose} disabled={loading || stripeRetryLoading}>
                   Cancelar
                 </Button>
               ) : (
@@ -1212,17 +1222,7 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
           </div>
         </form>
       </DialogContent>
-      <AlertDialog open={descartar} onOpenChange={setDescartar}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>¿Descartar lo que ya llenaste?</AlertDialogTitle>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Seguir editando</AlertDialogCancel>
-            <AlertDialogAction onClick={() => { setDescartar(false); onOpenChange(false); }}>Descartar</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmCloseDialog open={ask} onOpenChange={setAsk} onConfirm={confirm} />
     </Dialog>
   );
 };

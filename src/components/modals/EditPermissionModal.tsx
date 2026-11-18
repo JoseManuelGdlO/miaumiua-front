@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { permissionsService, UpdatePermissionData, Permission } from "@/services/permissionsService";
+import { ConfirmCloseDialog, formDirty, useConfirmClose } from "@/components/ConfirmClose";
 
 interface EditPermissionModalProps {
   open: boolean;
@@ -44,17 +45,20 @@ const EditPermissionModal = ({
     descripcion: "",
     tipo: "lectura"
   });
+  const [baseline, setBaseline] = useState(formData);
 
   // Cargar datos del permiso y opciones al abrir el modal
   useEffect(() => {
     if (open && permission) {
       loadCategoriesAndTypes();
-      setFormData({
+      const next = {
         nombre: permission.nombre,
         categoria: permission.categoria,
         descripcion: permission.descripcion || "",
         tipo: permission.tipo
-      });
+      };
+      setFormData(next);
+      setBaseline(next);
     }
   }, [open, permission]);
 
@@ -148,8 +152,14 @@ const EditPermissionModal = ({
 
   if (!permission) return null;
 
+  const { ask, setAsk, requestClose, confirm, onOpenChange: guardClose } = useConfirmClose(
+    () => onOpenChange(false),
+    formDirty(formData, baseline),
+    loading,
+  );
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={guardClose}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>Editar Permiso</DialogTitle>
@@ -226,7 +236,7 @@ const EditPermissionModal = ({
             <Button 
               type="button" 
               variant="outline" 
-              onClick={() => onOpenChange(false)}
+              onClick={requestClose}
               disabled={loading}
             >
               Cancelar
@@ -237,6 +247,7 @@ const EditPermissionModal = ({
           </DialogFooter>
         </form>
       </DialogContent>
+      <ConfirmCloseDialog open={ask} onOpenChange={setAsk} onConfirm={confirm} />
     </Dialog>
   );
 };

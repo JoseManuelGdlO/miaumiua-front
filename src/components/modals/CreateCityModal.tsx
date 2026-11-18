@@ -22,6 +22,22 @@ import { useToast } from "@/hooks/use-toast";
 import { citiesService, HORARIO_POR_DIA_DEFAULT, type HorarioPorDia } from "@/services/citiesService";
 import { formatHour24To12, parseHour12To24 } from "@/utils/businessHoursTime";
 import { Copy, Loader2 } from "lucide-react";
+import { ConfirmCloseDialog, formDirty, useConfirmClose } from "@/components/ConfirmClose";
+
+const EMPTY_POINT = { nombre: "", direccion: "", telefono: "", encargado: "" };
+const EMPTY_CITY = {
+  nombre: "",
+  departamento: "",
+  direccion_operaciones: "",
+  manager: "",
+  telefono: "",
+  email_contacto: "",
+  numero_soporte_cliente: "",
+  estado_inicial: "activa" as const,
+  max_pedidos_por_horario: 5,
+  dias_trabajo: [1, 2, 3, 4, 5] as number[],
+  horario_por_dia: { ...HORARIO_POR_DIA_DEFAULT } as HorarioPorDia,
+};
 
 interface CreateCityModalProps {
   open: boolean;
@@ -34,19 +50,7 @@ const CreateCityModal = ({ open, onOpenChange, onCityCreated }: CreateCityModalP
   const [loading, setLoading] = useState(false);
   const [savingPoints, setSavingPoints] = useState(false);
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
-  const [formData, setFormData] = useState({
-    nombre: "",
-    departamento: "",
-    direccion_operaciones: "",
-    manager: "",
-    telefono: "",
-    email_contacto: "",
-    numero_soporte_cliente: "",
-    estado_inicial: "activa" as const,
-    max_pedidos_por_horario: 5,
-    dias_trabajo: [1, 2, 3, 4, 5] as number[],
-    horario_por_dia: { ...HORARIO_POR_DIA_DEFAULT } as HorarioPorDia,
-  });
+  const [formData, setFormData] = useState(EMPTY_CITY);
 
   type DraftPointOfSale = {
     nombre: string;
@@ -56,38 +60,16 @@ const CreateCityModal = ({ open, onOpenChange, onCityCreated }: CreateCityModalP
   };
 
   const [pointsOfSale, setPointsOfSale] = useState<DraftPointOfSale[]>([]);
-  const [pointForm, setPointForm] = useState<DraftPointOfSale>({
-    nombre: "",
-    direccion: "",
-    telefono: "",
-    encargado: "",
-  });
+  const [pointForm, setPointForm] = useState<DraftPointOfSale>(EMPTY_POINT);
   const [editingHorario, setEditingHorario] = useState<string | null>(null);
   const [horarioDraft, setHorarioDraft] = useState("");
 
   // Reset form cuando se abre el modal
   const resetForm = () => {
     setInviteUrl(null);
-    setFormData({
-      nombre: "",
-      departamento: "",
-      direccion_operaciones: "",
-      manager: "",
-      telefono: "",
-      email_contacto: "",
-      numero_soporte_cliente: "",
-      estado_inicial: "activa",
-      max_pedidos_por_horario: 5,
-      dias_trabajo: [1, 2, 3, 4, 5],
-      horario_por_dia: { ...HORARIO_POR_DIA_DEFAULT } as HorarioPorDia,
-    });
+    setFormData({ ...EMPTY_CITY, horario_por_dia: { ...HORARIO_POR_DIA_DEFAULT } });
     setPointsOfSale([]);
-    setPointForm({
-      nombre: "",
-      direccion: "",
-      telefono: "",
-      encargado: "",
-    });
+    setPointForm(EMPTY_POINT);
   };
 
   const handlePointInputChange = (field: keyof DraftPointOfSale, value: string) => {
@@ -108,12 +90,7 @@ const CreateCityModal = ({ open, onOpenChange, onCityCreated }: CreateCityModalP
     }
 
     setPointsOfSale(prev => [...prev, pointForm]);
-    setPointForm({
-      nombre: "",
-      direccion: "",
-      telefono: "",
-      encargado: "",
-    });
+    setPointForm(EMPTY_POINT);
   };
 
   const handleRemovePoint = (index: number) => {
@@ -360,15 +337,17 @@ const CreateCityModal = ({ open, onOpenChange, onCityCreated }: CreateCityModalP
     { value: 6, label: "Sábado" }
   ];
 
-  const handleOpenChange = (nextOpen: boolean) => {
-    if (!nextOpen) {
+  const { ask, setAsk, requestClose, confirm, onOpenChange: guardClose } = useConfirmClose(
+    () => {
       resetForm();
-    }
-    onOpenChange(nextOpen);
-  };
+      onOpenChange(false);
+    },
+    formDirty(formData, EMPTY_CITY) || pointsOfSale.length > 0 || formDirty(pointForm, EMPTY_POINT) || Boolean(inviteUrl),
+    loading,
+  );
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={guardClose}>
       <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Nueva Ciudad</DialogTitle>
@@ -673,10 +652,7 @@ const CreateCityModal = ({ open, onOpenChange, onCityCreated }: CreateCityModalP
             <Button
               type="button"
               variant="outline"
-              onClick={() => {
-                resetForm();
-                onOpenChange(false);
-              }}
+              onClick={requestClose}
               disabled={loading}
             >
               Cancelar
@@ -689,6 +665,7 @@ const CreateCityModal = ({ open, onOpenChange, onCityCreated }: CreateCityModalP
         </form>
         )}
       </DialogContent>
+      <ConfirmCloseDialog open={ask} onOpenChange={setAsk} onConfirm={confirm} />
     </Dialog>
   );
 };

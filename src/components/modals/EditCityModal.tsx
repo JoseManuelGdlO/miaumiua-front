@@ -24,6 +24,7 @@ import { formatHour24To12, parseHour12To24 } from "@/utils/businessHoursTime";
 import { Loader2 } from "lucide-react";
 import CityWhatsappCard from "@/components/cities/CityWhatsappCard";
 import { canEdit } from "@/utils/permissions";
+import { ConfirmCloseDialog, useConfirmClose } from "@/components/ConfirmClose";
 
 interface EditCityModalProps {
   open: boolean;
@@ -80,6 +81,7 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
   const [editingPointId, setEditingPointId] = useState<number | null>(null);
   const [editingHorario, setEditingHorario] = useState<string | null>(null);
   const [horarioDraft, setHorarioDraft] = useState("");
+  const [baseline, setBaseline] = useState({ form: "", points: "[]" });
 
   // Construir horario_por_dia desde backend: si viene horario_por_dia usarlo; si no, desde campos legacy
   const getInitialHorarioPorDia = (c: City): HorarioPorDia => {
@@ -108,15 +110,15 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
         const response = await citiesService.getPointsOfSale(cityId);
         if (response.success) {
           const puntos = response.data.pointsOfSale || [];
-          setPointsOfSale(
-            puntos.map((p: PointOfSale) => ({
-              id: p.id,
-              nombre: p.nombre,
-              direccion: p.direccion,
-              telefono: p.telefono || "",
-              encargado: p.encargado || "",
-            }))
-          );
+          const nextPoints = puntos.map((p: PointOfSale) => ({
+            id: p.id,
+            nombre: p.nombre,
+            direccion: p.direccion,
+            telefono: p.telefono || "",
+            encargado: p.encargado || "",
+          }));
+          setPointsOfSale(nextPoints);
+          setBaseline((prev) => ({ ...prev, points: JSON.stringify(nextPoints) }));
         }
       } catch (error) {
         console.error("Error al cargar puntos de venta:", error);
@@ -131,7 +133,7 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
     };
 
     if (city && open) {
-      setFormData({
+      const next = {
         nombre: city.nombre,
         departamento: city.departamento,
         direccion_operaciones: city.direccion_operaciones,
@@ -143,7 +145,9 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
         max_pedidos_por_horario: city.max_pedidos_por_horario || 5,
         dias_trabajo: city.dias_trabajo && city.dias_trabajo.length > 0 ? city.dias_trabajo : [1, 2, 3, 4, 5],
         horario_por_dia: getInitialHorarioPorDia(city),
-      });
+      };
+      setFormData(next);
+      setBaseline((prev) => ({ ...prev, form: JSON.stringify(next) }));
       setPointForm({
         nombre: "",
         direccion: "",
@@ -489,8 +493,16 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
     { value: 6, label: "Sábado" }
   ];
 
+  const { ask, setAsk, requestClose, confirm, onOpenChange: guardClose } = useConfirmClose(
+    () => onOpenChange(false),
+    JSON.stringify(formData) !== baseline.form
+      || JSON.stringify(pointsOfSale) !== baseline.points
+      || Boolean(pointForm.nombre || pointForm.direccion || pointForm.telefono || pointForm.encargado),
+    loading,
+  );
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={guardClose}>
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Editar Ciudad</DialogTitle>
@@ -812,7 +824,7 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
             <Button
               type="button"
               variant="outline"
-              onClick={() => onOpenChange(false)}
+              onClick={requestClose}
               disabled={loading}
             >
               Cancelar
@@ -824,6 +836,7 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
           </DialogFooter>
         </form>
       </DialogContent>
+      <ConfirmCloseDialog open={ask} onOpenChange={setAsk} onConfirm={confirm} />
     </Dialog>
   );
 };

@@ -32,6 +32,7 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { promotionsService, Promotion } from "@/services/promotionsService";
 import { citiesService, City } from "@/services/citiesService";
+import { ConfirmCloseDialog, formDirty, useConfirmClose } from "@/components/ConfirmClose";
 
 interface EditPromotionModalProps {
   isOpen: boolean;
@@ -59,6 +60,7 @@ const EditPromotionModal = ({ isOpen, onClose, onSuccess, promotion }: EditPromo
     aplica_a: "todos" as "todos" | "retail" | "distribuidor",
     departamento: "",
   });
+  const [baseline, setBaseline] = useState(formData);
 
   // Cargar ciudades
   useEffect(() => {
@@ -79,7 +81,7 @@ const EditPromotionModal = ({ isOpen, onClose, onSuccess, promotion }: EditPromo
   // Inicializar formulario con datos de la promoción
   useEffect(() => {
     if (promotion && isOpen) {
-      setFormData({
+      const next = {
         nombre: promotion.nombre,
         codigo: promotion.codigo,
         descripcion: promotion.descripcion || "",
@@ -93,7 +95,9 @@ const EditPromotionModal = ({ isOpen, onClose, onSuccess, promotion }: EditPromo
         ciudades: promotion.ciudades?.map(c => c.id) || [],
         aplica_a: promotion.aplica_a || "todos",
         departamento: "",
-      });
+      };
+      setFormData(next);
+      setBaseline(next);
     }
   }, [promotion, isOpen]);
 
@@ -166,8 +170,14 @@ const EditPromotionModal = ({ isOpen, onClose, onSuccess, promotion }: EditPromo
     }));
   };
 
+  const { ask, setAsk, requestClose, confirm, onOpenChange } = useConfirmClose(
+    onClose,
+    formDirty(formData, baseline),
+    loading,
+  );
+
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Editar Promoción</DialogTitle>
@@ -394,7 +404,7 @@ const EditPromotionModal = ({ isOpen, onClose, onSuccess, promotion }: EditPromo
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>
+            <Button type="button" variant="outline" onClick={requestClose}>
               Cancelar
             </Button>
             <Button type="submit" disabled={loading}>
@@ -403,6 +413,7 @@ const EditPromotionModal = ({ isOpen, onClose, onSuccess, promotion }: EditPromo
           </DialogFooter>
         </form>
       </DialogContent>
+      <ConfirmCloseDialog open={ask} onOpenChange={setAsk} onConfirm={confirm} />
     </Dialog>
   );
 };

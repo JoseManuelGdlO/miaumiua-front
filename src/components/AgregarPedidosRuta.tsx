@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { ConfirmCloseDialog, useConfirmClose } from "@/components/ConfirmClose";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { AvailableOrder } from "@/services/routesService";
 
@@ -41,14 +42,18 @@ export function AgregarPedidosRuta({ open, rutaNombre, ciudad, orders, rutas, ru
     setPicked((list) => list.includes(id) ? list.filter((item) => item !== id) : [...list, id]);
   };
 
+  const { ask, setAsk, requestClose, confirm, onOpenChange: guardClose } = useConfirmClose(
+    () => {
+      setPicked([]);
+      setQuery("");
+      onOpenChange(false);
+    },
+    picked.length > 0,
+    busy,
+  );
+
   return (
-    <Dialog open={open} onOpenChange={(next) => {
-      if (!next) {
-        setPicked([]);
-        setQuery("");
-      }
-      onOpenChange(next);
-    }}>
+    <Dialog open={open} onOpenChange={guardClose}>
       <DialogContent className="max-w-xl">
         <DialogHeader>
           <DialogTitle>Agregar pedidos a la ruta</DialogTitle>
@@ -101,11 +106,12 @@ export function AgregarPedidosRuta({ open, rutaNombre, ciudad, orders, rutas, ru
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm text-muted-foreground">{picked.length} pedido{picked.length === 1 ? "" : "s"} seleccionado{picked.length === 1 ? "" : "s"} ({dinero(total)})</p>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+            <Button variant="outline" onClick={requestClose}>Cancelar</Button>
             <Button disabled={picked.length === 0 || busy} onClick={() => onConfirm(picked)}>Asignar a la ruta</Button>
           </div>
         </div>
       </DialogContent>
+      <ConfirmCloseDialog open={ask} onOpenChange={setAsk} onConfirm={confirm} />
     </Dialog>
   );
 }
