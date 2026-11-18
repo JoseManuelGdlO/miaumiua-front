@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { proveedoresService, Proveedor } from "@/services/proveedoresService";
 import { Loader2 } from "lucide-react";
+import { ConfirmCloseDialog, formDirty, useConfirmClose } from "@/components/ConfirmClose";
 
 interface EditProveedorModalProps {
   isOpen: boolean;
@@ -31,16 +32,19 @@ const EditProveedorModal = ({ isOpen, onClose, onSuccess, proveedor }: EditProve
     telefono: "",
     descripcion: "",
   });
+  const [baseline, setBaseline] = useState(formData);
 
   // Inicializar formulario con datos del proveedor
   useEffect(() => {
     if (proveedor && isOpen) {
-      setFormData({
+      const next = {
         nombre: proveedor.nombre,
         correo: proveedor.correo,
         telefono: proveedor.telefono,
         descripcion: proveedor.descripcion || "",
-      });
+      };
+      setFormData(next);
+      setBaseline(next);
     }
   }, [proveedor, isOpen]);
 
@@ -79,8 +83,14 @@ const EditProveedorModal = ({ isOpen, onClose, onSuccess, proveedor }: EditProve
     }
   };
 
+  const { ask, setAsk, requestClose, confirm, onOpenChange } = useConfirmClose(
+    onClose,
+    formDirty(formData, baseline),
+    loading,
+  );
+
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Editar Proveedor</DialogTitle>
@@ -137,7 +147,7 @@ const EditProveedorModal = ({ isOpen, onClose, onSuccess, proveedor }: EditProve
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>
+            <Button type="button" variant="outline" onClick={requestClose}>
               Cancelar
             </Button>
             <Button type="submit" disabled={loading}>
@@ -153,6 +163,7 @@ const EditProveedorModal = ({ isOpen, onClose, onSuccess, proveedor }: EditProve
           </DialogFooter>
         </form>
       </DialogContent>
+      <ConfirmCloseDialog open={ask} onOpenChange={setAsk} onConfirm={confirm} />
     </Dialog>
   );
 };

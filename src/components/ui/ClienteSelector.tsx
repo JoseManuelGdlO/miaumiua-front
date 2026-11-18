@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { ConfirmCloseDialog, formDirty, useConfirmClose } from "@/components/ConfirmClose";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -62,11 +63,16 @@ const ClienteSelector = ({
   const searchTimeoutRef = useRef<NodeJS.Timeout>();
   const loadRequestRef = useRef(0);
 
-  const [newClienteData, setNewClienteData] = useState({
-    nombre_completo: "",
-    telefono: "",
-    fkid_ciudad: ""
-  });
+  const emptyCliente = { nombre_completo: "", telefono: "", fkid_ciudad: "" };
+  const [newClienteData, setNewClienteData] = useState(emptyCliente);
+  const { ask, setAsk, requestClose, confirm, onOpenChange: guardCreate } = useConfirmClose(
+    () => {
+      setCreateModalOpen(false);
+      setNewClienteData(emptyCliente);
+    },
+    formDirty(newClienteData, emptyCliente),
+    creating,
+  );
 
   // Buscar clientes cuando cambie el término de búsqueda (solo si tiene 3+ caracteres)
   useEffect(() => {
@@ -370,7 +376,7 @@ const ClienteSelector = ({
       </PopoverContent>
 
       {/* Modal para crear cliente rápido */}
-      <Dialog open={createModalOpen} onOpenChange={setCreateModalOpen}>
+      <Dialog open={createModalOpen} onOpenChange={guardCreate}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>Crear Nuevo Cliente</DialogTitle>
@@ -423,14 +429,7 @@ const ClienteSelector = ({
             <Button
               type="button"
               variant="outline"
-              onClick={() => {
-                setCreateModalOpen(false);
-                setNewClienteData({
-                  nombre_completo: "",
-                  telefono: "",
-                  fkid_ciudad: ""
-                });
-              }}
+              onClick={requestClose}
               disabled={creating}
             >
               Cancelar
@@ -445,6 +444,7 @@ const ClienteSelector = ({
             </Button>
           </DialogFooter>
         </DialogContent>
+        <ConfirmCloseDialog open={ask} onOpenChange={setAsk} onConfirm={confirm} />
       </Dialog>
     </Popover>
   );

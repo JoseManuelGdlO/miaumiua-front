@@ -17,6 +17,9 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { rolesService, CreateRoleData, Permission } from "@/services/rolesService";
 import { permissionsService } from "@/services/permissionsService";
+import { ConfirmCloseDialog, formDirty, useConfirmClose } from "@/components/ConfirmClose";
+
+const EMPTY_ROLE = { name: "", description: "", selectedPermissions: [] as number[] };
 
 interface CreateRoleModalProps {
   open: boolean;
@@ -28,11 +31,12 @@ const CreateRoleModal = ({ open, onOpenChange, onRoleCreated }: CreateRoleModalP
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [permissions, setPermissions] = useState<Permission[]>([]);
-  const [formData, setFormData] = useState({
-    name: "",
-    description: "",
-    selectedPermissions: [] as number[]
-  });
+  const [formData, setFormData] = useState(EMPTY_ROLE);
+  const { ask, setAsk, requestClose, confirm, onOpenChange: guardClose } = useConfirmClose(
+    () => onOpenChange(false),
+    formDirty(formData, EMPTY_ROLE),
+    loading,
+  );
 
   // Cargar permisos al abrir el modal
   useEffect(() => {
@@ -137,7 +141,7 @@ const CreateRoleModal = ({ open, onOpenChange, onRoleCreated }: CreateRoleModalP
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={guardClose}>
       <DialogContent className="flex max-h-[90vh] w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl">
         <DialogHeader className="shrink-0 space-y-1.5 border-b px-6 py-5 pr-12 text-left">
           <DialogTitle>Crear Nuevo Rol</DialogTitle>
@@ -216,7 +220,7 @@ const CreateRoleModal = ({ open, onOpenChange, onRoleCreated }: CreateRoleModalP
           </div>
 
           <DialogFooter className="shrink-0 border-t bg-card px-6 py-4">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
+            <Button type="button" variant="outline" onClick={requestClose} disabled={loading}>
               Cancelar
             </Button>
             <Button type="submit" disabled={loading}>
@@ -225,6 +229,7 @@ const CreateRoleModal = ({ open, onOpenChange, onRoleCreated }: CreateRoleModalP
           </DialogFooter>
         </form>
       </DialogContent>
+      <ConfirmCloseDialog open={ask} onOpenChange={setAsk} onConfirm={confirm} />
     </Dialog>
   );
 };

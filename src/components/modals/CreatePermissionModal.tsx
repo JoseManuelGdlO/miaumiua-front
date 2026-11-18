@@ -20,6 +20,9 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { permissionsService, CreatePermissionData, PERMISSION_CATEGORIES } from "@/services/permissionsService";
+import { ConfirmCloseDialog, formDirty, useConfirmClose } from "@/components/ConfirmClose";
+
+const EMPTY_PERMISSION: CreatePermissionData = { nombre: "", categoria: "", descripcion: "", tipo: "lectura" };
 
 interface CreatePermissionModalProps {
   open: boolean;
@@ -36,26 +39,22 @@ const CreatePermissionModal = ({
   const [loading, setLoading] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>("");
   const [selectedAction, setSelectedAction] = useState<string>("");
-  const [formData, setFormData] = useState<CreatePermissionData>({
-    nombre: "",
-    categoria: "",
-    descripcion: "",
-    tipo: "lectura"
-  });
+  const [formData, setFormData] = useState<CreatePermissionData>(EMPTY_PERMISSION);
 
   // Reset form when modal opens
   useEffect(() => {
     if (open) {
-      setFormData({
-        nombre: "",
-        categoria: "",
-        descripcion: "",
-        tipo: "lectura"
-      });
+      setFormData(EMPTY_PERMISSION);
       setSelectedCategory("");
       setSelectedAction("");
     }
   }, [open]);
+
+  const { ask, setAsk, requestClose, confirm, onOpenChange: guardClose } = useConfirmClose(
+    () => onOpenChange(false),
+    formDirty(formData, EMPTY_PERMISSION) || Boolean(selectedCategory || selectedAction),
+    loading,
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -152,7 +151,7 @@ const CreatePermissionModal = ({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={guardClose}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>Crear Nuevo Permiso</DialogTitle>
@@ -251,7 +250,7 @@ const CreatePermissionModal = ({
             <Button 
               type="button" 
               variant="outline" 
-              onClick={() => onOpenChange(false)}
+              onClick={requestClose}
               disabled={loading}
             >
               Cancelar
@@ -262,6 +261,7 @@ const CreatePermissionModal = ({
           </DialogFooter>
         </form>
       </DialogContent>
+      <ConfirmCloseDialog open={ask} onOpenChange={setAsk} onConfirm={confirm} />
     </Dialog>
   );
 };

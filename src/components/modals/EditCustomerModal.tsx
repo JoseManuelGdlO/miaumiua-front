@@ -25,7 +25,8 @@ import { clientesService, Cliente, UpdateClienteData } from "@/services/clientes
 import { petsService, Pet, CreatePetData, UpdatePetData } from "@/services/petsService";
 import { citiesService } from "@/services/citiesService";
 import { Loader2, Plus, Trash2, Heart, Edit, Save, X } from "lucide-react";
-import { Checkbox } from "@/components/ui/checkbox";
+import { TipoCuenta, TipoCuentaCards, tipoDesdeCliente } from "@/components/TipoCuentaCards";
+import { ConfirmCloseDialog, useConfirmClose } from "@/components/ConfirmClose";
 
 interface EditCustomerModalProps {
   open: boolean;
@@ -60,8 +61,12 @@ const EditCustomerModal = ({ open, onOpenChange, cliente, onClienteUpdated }: Ed
     canal_contacto: "",
     direccion_entrega: "",
     notas_especiales: "",
-    es_distribuidor: false,
+    tipo_cuenta: "general" as TipoCuenta,
   });
+  const [baseline, setBaseline] = useState({ form: "", pets: "[]" });
+  const [estado, setEstado] = useState("todos");
+  const estados = [...new Set(cities.map((city) => city.departamento).filter(Boolean))].sort();
+  const ciudadesVisibles = estado === "todos" ? cities : cities.filter((city) => city.departamento === estado);
 
   // Cargar ciudades y mascotas al abrir el modal
   useEffect(() => {
@@ -83,7 +88,7 @@ const EditCustomerModal = ({ open, onOpenChange, cliente, onClienteUpdated }: Ed
         ? cliente.fkid_ciudad.toString() 
         : "";
       
-      setFormData({
+      const next = {
         nombre_completo: cliente.nombre_completo || "",
         telefono: cliente.telefono || "",
         email: cliente.email || "",
@@ -91,8 +96,11 @@ const EditCustomerModal = ({ open, onOpenChange, cliente, onClienteUpdated }: Ed
         canal_contacto: cliente.canal_contacto || "",
         direccion_entrega: cliente.direccion_entrega || "",
         notas_especiales: cliente.notas_especiales || "",
-        es_distribuidor: Boolean(cliente.es_distribuidor),
-      });
+        tipo_cuenta: tipoDesdeCliente(cliente),
+      };
+      setFormData(next);
+      setBaseline((prev) => ({ ...prev, form: JSON.stringify(next) }));
+      setEstado(cliente.ciudad?.departamento || "todos");
     }
   }, [cliente, open]);
 
@@ -140,6 +148,7 @@ const EditCustomerModal = ({ open, onOpenChange, cliente, onClienteUpdated }: Ed
           isEditing: false
         }));
         setPets(petsData);
+        setBaseline((prev) => ({ ...prev, pets: JSON.stringify(petsData) }));
       }
     } catch (error) {
       console.error('Error al cargar mascotas:', error);
@@ -147,6 +156,12 @@ const EditCustomerModal = ({ open, onOpenChange, cliente, onClienteUpdated }: Ed
       setPetsLoading(false);
     }
   };
+
+  const { ask, setAsk, requestClose, confirm, onOpenChange: guardClose } = useConfirmClose(
+    () => onOpenChange(false),
+    JSON.stringify(formData) !== baseline.form || JSON.stringify(pets) !== baseline.pets,
+    loading,
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -199,7 +214,8 @@ const EditCustomerModal = ({ open, onOpenChange, cliente, onClienteUpdated }: Ed
         canal_contacto: formData.canal_contacto || undefined,
         direccion_entrega: formData.direccion_entrega || undefined,
         notas_especiales: formData.notas_especiales || undefined,
-        es_distribuidor: formData.es_distribuidor,
+        tipo_cuenta: formData.tipo_cuenta,
+        es_distribuidor: formData.tipo_cuenta !== "general",
       };
 
       const response = await clientesService.updateCliente(cliente.id, updateData);
@@ -386,7 +402,7 @@ const EditCustomerModal = ({ open, onOpenChange, cliente, onClienteUpdated }: Ed
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={guardClose}>
       <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Editar Cliente</DialogTitle>
@@ -441,23 +457,45 @@ const EditCustomerModal = ({ open, onOpenChange, cliente, onClienteUpdated }: Ed
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="fkid_ciudad">Ciudad *</Label>
-                  <Select 
-                    value={formData.fkid_ciudad} 
-                    onValueChange={(value) => handleInputChange('fkid_ciudad', value)}
+                  <Label>Estado</Label>
+                  <Select
+                    value={estado}
+                    onValueChange={(value) => {
+                      setEstado(value);
+                      const still = (value === "todos" ? cities : cities.filter((city) => city.departamento === value))
+                        .some((city) => city.id.toString() === formData.fkid_ciudad);
+                      if (!still) handleInputChange("fkid_ciudad", "");
+                    }}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Selecciona una ciudad" />
+                      <SelectValue placeholder="Estado" />
                     </SelectTrigger>
                     <SelectContent>
-                      {cities.map((city) => (
-                        <SelectItem key={city.id} value={city.id.toString()}>
-                          {city.nombre} - {city.departamento}
-                        </SelectItem>
+                      <SelectItem value="todos">Todos</SelectItem>
+                      {estados.map((name) => (
+                        <SelectItem key={name} value={name}>{name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="fkid_ciudad">Ciudad *</Label>
+                <Select
+                  value={formData.fkid_ciudad}
+                  onValueChange={(value) => handleInputChange('fkid_ciudad', value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecciona una ciudad" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ciudadesVisibles.map((city) => (
+                      <SelectItem key={city.id} value={city.id.toString()}>
+                        {city.nombre} - {city.departamento}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-2">
@@ -489,13 +527,12 @@ const EditCustomerModal = ({ open, onOpenChange, cliente, onClienteUpdated }: Ed
                 />
               </div>
 
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="es_distribuidor"
-                  checked={formData.es_distribuidor}
-                  onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, es_distribuidor: checked === true }))}
+              <div className="space-y-2">
+                <Label>Tipo de cuenta</Label>
+                <TipoCuentaCards
+                  value={formData.tipo_cuenta}
+                  onChange={(tipo_cuenta) => setFormData((prev) => ({ ...prev, tipo_cuenta }))}
                 />
-                <Label htmlFor="es_distribuidor" className="font-normal cursor-pointer">Este cliente es distribuidor (veterinaria)</Label>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="notas_especiales">Notas Especiales</Label>
@@ -724,7 +761,7 @@ const EditCustomerModal = ({ open, onOpenChange, cliente, onClienteUpdated }: Ed
             <Button
               type="button"
               variant="outline"
-              onClick={() => onOpenChange(false)}
+              onClick={requestClose}
               disabled={loading}
             >
               Cancelar
@@ -736,6 +773,7 @@ const EditCustomerModal = ({ open, onOpenChange, cliente, onClienteUpdated }: Ed
           </DialogFooter>
         </form>
       </DialogContent>
+      <ConfirmCloseDialog open={ask} onOpenChange={setAsk} onConfirm={confirm} />
     </Dialog>
   );
 };

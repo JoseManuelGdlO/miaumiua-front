@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { ConfirmCloseDialog, useConfirmClose } from "@/components/ConfirmClose";
 
 interface Pedido {
   id: number;
@@ -49,6 +50,13 @@ const RepartidorDashboard = () => {
   const [selectedPedido, setSelectedPedido] = useState<Pedido | null>(null);
   const [showNotasDialog, setShowNotasDialog] = useState(false);
   const [notas, setNotas] = useState("");
+  const { ask, setAsk, requestClose, confirm, onOpenChange: guardNotas } = useConfirmClose(
+    () => {
+      setShowNotasDialog(false);
+      setNotas("");
+    },
+    Boolean(notas.trim()),
+  );
   const [fechaActual, setFechaActual] = useState<string>("");
   const { repartidor, isAuthenticated, isLoading: authLoading, logout } = useRepartidorAuth();
   const navigate = useNavigate();
@@ -524,7 +532,7 @@ const RepartidorDashboard = () => {
       </div>
 
       {/* Dialog para notas cuando no se entrega */}
-      <Dialog open={showNotasDialog} onOpenChange={setShowNotasDialog}>
+      <Dialog open={showNotasDialog} onOpenChange={guardNotas}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Marcar como No Entregado</DialogTitle>
@@ -545,7 +553,7 @@ const RepartidorDashboard = () => {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowNotasDialog(false)}>
+            <Button variant="outline" onClick={requestClose}>
               Cancelar
             </Button>
             <Button
@@ -560,6 +568,7 @@ const RepartidorDashboard = () => {
             </Button>
           </DialogFooter>
         </DialogContent>
+        <ConfirmCloseDialog open={ask} onOpenChange={setAsk} onConfirm={confirm} />
       </Dialog>
     </div>
   );

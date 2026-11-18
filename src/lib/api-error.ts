@@ -1,12 +1,20 @@
 function textos(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value
-    .map((item) => (typeof item === 'string' ? item.trim() : ''))
-    .filter((item) => item !== '');
+    .map((item) => {
+      if (typeof item === "string") return item.trim();
+      if (item && typeof item === "object") {
+        const record = item as { msg?: unknown; message?: unknown };
+        const text = record.msg ?? record.message;
+        return typeof text === "string" ? text.trim() : "";
+      }
+      return "";
+    })
+    .filter((item) => item !== "");
 }
 
 export function textoDeError(body: unknown): string {
-  if (!body || typeof body !== 'object') return 'No se pudo completar la solicitud';
+  if (!body || typeof body !== "object") return "No se pudo completar la solicitud";
   const record = body as Record<string, unknown>;
   const errors = textos(record.errors);
   const message = typeof record.message === 'string' && record.message.trim()

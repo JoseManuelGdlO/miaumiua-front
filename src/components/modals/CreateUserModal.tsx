@@ -16,6 +16,16 @@ import { useToast } from "@/hooks/use-toast";
 import { usersService, CreateUserData, Role } from "@/services/usersService";
 import { rolesService } from "@/services/rolesService";
 import { citiesService, City } from "@/services/citiesService";
+import { ConfirmCloseDialog, formDirty, useConfirmClose } from "@/components/ConfirmClose";
+
+const EMPTY_USER = {
+  nombre_completo: "",
+  correo_electronico: "",
+  contrasena: "",
+  confirmPassword: "",
+  rol_id: "",
+  ciudad_id: "",
+};
 
 interface CreateUserModalProps {
   open: boolean;
@@ -28,14 +38,12 @@ const CreateUserModal = ({ open, onOpenChange, onUserCreated }: CreateUserModalP
   const [loading, setLoading] = useState(false);
   const [roles, setRoles] = useState<Role[]>([]);
   const [cities, setCities] = useState<City[]>([]);
-  const [formData, setFormData] = useState({
-    nombre_completo: "",
-    correo_electronico: "",
-    contrasena: "",
-    confirmPassword: "",
-    rol_id: "",
-    ciudad_id: ""
-  });
+  const [formData, setFormData] = useState(EMPTY_USER);
+  const { ask, setAsk, requestClose, confirm, onOpenChange: guardClose } = useConfirmClose(
+    () => onOpenChange(false),
+    formDirty(formData, EMPTY_USER),
+    loading,
+  );
 
   // Cargar datos al abrir el modal
   useEffect(() => {
@@ -162,7 +170,7 @@ const CreateUserModal = ({ open, onOpenChange, onUserCreated }: CreateUserModalP
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={guardClose}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Crear Nuevo Usuario</DialogTitle>
@@ -252,7 +260,7 @@ const CreateUserModal = ({ open, onOpenChange, onUserCreated }: CreateUserModalP
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
+            <Button type="button" variant="outline" onClick={requestClose} disabled={loading}>
               Cancelar
             </Button>
             <Button type="submit" disabled={loading}>
@@ -261,6 +269,7 @@ const CreateUserModal = ({ open, onOpenChange, onUserCreated }: CreateUserModalP
           </DialogFooter>
         </form>
       </DialogContent>
+      <ConfirmCloseDialog open={ask} onOpenChange={setAsk} onConfirm={confirm} />
     </Dialog>
   );
 };

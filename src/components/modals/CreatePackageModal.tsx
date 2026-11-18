@@ -19,6 +19,9 @@ import { Inventario } from "@/services/inventariosService";
 import ProductSelector from "@/components/ui/ProductSelector";
 import { Loader2, Plus, Trash2, Package as PackageIcon, DollarSign, Percent } from "lucide-react";
 import { config } from "@/config/environment";
+import { ConfirmCloseDialog, formDirty, useConfirmClose } from "@/components/ConfirmClose";
+
+const EMPTY_PACKAGE = { nombre: "", descripcion: "", precio: "", descuento: "" };
 
 const TITLE_MAX_LENGTH = 24; // Límite de WhatsApp para títulos de paquete
 
@@ -52,44 +55,37 @@ const CreatePackageModal = ({ open, onOpenChange, onPackageCreated, editingPacka
   const [products, setProducts] = useState<ProductFormData[]>([]);
   const isEditing = !!editingPackage;
 
-  const [formData, setFormData] = useState({
-    nombre: "",
-    descripcion: "",
-    precio: "",
-    descuento: ""
-  });
+  const [formData, setFormData] = useState(EMPTY_PACKAGE);
+  const [baseline, setBaseline] = useState(EMPTY_PACKAGE);
+  const [productsBaseline, setProductsBaseline] = useState<ProductFormData[]>([]);
 
   // Reset form cuando se abre el modal o cambia el paquete a editar
   useEffect(() => {
     if (open) {
       if (editingPackage) {
         // Cargar datos del paquete a editar
-        setFormData({
+        const next = {
           nombre: editingPackage.nombre || "",
           descripcion: editingPackage.descripcion || "",
           precio: editingPackage.precio?.toString() || "",
           descuento: editingPackage.descuento?.toString() || ""
-        });
-        
-        // Cargar productos del paquete
-        if (editingPackage.productos && editingPackage.productos.length > 0) {
-          setProducts(editingPackage.productos.map(p => ({
+        };
+        setFormData(next);
+        setBaseline(next);
+        const nextProducts = editingPackage.productos && editingPackage.productos.length > 0
+          ? editingPackage.productos.map(p => ({
             fkid_producto: p.fkid_producto,
             cantidad: p.cantidad,
             producto: p.producto
-          })));
-        } else {
-          setProducts([]);
-        }
+          }))
+          : [];
+        setProducts(nextProducts);
+        setProductsBaseline(nextProducts);
       } else {
-        // Reset para crear nuevo
-        setFormData({
-          nombre: "",
-          descripcion: "",
-          precio: "",
-          descuento: ""
-        });
+        setFormData(EMPTY_PACKAGE);
+        setBaseline(EMPTY_PACKAGE);
         setProducts([]);
+        setProductsBaseline([]);
       }
       setImageFile(null);
       setImagePreview(null);
@@ -292,8 +288,14 @@ const CreatePackageModal = ({ open, onOpenChange, onPackageCreated, editingPacka
     }));
   };
 
+  const { ask, setAsk, requestClose, confirm, onOpenChange: guardClose } = useConfirmClose(
+    () => onOpenChange(false),
+    formDirty(formData, baseline) || formDirty(products, productsBaseline) || Boolean(imageFile),
+    loading,
+  );
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={guardClose}>
       <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEditing ? 'Editar Paquete' : 'Crear Nuevo Paquete'}</DialogTitle>
@@ -545,7 +547,7 @@ const CreatePackageModal = ({ open, onOpenChange, onPackageCreated, editingPacka
             <Button
               type="button"
               variant="outline"
-              onClick={() => onOpenChange(false)}
+              onClick={requestClose}
               disabled={loading}
             >
               Cancelar
@@ -557,6 +559,7 @@ const CreatePackageModal = ({ open, onOpenChange, onPackageCreated, editingPacka
           </DialogFooter>
         </form>
       </DialogContent>
+      <ConfirmCloseDialog open={ask} onOpenChange={setAsk} onConfirm={confirm} />
     </Dialog>
   );
 };

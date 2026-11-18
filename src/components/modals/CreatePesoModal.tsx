@@ -20,6 +20,9 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { pesosService, CreatePesoData } from "@/services/pesosService";
 import { Loader2 } from "lucide-react";
+import { ConfirmCloseDialog, formDirty, useConfirmClose } from "@/components/ConfirmClose";
+
+const EMPTY_PESO: CreatePesoData = { cantidad: 0, unidad_medida: "kg" };
 
 interface CreatePesoModalProps {
   open: boolean;
@@ -34,10 +37,12 @@ const CreatePesoModal = ({
 }: CreatePesoModalProps) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState<CreatePesoData>({
-    cantidad: 0,
-    unidad_medida: "kg"
-  });
+  const [formData, setFormData] = useState<CreatePesoData>(EMPTY_PESO);
+  const { ask, setAsk, requestClose, confirm, onOpenChange: guardClose } = useConfirmClose(
+    () => onOpenChange(false),
+    formDirty(formData, EMPTY_PESO),
+    loading,
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,10 +86,7 @@ const CreatePesoModal = ({
         });
         
         // Limpiar el formulario
-        setFormData({
-          cantidad: 0,
-          unidad_medida: "kg"
-        });
+        setFormData(EMPTY_PESO);
         
         // Cerrar el modal
         onOpenChange(false);
@@ -118,7 +120,7 @@ const CreatePesoModal = ({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={guardClose}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Nuevo Peso</DialogTitle>
@@ -171,7 +173,7 @@ const CreatePesoModal = ({
             <Button
               type="button"
               variant="outline"
-              onClick={() => onOpenChange(false)}
+              onClick={requestClose}
               disabled={loading}
             >
               Cancelar
@@ -183,6 +185,7 @@ const CreatePesoModal = ({
           </DialogFooter>
         </form>
       </DialogContent>
+      <ConfirmCloseDialog open={ask} onOpenChange={setAsk} onConfirm={confirm} />
     </Dialog>
   );
 };

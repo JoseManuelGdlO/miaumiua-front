@@ -11,6 +11,9 @@ export interface Inventario {
   stock_minimo: number;
   stock_maximo: number;
   precio_venta: number;
+  precio_distribuidor?: number | null;
+  umbral_mayoreo?: number | null;
+  descuento_proveedor_pct?: number | null;
   costo_unitario: number;
   fkid_peso: number;
   fkid_categoria: number;
@@ -63,6 +66,9 @@ export interface CreateInventarioData {
   stock_minimo: number;
   stock_maximo: number;
   precio_venta: number;
+  precio_distribuidor?: number | null;
+  umbral_mayoreo?: number | null;
+  descuento_proveedor_pct?: number | null;
   costo_unitario: number;
   fkid_peso: number;
   fkid_categoria: number;
@@ -79,6 +85,9 @@ export interface UpdateInventarioData {
   stock_minimo?: number;
   stock_maximo?: number;
   precio_venta?: number;
+  precio_distribuidor?: number | null;
+  umbral_mayoreo?: number | null;
+  descuento_proveedor_pct?: number | null;
   costo_unitario?: number;
   fkid_peso?: number;
   fkid_categoria?: number;
@@ -132,6 +141,19 @@ export interface InventariosQueryParams {
   search?: string;
   min_price?: number;
   max_price?: number;
+  departamento?: string;
+}
+
+export function precioLista(
+  inv: Pick<Inventario, 'precio_venta' | 'precio_distribuidor' | 'umbral_mayoreo'> | null | undefined,
+  { es_distribuidor, cantidad }: { es_distribuidor?: boolean; cantidad?: number } = {},
+) {
+  const venta = Number(inv?.precio_venta) || 0;
+  const dist = Number(inv?.precio_distribuidor) || venta;
+  if (es_distribuidor) return dist;
+  const umbral = Number(inv?.umbral_mayoreo) || 0;
+  if (umbral > 0 && Number(cantidad) >= umbral) return dist;
+  return venta;
 }
 
 class InventariosService {
@@ -178,6 +200,7 @@ class InventariosService {
     if (params.search) queryParams.append('search', params.search);
     if (params.min_price) queryParams.append('min_price', params.min_price.toString());
     if (params.max_price) queryParams.append('max_price', params.max_price.toString());
+    if (params.departamento) queryParams.append('departamento', params.departamento);
 
     const queryString = queryParams.toString();
     const endpoint = `/inventarios${queryString ? `?${queryString}` : ''}`;

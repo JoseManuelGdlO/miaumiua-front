@@ -14,6 +14,9 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { categoriasProductoService, CreateCategoriaProductoData } from "@/services/categoriasProductoService";
 import { Loader2 } from "lucide-react";
+import { ConfirmCloseDialog, formDirty, useConfirmClose } from "@/components/ConfirmClose";
+
+const EMPTY_CATEGORIA: CreateCategoriaProductoData = { nombre: "", descripcion: "" };
 
 interface CreateCategoriaProductoModalProps {
   open: boolean;
@@ -28,10 +31,12 @@ const CreateCategoriaProductoModal = ({
 }: CreateCategoriaProductoModalProps) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState<CreateCategoriaProductoData>({
-    nombre: "",
-    descripcion: ""
-  });
+  const [formData, setFormData] = useState<CreateCategoriaProductoData>(EMPTY_CATEGORIA);
+  const { ask, setAsk, requestClose, confirm, onOpenChange: guardClose } = useConfirmClose(
+    () => onOpenChange(false),
+    formDirty(formData, EMPTY_CATEGORIA),
+    loading,
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,10 +89,7 @@ const CreateCategoriaProductoModal = ({
         });
         
         // Limpiar el formulario
-        setFormData({
-          nombre: "",
-          descripcion: ""
-        });
+        setFormData(EMPTY_CATEGORIA);
         
         // Cerrar el modal
         onOpenChange(false);
@@ -121,7 +123,7 @@ const CreateCategoriaProductoModal = ({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={guardClose}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Nueva Categoría de Producto</DialogTitle>
@@ -165,7 +167,7 @@ const CreateCategoriaProductoModal = ({
             <Button
               type="button"
               variant="outline"
-              onClick={() => onOpenChange(false)}
+              onClick={requestClose}
               disabled={loading}
             >
               Cancelar
@@ -177,6 +179,7 @@ const CreateCategoriaProductoModal = ({
           </DialogFooter>
         </form>
       </DialogContent>
+      <ConfirmCloseDialog open={ask} onOpenChange={setAsk} onConfirm={confirm} />
     </Dialog>
   );
 };
