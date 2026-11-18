@@ -3,8 +3,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Sparkles, MapPin, Truck, Route } from 'lucide-react';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AlertCircle, Loader2, Sparkles, MapPin, Truck, Route } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { mapsService, AVISO_SIN_UBICAR } from '@/services/mapsService';
 import { compareOneVsTwoDrivers, type Location } from '@/utils/vrpSolver';
@@ -378,6 +378,11 @@ const AIRouteOptimizer: React.FC<AIRouteOptimizerProps> = ({
       return;
     }
 
+    if (driversAvailable < 1) {
+      setError('No hay repartidores disponibles. Agrega al menos uno antes de optimizar.');
+      return;
+    }
+
     if (!cityInfo || !cityInfo.direccion_operaciones) {
       setError('No se encontró la dirección de la bodega para esta ciudad');
       return;
@@ -521,8 +526,15 @@ const AIRouteOptimizer: React.FC<AIRouteOptimizerProps> = ({
         summary: summary
       });
 
-      const chosen = driverId === 'auto' ? undefined : Number(driverId);
-      onRoutesGenerated(optimizedRoutes, chosen ? { driverId: chosen } : undefined);
+      const chosenId = Number(driverId);
+      const assigned = driverId !== 'auto'
+        && Number.isFinite(chosenId)
+        && drivers.some((driver) => driver.id === chosenId);
+      if (assigned) {
+        onRoutesGenerated(optimizedRoutes, { driverId: chosenId });
+      } else {
+        onRoutesGenerated(optimizedRoutes);
+      }
 
     } catch (error) {
       console.error('Error optimizando rutas:', error);
@@ -576,7 +588,9 @@ const AIRouteOptimizer: React.FC<AIRouteOptimizerProps> = ({
           <p className="text-xs text-muted-foreground">Si no eliges uno, la ruta queda sin repartidor. 8 pedidos o menos salen en una sola ruta.</p>
         </div>
         {error ? (
-          <Alert>
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>No se pudo optimizar</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         ) : null}
@@ -584,9 +598,15 @@ const AIRouteOptimizer: React.FC<AIRouteOptimizerProps> = ({
         {/* Optimization Button */}
         <Button
           onClick={optimizeRoutes}
-          disabled={orders.length === 0 || isOptimizing}
+          disabled={orders.length === 0 || driversAvailable < 1 || isOptimizing}
           className="w-full gap-2"
-          title={orders.length === 0 ? "No hay pedidos para optimizar" : ""}
+          title={
+            orders.length === 0
+              ? "No hay pedidos para optimizar"
+              : driversAvailable < 1
+                ? "No hay repartidores disponibles"
+                : ""
+          }
         >
           {isOptimizing ? (
             <>
@@ -629,10 +649,11 @@ const AIRouteOptimizer: React.FC<AIRouteOptimizerProps> = ({
 
         {/* Warning if no drivers */}
         {driversAvailable === 0 && (
-          <Alert className="border-warning/20 bg-warning/5">
+          <Alert>
             <Truck className="h-4 w-4" />
+            <AlertTitle>Sin repartidores</AlertTitle>
             <AlertDescription className="text-sm">
-              No hay repartidores en la lista. La ruta se crea igual; asígnalo después en la tarjeta.
+              No hay repartidores disponibles. Agrega al menos uno antes de optimizar.
             </AlertDescription>
           </Alert>
         )}
