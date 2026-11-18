@@ -12,6 +12,7 @@ export interface Cliente {
   direccion_entrega?: string;
   puntos_lealtad: number;
   notas_especiales?: string;
+  es_distribuidor?: boolean;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -41,6 +42,7 @@ export interface CreateClienteData {
   canal_contacto?: string;
   direccion_entrega?: string;
   notas_especiales?: string;
+  es_distribuidor?: boolean;
 }
 
 export interface UpdateClienteData {
@@ -51,6 +53,7 @@ export interface UpdateClienteData {
   canal_contacto?: string;
   direccion_entrega?: string;
   notas_especiales?: string;
+  es_distribuidor?: boolean;
 }
 
 export interface ClienteResponse {

@@ -734,6 +734,7 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
                       <SelectItem value="tarjeta">Tarjeta</SelectItem>
                       <SelectItem value="transferencia">Transferencia</SelectItem>
                       <SelectItem value="pago_movil">Pago Móvil</SelectItem>
+                      <SelectItem value="mixto">Mixto</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

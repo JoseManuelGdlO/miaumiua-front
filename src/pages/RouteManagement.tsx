@@ -54,6 +54,15 @@ function sinPrueba<T extends { es_prueba?: boolean }>(rows: T[] | undefined) {
   return (rows || []).filter((row) => !row.es_prueba);
 }
 import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { canCreate, canEdit, canDelete, canViewStats } from "@/utils/permissions";
 
 function claseEstadoRuta(estado?: string) {
@@ -96,6 +105,7 @@ function irAlMapa(rutaId: number) {
 
 const RouteManagement = () => {
   const { toast } = useToast();
+  const [borrarRuta, setBorrarRuta] = useState<string | null>(null);
   const [searchParams] = useSearchParams();
   const [selectedCity, setSelectedCity] = useState(searchParams.get("ciudad") || "");
   const [selectedDate, setSelectedDate] = useState(searchParams.get("fecha") || new Date().toISOString().split("T")[0]);
@@ -438,7 +448,13 @@ const RouteManagement = () => {
   };
 
   const deleteRoute = async (routeId: string) => {
-    if (!window.confirm("¿Estás seguro de que deseas eliminar esta ruta?")) return;
+    setBorrarRuta(routeId);
+  };
+
+  const confirmarBorrarRuta = async () => {
+    if (!borrarRuta) return;
+    const routeId = borrarRuta;
+    setBorrarRuta(null);
     try {
       const response = await routesService.deleteRoute(parseInt(routeId));
       
@@ -724,6 +740,7 @@ const RouteManagement = () => {
   };
 
   return (
+    <>
     <DndContext
       collisionDetection={closestCenter}
       onDragStart={handleDragStart}
@@ -856,23 +873,14 @@ const RouteManagement = () => {
             } : undefined}
             date={selectedDate}
             driversAvailable={drivers.length}
-            onRoutesGenerated={async (newRoutes) => {
+            drivers={drivers.map((driver) => ({ id: driver.id, nombre_completo: driver.nombre_completo }))}
+            onRoutesGenerated={async (newRoutes, opts) => {
               try {
                 setLoading(true);
-                
-                // Verificar que haya repartidores disponibles
-                if (drivers.length === 0) {
-                  toast({
-                    title: "Error",
-                    description: "No hay repartidores disponibles para asignar a las rutas. Por favor, asegúrate de que haya al menos un repartidor disponible.",
-                    variant: "destructive"
-                  });
-                  return;
-                }
-                
+                const chosen = opts?.driverId ? drivers.find((driver) => driver.id === opts.driverId) : null;
+
                 // Crear una ruta para cada grupo optimizado
                 const routeEntries = Object.entries(newRoutes);
-                let driverIndex = 0;
                 let routesCreated = 0;
                 let routesWithOrders = 0;
                 let totalOrdersAssigned = 0;
@@ -881,16 +889,11 @@ const RouteManagement = () => {
                   if (orders.length === 0) continue;
                   
                   try {
-                    // Seleccionar repartidor (distribuir entre los disponibles)
-                    const selectedDriver = drivers[driverIndex % drivers.length];
-                    driverIndex++;
-                    
-                    // Crear la ruta con repartidor asignado
                     const routeResponse = await routesService.createRoute({
                       nombre_ruta: `Ruta ${routeId} - ${selectedDate}`,
                       fecha_ruta: selectedDate,
                       fkid_ciudad: parseInt(selectedCity),
-                      fkid_repartidor: selectedDriver.id,
+                      ...(chosen ? { fkid_repartidor: chosen.id } : {}),
                       estado: "planificada",
                       notas: `Ruta optimizada con IA - ${orders.length} pedidos`
                     });
@@ -1011,7 +1014,9 @@ const RouteManagement = () => {
                 if (routesCreated > 0) {
                   toast({
                     title: "Rutas optimizadas creadas",
-                    description: `Se crearon ${routesCreated} ruta(s) y se asignaron ${totalOrdersAssigned} pedido(s) exitosamente`,
+                    description: chosen
+                      ? `Se crearon ${routesCreated} ruta(s) y se asignaron ${totalOrdersAssigned} pedido(s) a ${chosen.nombre_completo}`
+                      : `Se crearon ${routesCreated} ruta(s) con ${totalOrdersAssigned} pedido(s). Elige el repartidor en la tarjeta de cada ruta.`,
                   });
                 } else {
                   toast({
@@ -1592,6 +1597,18 @@ const RouteManagement = () => {
          ) : null}
        </DragOverlay>
     </DndContext>
+    <AlertDialog open={borrarRuta != null} onOpenChange={(open) => { if (!open) setBorrarRuta(null); }}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>¿Eliminar esta ruta?</AlertDialogTitle>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          <AlertDialogAction onClick={() => void confirmarBorrarRuta()}>Eliminar</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 };
 

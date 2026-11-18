@@ -153,7 +153,7 @@ const Promotions = () => {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Promociones</h1>
           <p className="text-muted-foreground">
-            Gestiona las promociones y descuentos disponibles
+            Un código con vigencia, ciudades y tipo (porcentaje, monto fijo, 2x1). El bot y Call Center lo aplican al total del pedido. Para veterinarias, marca al cliente como distribuidor y crea una promo “solo distribuidores” del estado.
           </p>
         </div>
         {canCreate('promotions') && (

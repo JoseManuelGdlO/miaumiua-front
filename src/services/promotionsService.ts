@@ -16,6 +16,7 @@ export interface Promotion {
   compra_minima?: number;
   descuento_maximo?: number;
   baja_logica: boolean;
+  aplica_a?: 'todos' | 'retail' | 'distribuidor';
   created_at: string;
   updated_at: string;
   ciudades?: City[];
@@ -34,6 +35,7 @@ export interface CreatePromotionData {
   compra_minima?: number;
   descuento_maximo?: number;
   ciudades?: number[];
+  aplica_a?: 'todos' | 'retail' | 'distribuidor';
 }
 
 export interface UpdatePromotionData {
@@ -48,6 +50,7 @@ export interface UpdatePromotionData {
   compra_minima?: number;
   descuento_maximo?: number;
   ciudades?: number[];
+  aplica_a?: 'todos' | 'retail' | 'distribuidor';
 }
 
 export interface PromotionsResponse {
@@ -174,6 +177,10 @@ class PromotionsService {
 
   async getActivePromotions(): Promise<PromotionsResponse> {
     return this.makeRequest<PromotionsResponse>('/promotions/active');
+  }
+
+  async paraCliente(telefono: string): Promise<{ success: boolean; data: { promotion: Promotion | null; logica_aplicar?: unknown; es_distribuidor?: boolean } }> {
+    return this.makeRequest(`/promotions/para-cliente?telefono=${encodeURIComponent(telefono)}`);
   }
 }
 
