@@ -491,11 +491,18 @@ function MonitorRepartidores({
     setGpsPausado(false);
   }, [elegido]);
   useEffect(() => {
-    if (!vivo) return;
-    const timer = window.setInterval(() => {
-      setGpsPausado(Date.now() - vivo.at > 30000);
-    }, 5000);
-    return () => window.clearInterval(timer);
+    if (!vivo) {
+      setGpsPausado(false);
+      return;
+    }
+    const restante = 30000 - (Date.now() - vivo.at);
+    if (restante <= 0) {
+      setGpsPausado(true);
+      return;
+    }
+    setGpsPausado(false);
+    const timer = window.setTimeout(() => setGpsPausado(true), restante);
+    return () => window.clearTimeout(timer);
   }, [vivo]);
   useEffect(() => {
     let vivo = true;

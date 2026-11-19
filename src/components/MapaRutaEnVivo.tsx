@@ -84,6 +84,43 @@ export type TelemetriaGps = {
   alertaGps: boolean;
 };
 
+type GpsWsMessage = {
+  type: "gps";
+  repartidorId: number;
+  lat: number;
+  lng: number;
+  velocidadActualKmh: number;
+  velocidadPromedioKmh: number;
+  estadoMovimiento: "en_movimiento" | "detenido";
+  alertaGps: boolean;
+};
+
+function parseGpsMessage(raw: unknown): GpsWsMessage | null {
+  let data: unknown;
+  try {
+    data = JSON.parse(String(raw));
+  } catch {
+    return null;
+  }
+  if (!data || typeof data !== "object") return null;
+  const row = data as Record<string, unknown>;
+  if (row.type !== "gps") return null;
+  const lat = Number(row.lat);
+  const lng = Number(row.lng);
+  const repartidorId = Number(row.repartidorId);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || !Number.isFinite(repartidorId)) return null;
+  return {
+    type: "gps",
+    repartidorId,
+    lat,
+    lng,
+    velocidadActualKmh: Number(row.velocidadActualKmh) || 0,
+    velocidadPromedioKmh: Number(row.velocidadPromedioKmh) || 0,
+    estadoMovimiento: row.estadoMovimiento === "en_movimiento" ? "en_movimiento" : "detenido",
+    alertaGps: Boolean(row.alertaGps),
+  };
+}
+
 export function MapaRutaEnVivo({
   rutaId,
   paradas = [],
@@ -201,34 +238,13 @@ export function MapaRutaEnVivo({
         ws?.send(JSON.stringify({ type: "auth", token }));
       };
       ws.onmessage = (message) => {
-        let data: {
-          type?: string;
-          repartidorId?: number;
-          lat?: number;
-          lng?: number;
-          velocidadActualKmh?: number;
-          velocidadPromedioKmh?: number;
-          estadoMovimiento?: string;
-          alertaGps?: boolean;
-        } | null = null;
-        try {
-          data = JSON.parse(String(message.data));
-        } catch {
-          return;
-        }
-        if (data?.type !== "gps") return;
-        if (Number(data.repartidorId) !== Number(repartidorId)) return;
-        const punto = { lat: Number(data.lat), lng: Number(data.lng) };
+        const data = parseGpsMessage(message.data);
+        if (!data || data.repartidorId !== Number(repartidorId)) return;
+        const punto = { lat: data.lat, lng: data.lng };
         if (!data.alertaGps) aplicarGps(punto);
-        onTelemetriaRef.current?.({
-          lat: punto.lat,
-          lng: punto.lng,
-          velocidadActualKmh: Number(data.velocidadActualKmh) || 0,
-          velocidadPromedioKmh: Number(data.velocidadPromedioKmh) || 0,
-          estadoMovimiento: data.estadoMovimiento === "en_movimiento" ? "en_movimiento" : "detenido",
-          alertaGps: Boolean(data.alertaGps),
-        });
+        onTelemetriaRef.current?.(data);
       };
+      ws.onerror = () => {};
       ws.onclose = () => {
         if (!stopped) window.setTimeout(connect, 2000);
       };
