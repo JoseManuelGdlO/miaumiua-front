@@ -126,6 +126,11 @@ export type ComprobantePago = {
   nota?: string | null;
   fecha?: string | null;
   comprobante_url: string | null;
+  evidencia_url?: string | null;
+  receptor_nombre?: string | null;
+  dejar_lugar?: string | null;
+  deposito_url?: string | null;
+  efectivo_a_depositar?: number;
   puede_subir: boolean;
 };
 
@@ -297,7 +302,14 @@ export const callCenterService = {
   }),
   listarVelocidad: () => request<VelocidadDia[]>('/call-center/velocidad'),
   trazado: (rutaId: number) => request<TrazadoRuta>(`/call-center/rutas/${rutaId}/trazado`),
-  listarComprobantes: (query?: { historico?: boolean }) => request<ComprobantePago[]>(`/call-center/comprobantes${query?.historico ? '?historico=1' : ''}`),
+  listarComprobantes: (query?: { fecha?: string; desde?: string; hasta?: string }) => {
+    const params = new URLSearchParams();
+    if (query?.desde) params.set('desde', query.desde);
+    if (query?.hasta) params.set('hasta', query.hasta);
+    if (query?.fecha && !query.desde && !query.hasta) params.set('fecha', query.fecha);
+    const qs = params.toString();
+    return request<ComprobantePago[]>(`/call-center/comprobantes${qs ? `?${qs}` : ''}`);
+  },
   corte: (repartidorId: number, fecha: string) => request<CorteDia>(`/call-center/corte?repartidorId=${repartidorId}&fecha=${fecha}`),
   anotarComprobante: (id: number, comentario: string) => request<{ guardado: boolean }>(`/call-center/pedidos/${id}/comprobante-nota`, {
     method: 'POST',

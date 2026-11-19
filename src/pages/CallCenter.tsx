@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { AlertTriangle, ChevronDown, ClipboardCheck, Download, Headphones, History, Inbox, LifeBuoy, Loader2, LogOut, Package, Phone, Receipt, Truck, Users, Wallet } from "lucide-react";
+import { AlertTriangle, ChevronDown, ClipboardCheck, Download, Eye, Headphones, History, Inbox, LifeBuoy, Loader2, LogOut, Package, Phone, Receipt, RefreshCw, Search, Truck, Users, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -11,7 +11,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useNotificationStream } from "@/hooks/useNotificationStream";
@@ -126,10 +125,62 @@ function receiptSrc(path: string | null | undefined) {
   return `${config.imageBaseUrl}${path.startsWith("/") ? "" : "/"}${path}`;
 }
 
-function receiptFilename(numero: string, url: string) {
-  const clean = numero.replace(/[^\w.-]+/g, "-") || "pedido";
+function receiptFilename(nombre: string, url: string) {
+  const clean = nombre.replace(/[^\w.-]+/g, "-") || "archivo";
   const match = url.match(/\.([a-z0-9]{2,5})(?:\?|$)/i);
-  return `comprobante-${clean}.${match?.[1] || "jpg"}`;
+  return `${clean}.${match?.[1] || "jpg"}`;
+}
+
+function hoyMexico() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Mexico_City" }).format(new Date());
+}
+
+function fechaMexico(delta = 0) {
+  const [y, m, d] = hoyMexico().split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + delta)).toISOString().slice(0, 10);
+}
+
+function primerDiaMesMexico() {
+  return `${hoyMexico().slice(0, 8)}01`;
+}
+
+function fechaCorta(iso: string) {
+  const [y, m, d] = String(iso).split("-");
+  return y && m && d ? `${d}/${m}/${y}` : iso;
+}
+
+function agruparCortes(rows: ComprobantePago[]) {
+  const grupos = new Map<string, {
+    key: string;
+    id: number;
+    nombre: string;
+    ciudad: string | null;
+    fecha: string;
+    deposito_url: string | null;
+    efectivo: number;
+    pedidos: ComprobantePago[];
+  }>();
+  for (const row of rows) {
+    const id = Number(row.repartidor_id) || 0;
+    const fecha = String(row.fecha || "").slice(0, 10);
+    const key = `${id}|${fecha}`;
+    const grupo = grupos.get(key) || {
+      key,
+      id,
+      nombre: row.repartidor || "Repartidor",
+      ciudad: row.ciudad || null,
+      fecha,
+      deposito_url: row.deposito_url || null,
+      efectivo: Number(row.efectivo_a_depositar) || 0,
+      pedidos: [] as ComprobantePago[],
+    };
+    grupo.pedidos.push(row);
+    if (row.deposito_url) grupo.deposito_url = row.deposito_url;
+    const efectivo = Number(row.efectivo_a_depositar) || 0;
+    if (efectivo) grupo.efectivo = efectivo;
+    grupos.set(key, grupo);
+  }
+  return [...grupos.values()];
 }
 
 function OrderStatus({ estado, modificado }: { estado: string; modificado?: boolean }) {
@@ -417,6 +468,14 @@ function MonitorRepartidores({
   const [codigoPedido, setCodigoPedido] = useState<number | null>(null);
   const [codigoPedidoTexto, setCodigoPedidoTexto] = useState("");
   const [franjaMapa, setFranjaMapa] = useState<"manana" | "tarde">("manana");
+  const [vivo, setVivo] = useState<{
+    actual: number;
+    promedio: number;
+    estado: "en_movimiento" | "detenido";
+    alerta: boolean;
+    at: number;
+  } | null>(null);
+  const [gpsPausado, setGpsPausado] = useState(false);
   const nombres = new Map<number, string>();
   for (const pedido of pedidos) {
     if (pedido.repartidor) nombres.set(pedido.repartidor.id, pedido.repartidor.nombre_completo);
@@ -427,6 +486,24 @@ function MonitorRepartidores({
   useEffect(() => {
     if (abiertoId) setElegido(abiertoId);
   }, [abiertoId]);
+  useEffect(() => {
+    setVivo(null);
+    setGpsPausado(false);
+  }, [elegido]);
+  useEffect(() => {
+    if (!vivo) {
+      setGpsPausado(false);
+      return;
+    }
+    const restante = 30000 - (Date.now() - vivo.at);
+    if (restante <= 0) {
+      setGpsPausado(true);
+      return;
+    }
+    setGpsPausado(false);
+    const timer = window.setTimeout(() => setGpsPausado(true), restante);
+    return () => window.clearTimeout(timer);
+  }, [vivo]);
   useEffect(() => {
     let vivo = true;
     callCenterService.listContactos().then((data) => {
@@ -538,6 +615,16 @@ function MonitorRepartidores({
                       paradas={deFranja.length ? deFranja : row.paradas}
                       ciudad={row.ciudadNombre || null}
                       destinoId={row.actual?.id ?? null}
+                      onTelemetria={(data) => {
+                        setGpsPausado(false);
+                        setVivo({
+                          actual: data.velocidadActualKmh,
+                          promedio: data.velocidadPromedioKmh,
+                          estado: data.estadoMovimiento,
+                          alerta: data.alertaGps,
+                          at: Date.now(),
+                        });
+                      }}
                       gps={(() => {
                         const candidatos = [row.velocidad, row.paradas.find((pedido) => pedido.repartidor?.lat != null)?.repartidor];
                         for (const punto of candidatos) {
@@ -559,9 +646,19 @@ function MonitorRepartidores({
                     {row.checkIn ? <p className="text-lg font-semibold">{row.checkIn.hora}</p> : null}
                   </div>
                   <div className="rounded-xl bg-white p-4">
-                    <p className="flex items-center gap-2 text-sm text-muted-foreground"><Truck className="h-4 w-4 text-primary" />Velocidad promedio</p>
-                    <p className="mt-2 text-lg font-semibold">{row.velocidad ? `${row.velocidad.promedio} km/h` : "Sin lecturas"}</p>
-                    {row.velocidad ? <p className="text-sm text-muted-foreground">{row.velocidad.lecturas} lecturas de hoy</p> : null}
+                    <p className="flex items-center gap-2 text-sm text-muted-foreground"><Truck className="h-4 w-4 text-primary" />Velocidad</p>
+                    {(() => {
+                      const enRuta = vivo?.estado === "en_movimiento";
+                      const promedio = vivo?.promedio ?? row.velocidad?.promedio ?? null;
+                      const estado = !vivo ? "Sin señal" : enRuta ? `En ruta · ${vivo.actual} km/h` : "Detenido · 0 km/h";
+                      return (
+                        <>
+                          <p className="mt-2 text-lg font-semibold">{estado}</p>
+                          <p className="text-sm text-muted-foreground">{promedio != null ? `Prom. trayecto: ${promedio} km/h` : "Sin lecturas"}</p>
+                          {vivo?.alerta || gpsPausado ? <p className="mt-1 text-sm text-amber-800">Señal GPS inestable o pausada</p> : null}
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
                 <div className="space-y-3 rounded-xl bg-white p-4">
@@ -1002,7 +1099,11 @@ const CallCenter = () => {
   const [pedidos, setPedidos] = useState<PedidoDia[]>([]);
   const [velocidades, setVelocidades] = useState<VelocidadDia[]>([]);
   const [comprobantes, setComprobantes] = useState<ComprobantePago[]>([]);
-  const [comprobantesHistorico, setComprobantesHistorico] = useState<ComprobantePago[] | null>(null);
+  const [desdeHistorico, setDesdeHistorico] = useState(hoyMexico);
+  const [hastaHistorico, setHastaHistorico] = useState(hoyMexico);
+  const [filasHistorico, setFilasHistorico] = useState<ComprobantePago[] | null>(null);
+  const [cargandoHistorico, setCargandoHistorico] = useState(false);
+  const [corteAbierto, setCorteAbierto] = useState<string | null>(null);
   const [filtroPago, setFiltroPago] = useState("all");
   const [filtroEstadoCobro, setFiltroEstadoCobro] = useState("all");
   const [filtroCobro, setFiltroCobro] = useState("");
@@ -1028,9 +1129,8 @@ const CallCenter = () => {
   const [historial, setHistorial] = useState<CargaValidada[]>([]);
   const [historialId, setHistorialId] = useState<number | null>(null);
   const [historialTick, setHistorialTick] = useState(0);
-  const [receipt, setReceipt] = useState<{ url: string; numero: string } | null>(null);
+  const [receipt, setReceipt] = useState<{ url: string; nombre: string; titulo: string } | null>(null);
   const [flujoAbierto, setFlujoAbierto] = useState(false);
-  const [downloading, setDownloading] = useState(false);
   const listGeneration = useRef(0);
   const latestFilters = useRef({ ciudadId, repartidorId });
   const detailRequest = useRef(0);
@@ -1042,6 +1142,35 @@ const CallCenter = () => {
   const notify = (error: unknown) => {
     toast({ title: "Call Center", description: errorText(error), variant: "destructive" });
   };
+
+  const rangoEsHoy = (desde: string, hasta: string) => {
+    const hoy = hoyMexico();
+    return desde === hoy && hasta === hoy;
+  };
+
+  const cargarHistorico = (desde: string, hasta: string) => {
+    setDesdeHistorico(desde);
+    setHastaHistorico(hasta);
+    setCorteAbierto(null);
+    if (rangoEsHoy(desde, hasta)) {
+      setFilasHistorico(null);
+      setCargandoHistorico(false);
+      return;
+    }
+    setCargandoHistorico(true);
+    void callCenterService.listarComprobantes({ desde, hasta })
+      .then(setFilasHistorico)
+      .catch(notify)
+      .finally(() => setCargandoHistorico(false));
+  };
+
+  const hoy = hoyMexico();
+  const periodosHistorico = [
+    { etiqueta: "Solo hoy", desde: hoy, hasta: hoy },
+    { etiqueta: "Ayer", desde: fechaMexico(-1), hasta: fechaMexico(-1) },
+    { etiqueta: "Últimos 7 días", desde: fechaMexico(-6), hasta: hoy },
+    { etiqueta: "Mes actual", desde: primerDiaMesMexico(), hasta: hoy },
+  ];
 
   const cambiarFranja = async (id: number, franja: "manana" | "tarde", alcance?: "ruta") => {
     try {
@@ -1393,26 +1522,6 @@ const CallCenter = () => {
     }
   };
 
-  const downloadReceipt = async () => {
-    if (!receipt || downloading) return;
-    setDownloading(true);
-    try {
-      const response = await fetch(receipt.url);
-      if (!response.ok) throw new Error("No se pudo descargar el comprobante");
-      const blob = await response.blob();
-      const objectUrl = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = objectUrl;
-      link.download = receiptFilename(receipt.numero, receipt.url);
-      link.click();
-      URL.revokeObjectURL(objectUrl);
-    } catch (error) {
-      notify(error);
-    } finally {
-      setDownloading(false);
-    }
-  };
-
   const driverOptions = Array.from(
     new Map(pedidos.filter((row) => row.repartidor).map((row) => [row.repartidor!.id, row.repartidor!])).values()
   );
@@ -1624,7 +1733,7 @@ const CallCenter = () => {
                       <button
                         type="button"
                         className="overflow-hidden rounded-md border bg-muted"
-                        onClick={() => setReceipt({ url: receiptSrc(row.comprobante_url), numero: row.numero_pedido })}
+                        onClick={() => setReceipt({ url: receiptSrc(row.comprobante_url), nombre: `comprobante-${row.numero_pedido}`, titulo: `Comprobante ${row.numero_pedido}` })}
                         aria-label={`Ver comprobante del pedido ${row.numero_pedido}`}
                       >
                         <img
@@ -1669,25 +1778,75 @@ const CallCenter = () => {
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2"><Receipt className="h-5 w-5 text-primary" />{comprobantesHistorico ? "Histórico de comprobantes" : "Comprobantes de hoy"}</CardTitle>
-          <CardDescription>Método, montos y si el cobro está completo. El corte final se exporta por repartidor y fecha.</CardDescription>
+          <CardTitle className="flex items-center gap-2"><Receipt className="h-5 w-5 text-primary" />Histórico de evidencias</CardTitle>
+          <CardDescription>Pago, foto de entrega y depósito. Un corte por repartidor y día.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex flex-wrap gap-2">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button onClick={() => {
-                  if (comprobantesHistorico) {
-                    setComprobantesHistorico(null);
-                    return;
-                  }
-                  void callCenterService.listarComprobantes({ historico: true }).then(setComprobantesHistorico).catch(notify);
-                }}>{comprobantesHistorico ? "Solo hoy" : "Ver histórico"}</Button>
-              </TooltipTrigger>
-              <TooltipContent>{comprobantesHistorico ? "Vuelve a los comprobantes de hoy." : "Muestra todos los comprobantes, no solo los de hoy."}</TooltipContent>
-            </Tooltip>
+        <CardContent className="space-y-5">
+          <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm text-muted-foreground">Periodo</span>
+              {periodosHistorico.map((periodo) => {
+                const activo = periodo.desde === desdeHistorico && periodo.hasta === hastaHistorico;
+                return (
+                  <Button
+                    key={periodo.etiqueta}
+                    size="sm"
+                    variant={activo ? "default" : "outline"}
+                    onClick={() => cargarHistorico(periodo.desde, periodo.hasta)}
+                  >
+                    {periodo.etiqueta}
+                  </Button>
+                );
+              })}
+            </div>
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="space-y-1 text-sm">
+                <span className="block">Desde</span>
+                <Input
+                  type="date"
+                  className="w-44"
+                  value={desdeHistorico}
+                  onChange={(event) => {
+                    const desde = event.target.value;
+                    if (!desde || !hastaHistorico) {
+                      setDesdeHistorico(desde);
+                      return;
+                    }
+                    cargarHistorico(desde, hastaHistorico);
+                  }}
+                />
+              </label>
+              <span className="hidden pb-2 text-muted-foreground sm:inline">→</span>
+              <label className="space-y-1 text-sm">
+                <span className="block">Hasta</span>
+                <Input
+                  type="date"
+                  className="w-44"
+                  value={hastaHistorico}
+                  onChange={(event) => {
+                    const hasta = event.target.value;
+                    if (!desdeHistorico || !hasta) {
+                      setHastaHistorico(hasta);
+                      return;
+                    }
+                    cargarHistorico(desdeHistorico, hasta);
+                  }}
+                />
+              </label>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative min-w-56 flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={filtroCobro}
+                onChange={(event) => setFiltroCobro(event.target.value)}
+                placeholder="Buscar por repartidor o ciudad"
+                className="pl-9"
+              />
+            </div>
             <Select value={filtroPago} onValueChange={setFiltroPago}>
-              <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-full sm:w-52"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos los métodos</SelectItem>
                 <SelectItem value="efectivo">Efectivo</SelectItem>
@@ -1697,7 +1856,7 @@ const CallCenter = () => {
               </SelectContent>
             </Select>
             <Select value={filtroEstadoCobro} onValueChange={setFiltroEstadoCobro}>
-              <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-full sm:w-52"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todo el cobro</SelectItem>
                 <SelectItem value="completo">Cobro completo</SelectItem>
@@ -1705,10 +1864,24 @@ const CallCenter = () => {
                 <SelectItem value="falta comprobante">Falta comprobante</SelectItem>
               </SelectContent>
             </Select>
-            <Input value={filtroCobro} onChange={(event) => setFiltroCobro(event.target.value)} placeholder="Repartidor o ciudad" className="w-56" />
+            <Button
+              variant="outline"
+              size="icon"
+              aria-label="Actualizar evidencias"
+              disabled={cargandoHistorico}
+              onClick={() => {
+                if (rangoEsHoy(desdeHistorico, hastaHistorico)) {
+                  void loadLists().catch(notify);
+                  return;
+                }
+                cargarHistorico(desdeHistorico, hastaHistorico);
+              }}
+            >
+              <RefreshCw className={cargandoHistorico ? "animate-spin" : ""} />
+            </Button>
           </div>
-          {(() => {
-            const fuente = comprobantesHistorico || comprobantes;
+          {cargandoHistorico ? <p className="text-sm">Cargando comprobantes…</p> : (() => {
+            const fuente = rangoEsHoy(desdeHistorico, hastaHistorico) ? comprobantes : (filasHistorico || []);
             const q = filtroCobro.trim().toLowerCase();
             const visibles = fuente.filter((row) => {
               if (filtroPago !== "all" && row.metodo !== filtroPago) return false;
@@ -1716,109 +1889,198 @@ const CallCenter = () => {
               if (!q) return true;
               return `${row.repartidor || ""} ${row.ciudad || ""}`.toLowerCase().includes(q);
             });
-            if (visibles.length === 0) return <p className="text-sm text-muted-foreground">No hay comprobantes con ese filtro.</p>;
-            const cortes: { id: number; fecha: string; nombre: string }[] = [];
-            const vistos = new Set<string>();
-            for (const row of visibles) {
-              const fecha = String(row.fecha || "").slice(0, 10);
-              const id = Number(row.repartidor_id);
-              if (!id || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) continue;
-              const key = `${id}|${fecha}`;
-              if (vistos.has(key)) continue;
-              vistos.add(key);
-              cortes.push({ id, fecha, nombre: row.repartidor || "Repartidor" });
-            }
+            const grupos = agruparCortes(visibles);
+            const abrir = (url: string | null | undefined, nombre: string, titulo: string) => {
+              if (!url) return;
+              setReceipt({ url: receiptSrc(url), nombre, titulo });
+            };
+            const refrescarFilas = () => {
+              if (rangoEsHoy(desdeHistorico, hastaHistorico)) return loadLists();
+              return callCenterService.listarComprobantes({ desde: desdeHistorico, hasta: hastaHistorico }).then(setFilasHistorico);
+            };
             return (
             <div className="space-y-3">
-              {cortes.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                  {cortes.map((corte) => (
-                    <Button
-                      key={`${corte.id}-${corte.fecha}`}
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        void callCenterService.corte(corte.id, corte.fecha)
-                          .then((data) => descargarHoja(hojaDesdeParadas({
-                            fecha: data.fecha,
-                            repartidor: data.repartidor.nombre_completo,
-                            ciudad: data.ciudad || "",
-                            km_esperados: data.km_esperados,
-                            paradas: data.paradas,
-                          }), "corte"))
-                          .catch(notify);
-                      }}
-                    >
-                      <Download className="h-4 w-4" /> Exportar corte final · {corte.nombre} · {corte.fecha}
-                    </Button>
-                  ))}
-                </div>
-              ) : null}
-              {visibles.map((row) => (
-                <div key={`${row.fecha || "hoy"}-${row.pedido_id}`} className="space-y-2 text-sm">
-                  <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="font-medium">{row.numero_pedido}{row.fecha ? ` · ${String(row.fecha).slice(0, 10)}` : ""}</p>
-                    <p className="text-muted-foreground">{row.repartidor || "—"}{row.ciudad ? ` · ${row.ciudad}` : ""}</p>
-                    <p>
-                      Pedido: {row.metodo_pedido || "sin método"}
-                      {row.metodo && row.metodo !== row.metodo_pedido ? ` · cobrado: ${row.metodo}` : ""}
-                      {row.monto ? ` · total $${formatMoney(row.monto)}` : ""}
-                    </p>
-                    {(row.monto_efectivo || row.monto_transferencia) ? (
-                      <p>
-                        {row.monto_efectivo ? `Efectivo $${formatMoney(row.monto_efectivo)}` : ""}
-                        {row.monto_efectivo && row.monto_transferencia ? " · " : ""}
-                        {row.monto_transferencia ? `Transferencia $${formatMoney(row.monto_transferencia)}` : ""}
-                      </p>
-                    ) : null}
-                    {etiquetaCobro(row.estado_cobro) ? <Badge className={`mt-1 ${claseCobro(row.estado_cobro)}`}>{etiquetaCobro(row.estado_cobro)}</Badge> : null}
-                    {row.nota ? <p>{row.nota}</p> : null}
-                  </div>
-                  {row.comprobante_url ? (
-                    <button
-                      type="button"
-                      className="overflow-hidden rounded-md border bg-muted"
-                      onClick={() => setReceipt({ url: receiptSrc(row.comprobante_url), numero: row.numero_pedido })}
-                      aria-label={`Ver comprobante del pedido ${row.numero_pedido}`}
-                    >
-                      <img src={receiptSrc(row.comprobante_url)} alt="" className="h-12 w-12 object-cover" />
-                    </button>
-                  ) : row.puede_subir ? (
-                    <label className="cursor-pointer text-sm font-medium text-primary">
-                      Subir foto
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={(event) => {
-                          const file = event.target.files?.[0];
-                          event.target.value = "";
-                          if (!file) return;
-                          void callCenterService.subirComprobante(row.pedido_id, file)
-                            .then(() => loadLists())
-                            .catch(notify);
-                        }}
-                      />
-                    </label>
-                  ) : "—"}
-                  </div>
-                  <div className="flex gap-2">
-                    <Input
-                      value={notaCobro[row.pedido_id] || ""}
-                      onChange={(event) => setNotaCobro((prev) => ({ ...prev, [row.pedido_id]: event.target.value }))}
-                      placeholder="Comentario de este comprobante"
-                    />
-                    <Button variant="outline" onClick={() => {
-                      const texto = (notaCobro[row.pedido_id] || "").trim();
-                      if (texto.length < 2) return;
-                      void callCenterService.anotarComprobante(row.pedido_id, texto)
-                        .then(() => loadLists())
-                        .catch(notify);
-                    }}>Guardar</Button>
-                  </div>
-                </div>
-              ))}
+              <p className="text-sm">
+                <span className="mr-2 inline-block h-2 w-2 rounded-full bg-emerald-500 align-middle" />
+                Mostrando {grupos.length} {grupos.length === 1 ? "corte" : "cortes"} del {fechaCorta(desdeHistorico)} al {fechaCorta(hastaHistorico)}
+              </p>
+              <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-left">Fecha corte</TableHead>
+                    <TableHead className="text-left">Repartidor y ciudad</TableHead>
+                    <TableHead className="text-left">Método cobro</TableHead>
+                    <TableHead className="text-left">Recaudado</TableHead>
+                    <TableHead className="text-left">Evidencias</TableHead>
+                    <TableHead className="text-left">Estado depósito</TableHead>
+                    <TableHead className="text-left">Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {grupos.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">No hay comprobantes con ese filtro.</TableCell>
+                    </TableRow>
+                  ) : grupos.map((grupo) => {
+                    const abierto = corteAbierto === grupo.key;
+                    const recaudado = grupo.pedidos.reduce((sum, row) => sum + (Number(row.monto) || 0), 0);
+                    const metodos = [...new Set(grupo.pedidos.map((row) => etiquetaMetodo(row.metodo || row.metodo_pedido)))].join(" · ");
+                    const pagos = grupo.pedidos.filter((row) => row.comprobante_url).length;
+                    const entregas = grupo.pedidos.filter((row) => row.evidencia_url).length;
+                    const completos = grupo.pedidos.filter((row) => row.estado_cobro === "completo").length;
+                    const depositoEtiqueta = grupo.deposito_url ? "Liquidado" : grupo.efectivo > 0 ? "Pendiente" : "Sin depósito";
+                    return (
+                      <Fragment key={grupo.key}>
+                        <TableRow data-state={abierto ? "selected" : undefined}>
+                          <TableCell className="text-left">
+                            <p className="font-semibold">{fechaCorta(grupo.fecha)}</p>
+                          </TableCell>
+                          <TableCell className="text-left">
+                            <p className="font-semibold">{grupo.nombre}</p>
+                            <p className="text-sm text-muted-foreground">{grupo.ciudad || "Sin ciudad"}</p>
+                          </TableCell>
+                          <TableCell className="text-left">{metodos || "Sin método"}</TableCell>
+                          <TableCell className="text-left">
+                            <p className="font-semibold">${formatMoney(recaudado)}</p>
+                            <p className={`text-sm ${completos === grupo.pedidos.length ? "text-emerald-700" : "text-amber-800"}`}>
+                              {grupo.pedidos.length === 0 ? "" : completos === grupo.pedidos.length ? "Comprobado 100%" : `${completos} de ${grupo.pedidos.length} completos`}
+                            </p>
+                          </TableCell>
+                          <TableCell className="text-left">
+                            <div className="flex flex-wrap gap-1">
+                              {pagos ? <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">{pagos} {pagos === 1 ? "pago" : "pagos"}</span> : null}
+                              {entregas ? <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-semibold">{entregas} {entregas === 1 ? "entrega" : "entregas"}</span> : null}
+                              {grupo.deposito_url ? <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800">Depósito</span> : null}
+                              {!pagos && !entregas && !grupo.deposito_url ? <span className="text-sm text-muted-foreground">Sin fotos</span> : null}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-left">
+                            <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${grupo.deposito_url ? "bg-emerald-100 text-emerald-800" : grupo.efectivo > 0 ? "bg-amber-100 text-amber-900" : "bg-muted text-muted-foreground"}`}>
+                              {depositoEtiqueta}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-left">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              aria-label={abierto ? `Cerrar corte de ${grupo.nombre}` : `Ver corte de ${grupo.nombre}`}
+                              aria-expanded={abierto}
+                              onClick={() => setCorteAbierto(abierto ? null : grupo.key)}
+                            >
+                              <Eye />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                        {abierto ? (
+                          <TableRow>
+                            <TableCell colSpan={7} className="bg-muted/40 text-left">
+                              <div className="space-y-4 p-1">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  {grupo.deposito_url ? (
+                                    <button type="button" className="flex items-center gap-3 text-left" onClick={() => abrir(grupo.deposito_url, `deposito-${grupo.nombre}`, `Depósito de ${grupo.nombre}`)}>
+                                      <img src={receiptSrc(grupo.deposito_url)} alt={`Depósito de ${grupo.nombre}`} className="h-12 w-12 rounded-md object-cover" />
+                                      <span>Depósito{grupo.efectivo ? ` $${formatMoney(grupo.efectivo)}` : ""}</span>
+                                    </button>
+                                  ) : <span className="text-sm text-muted-foreground">Sin foto de depósito</span>}
+                                  {grupo.id && grupo.fecha ? (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => {
+                                        void callCenterService.corte(grupo.id, grupo.fecha)
+                                          .then((data) => descargarHoja(hojaDesdeParadas({
+                                            fecha: data.fecha,
+                                            repartidor: data.repartidor.nombre_completo,
+                                            ciudad: data.ciudad || "",
+                                            km_esperados: data.km_esperados,
+                                            paradas: data.paradas,
+                                          }), "corte"))
+                                          .catch(notify);
+                                      }}
+                                    >
+                                      <Download className="h-4 w-4" /> Exportar corte
+                                    </Button>
+                                  ) : null}
+                                </div>
+                                {grupo.pedidos.map((row) => (
+                                  <div key={row.pedido_id} className="space-y-2 text-sm">
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div>
+                                        <p className="font-medium">{row.numero_pedido}</p>
+                                        <p>
+                                          Pedido: {row.metodo_pedido || "sin método"}
+                                          {row.metodo && row.metodo !== row.metodo_pedido ? ` · cobrado: ${row.metodo}` : ""}
+                                          {row.monto ? ` · total $${formatMoney(row.monto)}` : ""}
+                                        </p>
+                                        {(row.monto_efectivo || row.monto_transferencia) ? (
+                                          <p>
+                                            {row.monto_efectivo ? `Efectivo $${formatMoney(row.monto_efectivo)}` : ""}
+                                            {row.monto_efectivo && row.monto_transferencia ? " · " : ""}
+                                            {row.monto_transferencia ? `Transferencia $${formatMoney(row.monto_transferencia)}` : ""}
+                                          </p>
+                                        ) : null}
+                                        {row.receptor_nombre ? <p>Recibió {row.receptor_nombre}</p> : null}
+                                        {row.dejar_lugar ? <p>Dejado en {row.dejar_lugar}</p> : null}
+                                        {etiquetaCobro(row.estado_cobro) ? <Badge className={`mt-1 ${claseCobro(row.estado_cobro)}`}>{etiquetaCobro(row.estado_cobro)}</Badge> : null}
+                                        {row.nota ? <p>{row.nota}</p> : null}
+                                      </div>
+                                      <div className="flex gap-2">
+                                        {row.comprobante_url ? (
+                                          <button type="button" className="overflow-hidden rounded-md border bg-muted" onClick={() => abrir(row.comprobante_url, `comprobante-${row.numero_pedido}`, `Comprobante ${row.numero_pedido}`)} aria-label={`Ver comprobante ${row.numero_pedido}`}>
+                                            <img src={receiptSrc(row.comprobante_url)} alt="" className="h-12 w-12 object-cover" />
+                                          </button>
+                                        ) : row.puede_subir ? (
+                                          <label className="cursor-pointer text-sm font-medium text-primary">
+                                            Subir foto
+                                            <input
+                                              type="file"
+                                              accept="image/*"
+                                              className="hidden"
+                                              onChange={(event) => {
+                                                const file = event.target.files?.[0];
+                                                event.target.value = "";
+                                                if (!file) return;
+                                                void callCenterService.subirComprobante(row.pedido_id, file)
+                                                  .then(() => refrescarFilas())
+                                                  .catch(notify);
+                                              }}
+                                            />
+                                          </label>
+                                        ) : null}
+                                        {row.evidencia_url ? (
+                                          <button type="button" className="overflow-hidden rounded-md border bg-muted" onClick={() => abrir(row.evidencia_url, `evidencia-${row.numero_pedido}`, `Evidencia ${row.numero_pedido}`)} aria-label={`Ver evidencia ${row.numero_pedido}`}>
+                                            <img src={receiptSrc(row.evidencia_url)} alt="" className="h-12 w-12 object-cover" />
+                                          </button>
+                                        ) : null}
+                                      </div>
+                                    </div>
+                                    <div className="flex gap-2">
+                                      <Input
+                                        value={notaCobro[row.pedido_id] || ""}
+                                        onChange={(event) => setNotaCobro((prev) => ({ ...prev, [row.pedido_id]: event.target.value }))}
+                                        placeholder="Comentario de este comprobante"
+                                      />
+                                      <Button variant="outline" onClick={() => {
+                                        const texto = (notaCobro[row.pedido_id] || "").trim();
+                                        if (texto.length < 2) return;
+                                        void callCenterService.anotarComprobante(row.pedido_id, texto)
+                                          .then(() => refrescarFilas())
+                                          .catch(notify);
+                                      }}>Guardar</Button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ) : null}
+                      </Fragment>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+              </div>
             </div>
             );
           })()}
@@ -1845,7 +2107,7 @@ const CallCenter = () => {
                     <button
                       type="button"
                       className="overflow-hidden rounded-md border bg-muted"
-                      onClick={() => setReceipt({ url: receiptSrc(row.comprobante_url), numero: row.repartidor || "deposito" })}
+                      onClick={() => setReceipt({ url: receiptSrc(row.comprobante_url), nombre: `deposito-${row.repartidor || "repartidor"}`, titulo: `Depósito de ${row.repartidor || "repartidor"}` })}
                       aria-label={`Ver depósito de ${row.repartidor || "repartidor"}`}
                     >
                       <img src={receiptSrc(row.comprobante_url)} alt="" className="h-12 w-12 object-cover" />
@@ -1871,7 +2133,8 @@ const CallCenter = () => {
                   className="block overflow-hidden rounded-md border"
                   onClick={() => setReceipt({
                     url: receiptSrc(detail.comprobante_url),
-                    numero: detail.repartidor?.nombre_completo || "deposito",
+                    nombre: `deposito-${detail.repartidor?.nombre_completo || "repartidor"}`,
+                    titulo: `Depósito de ${detail.repartidor?.nombre_completo || "repartidor"}`,
                   })}
                 >
                   <img
@@ -2015,7 +2278,7 @@ const CallCenter = () => {
             cities={cities}
             onError={notify}
             onChanged={() => { void loadLists().catch(notify); }}
-            onReceipt={(url, numero) => setReceipt({ url, numero })}
+            onReceipt={(url, numero) => setReceipt({ url, nombre: `comprobante-${numero}`, titulo: `Comprobante ${numero}` })}
           />
         </TabsContent>
         <TabsContent value="checkout" className="mt-0">
@@ -2200,18 +2463,20 @@ const CallCenter = () => {
       <Dialog open={receipt != null} onOpenChange={(open) => { if (!open) setReceipt(null); }}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
-            <DialogTitle>Comprobante {receipt?.numero}</DialogTitle>
+            <DialogTitle>{receipt?.titulo}</DialogTitle>
           </DialogHeader>
           {receipt && (
             <div className="space-y-4">
               <img
                 src={receipt.url}
-                alt={`Comprobante del pedido ${receipt.numero}`}
+                alt={receipt.titulo}
                 className="max-h-[70vh] w-full rounded-md object-contain"
               />
-              <Button disabled={downloading} onClick={() => void downloadReceipt()}>
-                <Download className="mr-2 h-4 w-4" />
-                {downloading ? "Descargando..." : "Descargar"}
+              <Button asChild>
+                <a href={receipt.url} download={receiptFilename(receipt.nombre, receipt.url)} rel="noopener" target="_blank">
+                  <Download className="mr-2 h-4 w-4" />
+                  Descargar
+                </a>
               </Button>
             </div>
           )}
