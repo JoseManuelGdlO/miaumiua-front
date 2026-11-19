@@ -75,6 +75,15 @@ type MapHandle = { fitBounds: (b: unknown) => void; setCenter: (p: Punto) => voi
 type LineHandle = Overlay & { setPath?: (p: Punto[]) => void };
 type PinHandle = Overlay & { setPosition?: (p: Punto) => void };
 
+export type TelemetriaGps = {
+  lat: number;
+  lng: number;
+  velocidadActualKmh: number;
+  velocidadPromedioKmh: number;
+  estadoMovimiento: "en_movimiento" | "detenido";
+  alertaGps: boolean;
+};
+
 export function MapaRutaEnVivo({
   rutaId,
   paradas = [],
@@ -82,6 +91,7 @@ export function MapaRutaEnVivo({
   destinoId = null,
   repartidorId = null,
   gps: gpsProp = null,
+  onTelemetria,
 }: {
   rutaId: number | null;
   paradas?: ParadaVista[];
@@ -89,6 +99,7 @@ export function MapaRutaEnVivo({
   destinoId?: number | null;
   repartidorId?: number | null;
   gps?: Punto | null;
+  onTelemetria?: (data: TelemetriaGps) => void;
 }) {
   const key = mapsKey();
   const node = useRef<HTMLDivElement>(null);
@@ -98,6 +109,8 @@ export function MapaRutaEnVivo({
   const destRef = useRef<PinHandle | null>(null);
   const driverRef = useRef<PinHandle | null>(null);
   const gpsRef = useRef<Punto | null>(gpsValido(gpsProp));
+  const onTelemetriaRef = useRef(onTelemetria);
+  onTelemetriaRef.current = onTelemetria;
   const dirStamp = useRef("");
   const selloVista = useRef("");
   const [apagada, setApagada] = useState(false);
@@ -188,7 +201,16 @@ export function MapaRutaEnVivo({
         ws?.send(JSON.stringify({ type: "auth", token }));
       };
       ws.onmessage = (message) => {
-        let data: { type?: string; repartidorId?: number; lat?: number; lng?: number } | null = null;
+        let data: {
+          type?: string;
+          repartidorId?: number;
+          lat?: number;
+          lng?: number;
+          velocidadActualKmh?: number;
+          velocidadPromedioKmh?: number;
+          estadoMovimiento?: string;
+          alertaGps?: boolean;
+        } | null = null;
         try {
           data = JSON.parse(String(message.data));
         } catch {
@@ -196,7 +218,16 @@ export function MapaRutaEnVivo({
         }
         if (data?.type !== "gps") return;
         if (Number(data.repartidorId) !== Number(repartidorId)) return;
-        aplicarGps({ lat: Number(data.lat), lng: Number(data.lng) });
+        const punto = { lat: Number(data.lat), lng: Number(data.lng) };
+        if (!data.alertaGps) aplicarGps(punto);
+        onTelemetriaRef.current?.({
+          lat: punto.lat,
+          lng: punto.lng,
+          velocidadActualKmh: Number(data.velocidadActualKmh) || 0,
+          velocidadPromedioKmh: Number(data.velocidadPromedioKmh) || 0,
+          estadoMovimiento: data.estadoMovimiento === "en_movimiento" ? "en_movimiento" : "detenido",
+          alertaGps: Boolean(data.alertaGps),
+        });
       };
       ws.onclose = () => {
         if (!stopped) window.setTimeout(connect, 2000);

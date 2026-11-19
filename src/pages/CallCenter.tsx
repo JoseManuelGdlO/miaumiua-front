@@ -417,6 +417,14 @@ function MonitorRepartidores({
   const [codigoPedido, setCodigoPedido] = useState<number | null>(null);
   const [codigoPedidoTexto, setCodigoPedidoTexto] = useState("");
   const [franjaMapa, setFranjaMapa] = useState<"manana" | "tarde">("manana");
+  const [vivo, setVivo] = useState<{
+    actual: number;
+    promedio: number;
+    estado: "en_movimiento" | "detenido";
+    alerta: boolean;
+    at: number;
+  } | null>(null);
+  const [gpsPausado, setGpsPausado] = useState(false);
   const nombres = new Map<number, string>();
   for (const pedido of pedidos) {
     if (pedido.repartidor) nombres.set(pedido.repartidor.id, pedido.repartidor.nombre_completo);
@@ -427,6 +435,17 @@ function MonitorRepartidores({
   useEffect(() => {
     if (abiertoId) setElegido(abiertoId);
   }, [abiertoId]);
+  useEffect(() => {
+    setVivo(null);
+    setGpsPausado(false);
+  }, [elegido]);
+  useEffect(() => {
+    if (!vivo) return;
+    const timer = window.setInterval(() => {
+      setGpsPausado(Date.now() - vivo.at > 30000);
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [vivo]);
   useEffect(() => {
     let vivo = true;
     callCenterService.listContactos().then((data) => {
@@ -538,6 +557,16 @@ function MonitorRepartidores({
                       paradas={deFranja.length ? deFranja : row.paradas}
                       ciudad={row.ciudadNombre || null}
                       destinoId={row.actual?.id ?? null}
+                      onTelemetria={(data) => {
+                        setGpsPausado(false);
+                        setVivo({
+                          actual: data.velocidadActualKmh,
+                          promedio: data.velocidadPromedioKmh,
+                          estado: data.estadoMovimiento,
+                          alerta: data.alertaGps,
+                          at: Date.now(),
+                        });
+                      }}
                       gps={(() => {
                         const candidatos = [row.velocidad, row.paradas.find((pedido) => pedido.repartidor?.lat != null)?.repartidor];
                         for (const punto of candidatos) {
@@ -559,9 +588,19 @@ function MonitorRepartidores({
                     {row.checkIn ? <p className="text-lg font-semibold">{row.checkIn.hora}</p> : null}
                   </div>
                   <div className="rounded-xl bg-white p-4">
-                    <p className="flex items-center gap-2 text-sm text-muted-foreground"><Truck className="h-4 w-4 text-primary" />Velocidad promedio</p>
-                    <p className="mt-2 text-lg font-semibold">{row.velocidad ? `${row.velocidad.promedio} km/h` : "Sin lecturas"}</p>
-                    {row.velocidad ? <p className="text-sm text-muted-foreground">{row.velocidad.lecturas} lecturas de hoy</p> : null}
+                    <p className="flex items-center gap-2 text-sm text-muted-foreground"><Truck className="h-4 w-4 text-primary" />Velocidad</p>
+                    {(() => {
+                      const enRuta = vivo?.estado === "en_movimiento";
+                      const promedio = vivo?.promedio ?? row.velocidad?.promedio ?? null;
+                      const estado = !vivo ? "Sin señal" : enRuta ? `En ruta · ${vivo.actual} km/h` : "Detenido · 0 km/h";
+                      return (
+                        <>
+                          <p className="mt-2 text-lg font-semibold">{estado}</p>
+                          <p className="text-sm text-muted-foreground">{promedio != null ? `Prom. trayecto: ${promedio} km/h` : "Sin lecturas"}</p>
+                          {vivo?.alerta || gpsPausado ? <p className="mt-1 text-sm text-amber-800">Señal GPS inestable o pausada</p> : null}
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
                 <div className="space-y-3 rounded-xl bg-white p-4">
