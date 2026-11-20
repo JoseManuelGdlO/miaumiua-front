@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle, Archive, CalendarClock, Pencil, Phone, Users } from "lucide-react";
+import { AlertTriangle, Archive, CalendarClock, Pencil, Phone, Search, Users, X } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { TablePagination } from "@/components/TablePagination";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { callCenterService, type PedidoDia, type Solicitud } from "@/services/callCenterService";
 
 const PAGE_SIZE = 8;
@@ -351,6 +352,7 @@ function ContactosIncidencia({ superAdmin, onError }: { superAdmin: boolean; onE
   const [repartidores, setRepartidores] = useState<{ id: number; nombre: string }[]>([]);
   const [guardando, setGuardando] = useState(false);
   const [quitarDe, setQuitarDe] = useState<{ personaId: number; index: number; repartidorId: number; nombre: string } | null>(null);
+  const [quitarLinea, setQuitarLinea] = useState<{ personaId: number; index: number } | null>(null);
   const [listoId, setListoId] = useState<number | null>(null);
   const [busqueda, setBusqueda] = useState("");
   const [filtro, setFiltro] = useState<"todos" | "asignados" | "sin">("todos");
@@ -413,6 +415,27 @@ function ContactosIncidencia({ superAdmin, onError }: { superAdmin: boolean; onE
     cambiarLinea(personaId, index, { repartidor_ids: (persona?.numeros[index]?.repartidor_ids || []).filter((id) => id !== repartidorId) });
   };
 
+  const quitarNumero = (personaId: number, index: number) => {
+    setListoId(null);
+    setQuitarLinea(null);
+    if (editando === `${personaId}:${index}`) {
+      setEditando(null);
+      setPicker("");
+    }
+    setPersonas((lista) => lista.map((persona) => {
+      if (persona.id !== personaId || index <= 0 || persona.numeros.length <= 1) return persona;
+      const numeros = persona.numeros.filter((_, i) => i !== index);
+      return { ...persona, numeros, telefono: numeros[0]?.telefono || "", repartidor_ids: numeros.flatMap((linea) => linea.repartidor_ids) };
+    }));
+  };
+
+  const pedirQuitarNumero = (personaId: number, index: number) => {
+    const linea = personas.find((persona) => persona.id === personaId)?.numeros[index];
+    if (!linea) return;
+    if (linea.telefono.trim() || linea.repartidor_ids.length > 0) setQuitarLinea({ personaId, index });
+    else quitarNumero(personaId, index);
+  };
+
   const agregar = (personaId: number, index: number, repartidorId: number) => {
     setPicker("");
     setPersonas((lista) => lista.map((persona) => {
@@ -425,104 +448,162 @@ function ContactosIncidencia({ superAdmin, onError }: { superAdmin: boolean; onE
     }));
   };
 
+  const chip = (id: "todos" | "asignados" | "sin", label: string) => (
+    <Button key={id} type="button" size="sm" variant={filtro === id ? "default" : "outline"} onClick={() => setFiltro(id)}>
+      {label}
+    </Button>
+  );
+
   return (
-    <section className="space-y-4 rounded-xl bg-muted/40 p-4" data-ui>
-      <div>
-        <h2 className="flex items-center gap-2 text-2xl font-semibold tracking-tight"><Users className="h-5 w-5 text-primary" />Contactos de Soporte y Asignación</h2>
-        <p className="mt-1">Un agente puede tener varios números. Cada número lleva su grupo de repartidores. Solo un super admin los cambia.</p>
-      </div>
-      <div className="flex flex-wrap items-center gap-3">
-        <Input aria-label="Buscar agente" value={busqueda} placeholder="Buscar agente" onChange={(event) => setBusqueda(event.target.value)} className="max-w-sm" />
-        <Select value={filtro} onValueChange={(value) => setFiltro(value as "todos" | "asignados" | "sin")}>
-          <SelectTrigger className="w-56" aria-label="Filtrar agentes"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todos</SelectItem>
-            <SelectItem value="asignados">Asignados</SelectItem>
-            <SelectItem value="sin">Sin asignar</SelectItem>
-          </SelectContent>
-        </Select>
-        <p>{personas.length} con acceso · {ocupados.size} repartidores asignados</p>
-      </div>
-      {visibles.length === 0 ? <p>Nadie coincide con esa búsqueda.</p> : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {visibles.map((persona, index) => (
-              <div key={persona.id} className={`space-y-3 rounded-xl p-4 ${index % 2 === 0 ? "bg-white" : "bg-pink-50"}`}>
-                <div className="flex items-center gap-3">
-                  <span className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">{iniciales(persona.nombre)}</span>
-                  <div>
-                    <p className="text-lg font-semibold">{persona.nombre}</p>
-                    <p className="text-sm text-muted-foreground">{superAdmin ? "Editable" : "Solo lectura"}</p>
-                  </div>
-                </div>
-                {persona.numeros.map((linea, lineaIndex) => (
-                  <div key={`${persona.id}-${lineaIndex}`} className="space-y-2">
-                    <label className="block" htmlFor={`tel-${persona.id}-${lineaIndex}`}>Teléfono {lineaIndex + 1}</label>
-                    <div className="relative">
-                      <Phone className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                      <Input
-                        id={`tel-${persona.id}-${lineaIndex}`}
-                        value={linea.telefono}
-                        readOnly={!superAdmin}
-                        className="pl-9"
-                        onChange={(event) => cambiarLinea(persona.id, lineaIndex, { telefono: event.target.value })}
-                      />
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {linea.repartidor_ids.length === 0 ? <p className="text-sm text-muted-foreground">Ningún repartidor</p> : linea.repartidor_ids.map((id) => (
-                        <span key={id} className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-sm font-medium text-primary">
-                          {repartidores.find((row) => row.id === id)?.nombre || `Repartidor ${id}`}
-                          {superAdmin ? <button type="button" aria-label={`Quitar ${repartidores.find((row) => row.id === id)?.nombre || id}`} onClick={() => setQuitarDe({ personaId: persona.id, index: lineaIndex, repartidorId: id, nombre: repartidores.find((row) => row.id === id)?.nombre || `Repartidor ${id}` })}>×</button> : null}
-                        </span>
-                      ))}
-                    </div>
-                    {superAdmin ? (
-                      <>
-                        <Input
-                          aria-label={`Asignar repartidor al teléfono ${lineaIndex + 1} de ${persona.nombre}`}
-                          value={editando === `${persona.id}:${lineaIndex}` ? picker : ""}
-                          placeholder="Buscar y asignar repartidor"
-                          onChange={(event) => {
-                            setEditando(`${persona.id}:${lineaIndex}`);
-                            setPicker(event.target.value);
-                          }}
-                        />
-                        {editando === `${persona.id}:${lineaIndex}` && picker.trim() ? sugeridos.map((repartidor) => (
-                          <button key={repartidor.id} type="button" className="block w-full bg-background px-3 py-2 text-left" onClick={() => agregar(persona.id, lineaIndex, repartidor.id)}>
-                            {repartidor.nombre}{ocupados.has(repartidor.id) ? " · pasa a este número" : ""}
-                          </button>
-                        )) : null}
-                      </>
-                    ) : null}
-                  </div>
-                ))}
-                {superAdmin ? (
-                  <div className="flex flex-col gap-6 pt-2">
-                    <Button variant="outline" onClick={() => cambiarLinea(persona.id, persona.numeros.length, { telefono: "", repartidor_ids: [] })}>Otro número</Button>
-                    <Button disabled={guardando || persona.numeros.some((linea) => linea.telefono.trim().length < 8)} onClick={() => void guardar(persona.id)}>
-                      {guardando ? "Guardando…" : "Guardar contacto"}
-                    </Button>
-                    {listoId === persona.id ? <p>Contacto guardado. La app usará estos números.</p> : null}
-                  </div>
-                ) : <p>Solo un super admin puede cambiar números y repartidores.</p>}
-              </div>
-          ))}
+    <Card data-ui>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2"><Users className="h-5 w-5 text-primary" />Números de Call Center</CardTitle>
+        <CardDescription>El número que ve el repartidor en la app. Cada línea es un teléfono y los repartidores que lo usan.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative min-w-[16rem] flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input aria-label="Buscar agente" value={busqueda} placeholder="Buscar agente" onChange={(event) => setBusqueda(event.target.value)} className="pl-9" />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {chip("todos", "Todos")}
+            {chip("asignados", "Con repartidores")}
+            {chip("sin", "Sin asignar")}
+          </div>
+          <p className="text-sm text-muted-foreground">{personas.length} agentes · {ocupados.size} repartidores con número</p>
         </div>
-      )}
-      <AlertDialog open={quitarDe != null} onOpenChange={(open) => { if (!open) setQuitarDe(null); }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>¿Estás seguro de que deseas eliminar a {quitarDe?.nombre || "este repartidor"} del contacto?</AlertDialogTitle>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={() => {
-              const elegido = quitarDe;
-              setQuitarDe(null);
-              if (elegido) quitar(elegido.personaId, elegido.index, elegido.repartidorId);
-            }}>Eliminar</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </section>
+        {visibles.length === 0 ? <p className="text-sm text-muted-foreground">Nadie coincide con esa búsqueda.</p> : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Agente</TableHead>
+                <TableHead>Número</TableHead>
+                <TableHead>Repartidores</TableHead>
+                {superAdmin ? <TableHead className="w-40"> </TableHead> : null}
+              </TableRow>
+            </TableHeader>
+            <TableBody className="[&_tr:nth-child(odd)]:bg-transparent [&_tr:nth-child(even)]:bg-transparent">
+              {visibles.flatMap((persona, agenteIndex) => persona.numeros.map((linea, lineaIndex) => {
+                const ultima = lineaIndex === persona.numeros.length - 1;
+                const clave = `${persona.id}:${lineaIndex}`;
+                const tono = ["!bg-background", "!bg-muted", "!bg-primary/10"][agenteIndex % 3];
+                return (
+                  <TableRow key={clave} className={tono}>
+                    <TableCell className="align-top">
+                      {lineaIndex === 0 ? (
+                        <div className="flex items-center gap-3">
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">{iniciales(persona.nombre)}</span>
+                          <div>
+                            <p className="font-semibold">{persona.nombre}</p>
+                            <p className="text-xs text-muted-foreground">{persona.numeros.length === 1 ? "1 número" : `${persona.numeros.length} números`}</p>
+                          </div>
+                        </div>
+                      ) : <p className="pl-12 text-xs text-muted-foreground">Mismo agente</p>}
+                    </TableCell>
+                    <TableCell className="align-top">
+                      <div className="relative max-w-xs">
+                        <Phone className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                          id={`tel-${persona.id}-${lineaIndex}`}
+                          aria-label={`Número de Call Center de ${persona.nombre}`}
+                          value={linea.telefono}
+                          readOnly={!superAdmin}
+                          className="pl-9"
+                          onChange={(event) => cambiarLinea(persona.id, lineaIndex, { telefono: event.target.value })}
+                        />
+                      </div>
+                    </TableCell>
+                    <TableCell className="align-top">
+                      <div className="flex flex-wrap gap-2">
+                        {linea.repartidor_ids.length === 0 ? <p className="text-sm text-muted-foreground">Sin repartidores</p> : linea.repartidor_ids.map((id) => {
+                          const nombre = repartidores.find((row) => row.id === id)?.nombre || `Repartidor ${id}`;
+                          return (
+                            <span key={id} className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-3 py-1 text-sm font-medium text-primary">
+                              {nombre}
+                              {superAdmin ? (
+                                <button type="button" aria-label={`Quitar ${nombre}`} className="grid size-4 place-items-center" onClick={() => setQuitarDe({ personaId: persona.id, index: lineaIndex, repartidorId: id, nombre })}>
+                                  <X className="h-3 w-3" />
+                                </button>
+                              ) : null}
+                            </span>
+                          );
+                        })}
+                      </div>
+                      {superAdmin ? (
+                        <div className="relative mt-2 max-w-sm">
+                          <Input
+                            aria-label={`Asignar repartidor al número de ${persona.nombre}`}
+                            value={editando === clave ? picker : ""}
+                            placeholder="Buscar repartidor para este número"
+                            onChange={(event) => {
+                              setEditando(clave);
+                              setPicker(event.target.value);
+                            }}
+                          />
+                          {editando === clave && picker.trim() && sugeridos.length > 0 ? (
+                            <div className="absolute z-10 mt-1 w-full rounded-md border bg-background shadow-sm">
+                              {sugeridos.map((repartidor) => (
+                                <button key={repartidor.id} type="button" className="block w-full px-3 py-2 text-left text-sm hover:bg-accent" onClick={() => agregar(persona.id, lineaIndex, repartidor.id)}>
+                                  {repartidor.nombre}{ocupados.has(repartidor.id) ? " · pasa a este número" : ""}
+                                </button>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </TableCell>
+                    {superAdmin ? (
+                      <TableCell className="align-top">
+                        <div className="flex flex-col gap-2">
+                          {lineaIndex > 0 ? (
+                            <Button variant="outline" size="sm" onClick={() => pedirQuitarNumero(persona.id, lineaIndex)}>
+                              {linea.telefono.trim() || linea.repartidor_ids.length > 0 ? "Quitar número" : "Cancelar"}
+                            </Button>
+                          ) : null}
+                          {ultima ? (
+                            <>
+                              <Button variant="outline" size="sm" onClick={() => cambiarLinea(persona.id, persona.numeros.length, { telefono: "", repartidor_ids: [] })}>Otro número</Button>
+                              <Button size="sm" disabled={guardando || persona.numeros.some((row) => row.telefono.trim().length < 8)} onClick={() => void guardar(persona.id)}>
+                                {guardando ? "Guardando…" : "Guardar"}
+                              </Button>
+                              {listoId === persona.id ? <p className="text-xs text-muted-foreground">Guardado. La app usa estos números.</p> : null}
+                            </>
+                          ) : null}
+                        </div>
+                      </TableCell>
+                    ) : null}
+                  </TableRow>
+                );
+              }))}
+            </TableBody>
+          </Table>
+        )}
+        {superAdmin ? null : <p className="text-sm text-muted-foreground">Solo un super admin puede cambiar números y repartidores.</p>}
+        <AlertDialog open={quitarDe != null || quitarLinea != null} onOpenChange={(open) => { if (!open) { setQuitarDe(null); setQuitarLinea(null); } }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                {quitarLinea
+                  ? "¿Quitar este número de Call Center?"
+                  : `¿Estás seguro de que deseas eliminar a ${quitarDe?.nombre || "este repartidor"} del contacto?`}
+              </AlertDialogTitle>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={() => {
+                if (quitarLinea) {
+                  quitarNumero(quitarLinea.personaId, quitarLinea.index);
+                  return;
+                }
+                const elegido = quitarDe;
+                setQuitarDe(null);
+                if (elegido) quitar(elegido.personaId, elegido.index, elegido.repartidorId);
+              }}>Quitar</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </CardContent>
+    </Card>
   );
 }

@@ -149,6 +149,15 @@ function fechaCorta(iso: string) {
   return y && m && d ? `${d}/${m}/${y}` : iso;
 }
 
+function textoCheckIn(row: { fecha?: string | null; hora?: string | null }) {
+  const crudo = String(row.fecha || "");
+  const iso = crudo.slice(0, 10);
+  const dia = /^\d{4}-\d{2}-\d{2}$/.test(iso) ? fechaCorta(iso) : crudo;
+  const hhmm = String(row.hora || "").slice(0, 5);
+  if (!dia && !hhmm) return "Sin fecha";
+  return [dia, hhmm].filter(Boolean).join(" · ");
+}
+
 function agruparCortes(rows: ComprobantePago[]) {
   const grupos = new Map<string, {
     key: string;
@@ -426,6 +435,7 @@ function abrirChat(telefono: string | null | undefined, onError: (error: unknown
 function MonitorRepartidores({
   pedidos,
   solicitudes,
+  historial,
   puede,
   busy,
   codigo,
@@ -443,6 +453,7 @@ function MonitorRepartidores({
 }: {
   pedidos: PedidoDia[];
   solicitudes: Solicitud[];
+  historial: CargaValidada[];
   puede: boolean;
   busy: boolean;
   codigo: string;
@@ -523,7 +534,7 @@ function MonitorRepartidores({
   const ficha = (id: number, nombre: string) => {
     const paradas = pedidos.filter((pedido) => pedido.repartidor?.id === id);
     const actual = paradas.find((pedido) => pedido.estado_entrega !== "entregado" && pedido.estado !== "entregado" && pedido.estado !== "no_entregado");
-    const checkIn = [...solicitudes].reverse().find((solicitud) => solicitud.tipo === "check_in" && solicitud.repartidor?.id === id);
+    const checkIn = [...solicitudes.filter((solicitud) => solicitud.tipo === "check_in" && solicitud.repartidor?.id === id), ...historial.filter((row) => row.repartidor?.id === id)].sort((a, b) => b.id - a.id)[0] || null;
     const aprobaciones = solicitudes.filter((solicitud) => solicitud.repartidor?.id === id && (pideAprobacion(solicitud) || solicitud.tipo === "soporte"));
     const velocidad = velocidades.find((row) => row.repartidor_id === id);
     const numeros = new Set(paradas.map((pedido) => pedido.numero_pedido));
@@ -642,8 +653,7 @@ function MonitorRepartidores({
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="rounded-xl bg-white p-4">
                     <p className="flex items-center gap-2 text-sm text-muted-foreground"><ClipboardCheck className="h-4 w-4 text-primary" />Último check-in</p>
-                    <p className="mt-2 text-lg font-semibold">{row.checkIn ? `${row.checkIn.fecha}` : "Sin check-in"}</p>
-                    {row.checkIn ? <p className="text-lg font-semibold">{row.checkIn.hora}</p> : null}
+                    <p className="mt-2 text-lg font-semibold">{row.checkIn ? textoCheckIn(row.checkIn) : "Sin check-in"}</p>
                   </div>
                   <div className="rounded-xl bg-white p-4">
                     <p className="flex items-center gap-2 text-sm text-muted-foreground"><Truck className="h-4 w-4 text-primary" />Velocidad</p>
@@ -689,28 +699,96 @@ function MonitorRepartidores({
                       <p className="font-semibold">Ruta de hoy</p>
                       {[...row.paradas].sort((a, b) => (a.orden_entrega ?? 0) - (b.orden_entrega ?? 0)).map((pedido) => {
                         const esActual = row.actual?.id === pedido.id;
-                        const cerrado = pedido.estado_entrega === "entregado" || pedido.estado === "entregado" || pedido.estado_entrega === "fallido" || pedido.estado === "no_entregado";
+                        const entregado = pedido.estado_entrega === "entregado" || pedido.estado === "entregado";
+                        const fallido = pedido.estado_entrega === "fallido" || pedido.estado === "no_entregado";
+                        const cerrado = entregado || fallido;
                         const siguienteId = [...row.paradas].sort((a, b) => (a.orden_entrega ?? 0) - (b.orden_entrega ?? 0)).find((item) => item.estado_entrega !== "entregado" && item.estado !== "entregado" && item.estado_entrega !== "fallido" && item.estado !== "no_entregado" && item.id !== row.actual?.id)?.id;
                         const siguiente = !cerrado && !esActual && siguienteId === pedido.id;
-                        const tono = cerrado ? "bg-gray-100 text-gray-400" : esActual ? "border-2 border-pink-400 bg-pink-100" : "bg-white";
-                        const chip = cerrado
+                        const tono = cerrado ? "bg-gray-100 text-gray-400" : esActual ? "border-2 border-pink-400 bg-pink-100" : siguiente ? "bg-sky-50" : "bg-white";
+                        const chip = entregado
                           ? "bg-gray-200 text-gray-700"
-                          : esActual
-                            ? "bg-pink-200 text-pink-950"
-                            : "bg-muted text-foreground";
-                        const etiqueta = pedido.estado_entrega === "entregado" || pedido.estado === "entregado"
+                          : fallido
+                            ? "bg-red-100 text-red-800"
+                            : esActual
+                              ? "bg-pink-200 text-pink-950"
+                              : siguiente
+                                ? "bg-sky-100 text-sky-900"
+                                : "bg-muted text-foreground";
+                        const etiqueta = entregado
                           ? "Entregado"
-                          : pedido.estado_entrega === "fallido" || pedido.estado === "no_entregado"
+                          : fallido
                             ? "Fallido"
                             : esActual
                               ? "En curso"
                               : siguiente
                               ? "Siguiente"
                               : "En la ruta";
-                        const verCodigo = puede && pedido.codigo_oculto && codigoPedido !== pedido.id;
-                        const verChat = Boolean(pedido.telefono);
-                        const enviarCodigo = puede && pedido.codigo_oculto;
-                        const comprobante = puede && !pedido.comprobante_url;
+                        const verCodigo = puede && pedido.codigo_oculto && codigoPedido !== pedido.id && !entregado;
+                        const verChat = Boolean(pedido.telefono) && !entregado;
+                        const enviarCodigo = puede && pedido.codigo_oculto && !entregado;
+                        const comprobante = puede && !pedido.comprobante_url && !entregado;
+                        if (entregado || siguiente) {
+                          return (
+                            <Collapsible key={pedido.id} className={`group rounded-xl px-4 py-3 ${tono}`}>
+                              <CollapsibleTrigger className="flex w-full items-center justify-between gap-3 text-left">
+                                <p className="text-lg font-semibold leading-tight">{pedido.numero_pedido}</p>
+                                <span className="flex shrink-0 items-center gap-2">
+                                  <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${chip}`}>{etiqueta}</span>
+                                  <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]:rotate-180" />
+                                </span>
+                              </CollapsibleTrigger>
+                              <CollapsibleContent className="space-y-2 pt-3">
+                                <p>{pedido.cliente || "Sin cliente"}</p>
+                                {pedido.calificacion_servicio ? <p>El cliente calificó el servicio con {pedido.calificacion_servicio} estrellas.</p> : null}
+                                {pedido.calificacion_cliente ? <p>El repartidor calificó al cliente con {pedido.calificacion_cliente} estrellas.</p> : null}
+                                {siguiente && (enviarCodigo || verCodigo || verChat || comprobante) ? (
+                                  <div className="flex flex-col gap-2">
+                                    {enviarCodigo ? (
+                                      <Button className="w-full" disabled={busy} onClick={() => {
+                                        void callCenterService.enviarCodigo(pedido.id).then(() => onChanged()).catch(onError);
+                                      }}>Enviar código al cliente</Button>
+                                    ) : null}
+                                    {verCodigo || verChat ? (
+                                    <div className="grid grid-cols-2 gap-2">
+                                      {verCodigo ? (
+                                        <Button variant="outline" className={`w-full border-primary ${verChat ? "" : "col-span-2"}`} disabled={busy} onClick={() => {
+                                          void callCenterService.verCodigoPedido(pedido.id).then((data) => {
+                                            setCodigoPedido(pedido.id);
+                                            setCodigoPedidoTexto(data.codigo);
+                                          }).catch(onError);
+                                        }}>Ver código</Button>
+                                      ) : null}
+                                      {verChat ? (
+                                        <Button variant="outline" className={`w-full ${verCodigo ? "" : "col-span-2"}`} onClick={() => abrirChat(pedido.telefono, onError, navigate)}>Ver chat</Button>
+                                      ) : null}
+                                    </div>
+                                    ) : null}
+                                    {comprobante ? (
+                                      <Button variant="outline" className="w-full" asChild disabled={busy}>
+                                        <label htmlFor={`comp-${pedido.id}`}>
+                                          {pedido.metodo_pago === "transferencia" || pedido.metodo_pago === "mixto" ? "Subir comprobante" : "Pasar a transferencia"}
+                                          <input
+                                            id={`comp-${pedido.id}`}
+                                            type="file"
+                                            accept="image/*"
+                                            className="hidden"
+                                            disabled={busy}
+                                            onChange={(event) => {
+                                              const file = event.target.files?.[0];
+                                              event.target.value = "";
+                                              if (!file) return;
+                                              void callCenterService.subirComprobante(pedido.id, file).then(() => onChanged()).catch(onError);
+                                            }}
+                                          />
+                                        </label>
+                                      </Button>
+                                    ) : null}
+                                  </div>
+                                ) : null}
+                              </CollapsibleContent>
+                            </Collapsible>
+                          );
+                        }
                         return (
                         <div key={pedido.id} className={`flex flex-col gap-3 rounded-xl px-4 py-4 ${tono}`}>
                           <div className="flex items-start justify-between gap-3">
@@ -736,7 +814,7 @@ function MonitorRepartidores({
                             {verCodigo || verChat ? (
                             <div className="grid grid-cols-2 gap-2">
                               {verCodigo ? (
-                                <Button variant="outline" className={`w-full ${verChat ? "" : "col-span-2"}`} disabled={busy} onClick={() => {
+                                <Button variant="outline" className={`w-full border-primary ${verChat ? "" : "col-span-2"}`} disabled={busy} onClick={() => {
                                   void callCenterService.verCodigoPedido(pedido.id).then((data) => {
                                     setCodigoPedido(pedido.id);
                                     setCodigoPedidoTexto(data.codigo);
@@ -794,7 +872,7 @@ function MonitorRepartidores({
                       {solicitud.espera_desde ? <Cuenta desde={solicitud.espera_desde} minutos={solicitud.ayuda ? 15 : 5} /> : null}
                       {solicitud.ayuda === "codigo" ? (
                         codigoDe === solicitud.id && codigo ? <p className="text-2xl font-semibold tracking-widest">{codigo}</p> : (
-                          <Button variant="outline" disabled={busy} onClick={() => onAyuda(solicitud.id, "ver_codigo")}>Ver código</Button>
+                          <Button variant="outline" className="border-primary" disabled={busy} onClick={() => onAyuda(solicitud.id, "ver_codigo")}>Ver código</Button>
                         )
                       ) : null}
                       {solicitud.ayuda === "codigo" && puede ? (
@@ -1263,7 +1341,7 @@ const CallCenter = () => {
   }, []);
 
   useEffect(() => {
-    if (tab !== "checkin") return;
+    if (tab !== "checkin" && tab !== "soporte") return;
     let stop = false;
     void callCenterService.listCargasValidadas().then((rows) => {
       if (!stop) setHistorial(rows);
@@ -2164,7 +2242,7 @@ const CallCenter = () => {
                 <div className="space-y-2 rounded-md bg-primary/10 p-3">
                   <p className="text-sm">El repartidor no tiene el código del cliente.</p>
                   {codigoAyuda ? <p className="text-2xl font-semibold tracking-widest">{codigoAyuda}</p> : (
-                    <Button variant="outline" disabled={busy} onClick={() => void resolverAyuda(detail.id, "ver_codigo")}>Ver código</Button>
+                    <Button variant="outline" className="border-primary" disabled={busy} onClick={() => void resolverAyuda(detail.id, "ver_codigo")}>Ver código</Button>
                   )}
                   {puedeAutorizarExcepcion() ? (
                     <Button disabled={busy} onClick={() => void resolverAyuda(detail.id, "aprobar_codigo")}>Aprobar entrega sin código</Button>
@@ -2265,6 +2343,7 @@ const CallCenter = () => {
           <MonitorRepartidores
             pedidos={pedidos}
             solicitudes={solicitudes}
+            historial={historial}
             puede={puedeAutorizarExcepcion()}
             busy={busy}
             codigo={codigoAyuda}
