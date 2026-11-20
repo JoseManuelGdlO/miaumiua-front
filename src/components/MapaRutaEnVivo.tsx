@@ -150,6 +150,7 @@ export function MapaRutaEnVivo({
   onTelemetriaRef.current = onTelemetria;
   const dirStamp = useRef("");
   const selloVista = useRef("");
+  const liveAt = useRef(0);
   const [apagada, setApagada] = useState(false);
   const [failed, setFailed] = useState(false);
   const [dest, setDest] = useState<Punto | null>(null);
@@ -218,7 +219,10 @@ export function MapaRutaEnVivo({
       }).catch(() => {});
     };
     leerGps();
-    const timer = window.setInterval(leerGps, 8000);
+    const timer = window.setInterval(() => {
+      if (Date.now() - liveAt.current < 12000) return;
+      leerGps();
+    }, 8000);
     return () => {
       alive = false;
       window.clearInterval(timer);
@@ -241,6 +245,7 @@ export function MapaRutaEnVivo({
         const data = parseGpsMessage(message.data);
         if (!data || data.repartidorId !== Number(repartidorId)) return;
         const punto = { lat: data.lat, lng: data.lng };
+        liveAt.current = Date.now();
         if (!data.alertaGps) aplicarGps(punto);
         onTelemetriaRef.current?.(data);
       };
@@ -345,7 +350,7 @@ export function MapaRutaEnVivo({
       } else {
         driverRef.current?.setMap(null);
       }
-      const vista = `${dest?.lat ?? ""},${dest?.lng ?? ""}|${gps?.lat ?? ""},${gps?.lng ?? ""}|${naranja.length}`;
+      const vista = `${dest?.lat ?? ""},${dest?.lng ?? ""}|${naranja.length}|${gps ? "1" : "0"}`;
       if (vista !== selloVista.current) {
         selloVista.current = vista;
         const bounds = new maps.LatLngBounds();
