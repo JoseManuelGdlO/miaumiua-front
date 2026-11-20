@@ -11,6 +11,7 @@ import DashboardLayout from "./pages/DashboardLayout";
 import Users from "./pages/Users";
 import Historial from "./pages/Historial";
 import Drivers from "./pages/Drivers";
+import FlotillaCombustible from "./pages/FlotillaCombustible";
 import Roles from "./pages/Roles";
 import Permissions from "./pages/Permissions";
 import Promotions from "./pages/Promotions";
@@ -72,6 +73,7 @@ const App = () => (
             <Route path="users" element={<Users />} />
             <Route path="historial" element={<Historial />} />
             <Route path="drivers" element={<Drivers />} />
+            <Route path="drivers/combustible" element={<FlotillaCombustible />} />
             <Route path="roles" element={<Roles />} />
             <Route path="permissions" element={<Permissions />} />
             <Route path="conversations" element={<Conversations />} />

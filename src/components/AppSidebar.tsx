@@ -70,7 +70,15 @@ const menuSections: { label: string | null; items: MenuItem[] }[] = [
       { title: "Conversaciones", url: "/dashboard/conversations", icon: MessageCircle, permission: "conversations" },
       { title: "Contexto de Agentes", url: "/dashboard/agents", icon: Bot, permission: "agents" },
       { title: "Clientes", url: "/dashboard/customers", icon: UserCheck, permission: "customers" },
-      { title: "Repartidores", url: "/dashboard/drivers", icon: Truck, permission: "drivers" },
+      {
+        title: "Repartidores",
+        icon: Truck,
+        permission: "drivers",
+        submenu: [
+          { title: "Repartidores", url: "/dashboard/drivers", permission: "drivers" },
+          { title: "Flotilla/Combustible", url: "/dashboard/drivers/combustible", permission: "drivers" },
+        ],
+      },
       { title: "Pedidos", url: "/dashboard/orders", icon: Package2, permission: "orders" },
       {
         title: "Planeación de Rutas",
