@@ -5,6 +5,8 @@ import type { LecturaEvidencia } from './callCenterService';
 export type FlotillaFila = {
   repartidorId: number;
   nombre: string | null;
+  ciudadId: number | null;
+  ciudad: string | null;
   fecha: string;
   odometro: LecturaEvidencia | null;
   combustible: LecturaEvidencia | null;
@@ -414,9 +416,10 @@ class DriversService {
     }
   }
 
-  async getFlotilla(fecha: string): Promise<{ success: boolean; data: FlotillaFila[] }> {
+  async getFlotilla(desde: string, hasta: string): Promise<{ success: boolean; data: FlotillaFila[] }> {
+    const params = new URLSearchParams({ desde, hasta });
     return authService.authenticatedRequest<{ success: boolean; data: FlotillaFila[] }>(
-      `/repartidores/flotilla?fecha=${encodeURIComponent(fecha)}`,
+      `/repartidores/flotilla?${params}`,
     );
   }
 
