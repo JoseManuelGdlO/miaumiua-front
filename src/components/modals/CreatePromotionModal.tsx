@@ -97,7 +97,11 @@ const CreatePromotionModal = ({ isOpen, onClose, onSuccess }: CreatePromotionMod
       return;
     }
 
-    if (new Date(formData.fecha_inicio) >= new Date(formData.fecha_fin)) {
+    const inicio = new Date(formData.fecha_inicio);
+    inicio.setHours(0, 0, 0, 0);
+    const fin = new Date(formData.fecha_fin);
+    fin.setHours(23, 59, 59, 999);
+    if (fin <= inicio) {
       toast({
         title: "Error",
         description: "La fecha de fin debe ser posterior a la fecha de inicio",
@@ -115,8 +119,8 @@ const CreatePromotionModal = ({ isOpen, onClose, onSuccess }: CreatePromotionMod
         descripcion: formData.descripcion || undefined,
         tipo_promocion: formData.tipo_promocion as any,
         valor_descuento: parseFloat(formData.valor_descuento),
-        fecha_inicio: formData.fecha_inicio.toISOString(),
-        fecha_fin: formData.fecha_fin.toISOString(),
+        fecha_inicio: inicio.toISOString(),
+        fecha_fin: fin.toISOString(),
         limite_uso: parseInt(formData.limite_uso) || 0,
         compra_minima: formData.compra_minima ? parseFloat(formData.compra_minima) : undefined,
         descuento_maximo: formData.descuento_maximo ? parseFloat(formData.descuento_maximo) : undefined,
@@ -137,7 +141,7 @@ const CreatePromotionModal = ({ isOpen, onClose, onSuccess }: CreatePromotionMod
       console.error('Error al crear promoción:', error);
       toast({
         title: "Error",
-        description: "No se pudo crear la promoción",
+        description: error instanceof Error ? error.message : "No se pudo crear la promoción",
         variant: "destructive",
       });
     } finally {
