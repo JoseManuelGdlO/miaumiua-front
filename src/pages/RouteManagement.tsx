@@ -857,6 +857,7 @@ const RouteManagement = () => {
               zone: 'Zona',
               products: 'Productos',
               total: order.total,
+              horario: order.horario_preferente,
                 coordinates: order.cliente?.lat && order.cliente?.lng 
                   ? { lat: order.cliente.lat, lng: order.cliente.lng }
                   : { lat: 0, lng: 0 }, // Se geocodificará automáticamente

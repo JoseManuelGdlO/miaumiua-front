@@ -779,7 +779,7 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
                       onChange={(e) => handleInputChange("fecha_entrega_estimada", e.target.value)}
                     />
                     <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                      Horario de reparto de 9:30 a 17:00. Antes de las 14:00 queda en franja mañana. Desde las 14:00 queda en franja tarde.
+                      Horario de reparto de 9:30 a 17:00. Antes de las 12:00 queda en la mañana. Desde las 12:00 queda en la tarde.
                     </p>
                   </div>
                 </div>

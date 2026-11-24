@@ -727,7 +727,7 @@ function MonitorRepartidores({
                         const verChat = Boolean(pedido.telefono) && !entregado;
                         const enviarCodigo = puede && pedido.codigo_oculto && !entregado;
                         const comprobante = puede && !pedido.comprobante_url && !entregado;
-                        if (entregado || siguiente) {
+                        if (entregado || !esActual) {
                           return (
                             <Collapsible key={pedido.id} className={`group rounded-xl px-4 py-3 ${tono}`}>
                               <CollapsibleTrigger className="flex w-full items-center justify-between gap-3 text-left">
@@ -741,7 +741,11 @@ function MonitorRepartidores({
                                 <p>{pedido.cliente || "Sin cliente"}</p>
                                 {pedido.calificacion_servicio ? <p>El cliente calificó el servicio con {pedido.calificacion_servicio} estrellas.</p> : null}
                                 {pedido.calificacion_cliente ? <p>El repartidor calificó al cliente con {pedido.calificacion_cliente} estrellas.</p> : null}
-                                {siguiente && (enviarCodigo || verCodigo || verChat || comprobante) ? (
+                                {pedido.fecha_propuesta ? <p>Fecha propuesta: {pedido.fecha_propuesta}. Falta confirmarla.</p> : pedido.estado === "no_entregado" ? <p>Sin fecha confirmada.</p> : null}
+                                {puede && pedido.codigo_oculto && codigoPedido === pedido.id ? (
+                                  <p className="text-2xl font-semibold tracking-widest">{codigoPedidoTexto}</p>
+                                ) : null}
+                                {!cerrado && (enviarCodigo || verCodigo || verChat || comprobante) ? (
                                   <div className="flex flex-col gap-2">
                                     {enviarCodigo ? (
                                       <Button className="w-full" disabled={busy} onClick={() => {
@@ -2103,12 +2107,13 @@ const CallCenter = () => {
                                         {etiquetaCobro(row.estado_cobro) ? <Badge className={`mt-1 ${claseCobro(row.estado_cobro)}`}>{etiquetaCobro(row.estado_cobro)}</Badge> : null}
                                         {row.nota ? <p>{row.nota}</p> : null}
                                       </div>
-                                      <div className="flex gap-2">
-                                        {row.comprobante_url ? (
-                                          <button type="button" className="overflow-hidden rounded-md border bg-muted" onClick={() => abrir(row.comprobante_url, `comprobante-${row.numero_pedido}`, `Comprobante ${row.numero_pedido}`)} aria-label={`Ver comprobante ${row.numero_pedido}`}>
-                                            <img src={receiptSrc(row.comprobante_url)} alt="" className="h-12 w-12 object-cover" />
+                                      <div className="flex flex-wrap gap-2">
+                                        {(row.comprobante_urls?.length ? row.comprobante_urls : row.comprobante_url ? [row.comprobante_url] : []).map((url) => (
+                                          <button key={url} type="button" className="overflow-hidden rounded-md border bg-muted" onClick={() => abrir(url, `comprobante-${row.numero_pedido}`, `Comprobante ${row.numero_pedido}`)} aria-label={`Ver comprobante ${row.numero_pedido}`}>
+                                            <img src={receiptSrc(url)} alt="" className="h-12 w-12 object-cover" />
                                           </button>
-                                        ) : row.puede_subir ? (
+                                        ))}
+                                        {!row.comprobante_url && row.puede_subir ? (
                                           <label className="cursor-pointer text-sm font-medium text-primary">
                                             Subir foto
                                             <input
@@ -2126,11 +2131,11 @@ const CallCenter = () => {
                                             />
                                           </label>
                                         ) : null}
-                                        {row.evidencia_url ? (
-                                          <button type="button" className="overflow-hidden rounded-md border bg-muted" onClick={() => abrir(row.evidencia_url, `evidencia-${row.numero_pedido}`, `Evidencia ${row.numero_pedido}`)} aria-label={`Ver evidencia ${row.numero_pedido}`}>
-                                            <img src={receiptSrc(row.evidencia_url)} alt="" className="h-12 w-12 object-cover" />
+                                        {(row.evidencia_urls?.length ? row.evidencia_urls : row.evidencia_url ? [row.evidencia_url] : []).map((url) => (
+                                          <button key={url} type="button" className="overflow-hidden rounded-md border bg-muted" onClick={() => abrir(url, `evidencia-${row.numero_pedido}`, `Evidencia ${row.numero_pedido}`)} aria-label={`Ver evidencia ${row.numero_pedido}`}>
+                                            <img src={receiptSrc(url)} alt="" className="h-12 w-12 object-cover" />
                                           </button>
-                                        ) : null}
+                                        ))}
                                       </div>
                                     </div>
                                     <div className="flex gap-2">
