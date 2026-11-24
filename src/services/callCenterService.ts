@@ -126,7 +126,9 @@ export type ComprobantePago = {
   nota?: string | null;
   fecha?: string | null;
   comprobante_url: string | null;
+  comprobante_urls?: string[];
   evidencia_url?: string | null;
+  evidencia_urls?: string[];
   receptor_nombre?: string | null;
   dejar_lugar?: string | null;
   deposito_url?: string | null;

@@ -16,6 +16,7 @@ import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { Shield, AlertTriangle, Loader2, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { rolesService, Permission } from "@/services/rolesService";
 import { permissionsService } from "@/services/permissionsService";
 import { ConfirmCloseDialog, formDirty, useConfirmClose } from "@/components/ConfirmClose";
@@ -25,6 +26,7 @@ interface ManageRolePermissionsModalProps {
   onOpenChange: (open: boolean) => void;
   roleId?: string;
   roleName?: string;
+  roleDescription?: string;
   onPermissionsUpdated?: () => void;
 }
 
@@ -33,6 +35,7 @@ const ManageRolePermissionsModal = ({
   onOpenChange, 
   roleId, 
   roleName,
+  roleDescription,
   onPermissionsUpdated
 }: ManageRolePermissionsModalProps) => {
   const { toast } = useToast();
@@ -43,10 +46,14 @@ const ManageRolePermissionsModal = ({
   const [selectedPermissions, setSelectedPermissions] = useState<number[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [baseline, setBaseline] = useState<number[]>([]);
+  const [nombre, setNombre] = useState(roleName || "");
+  const [descripcion, setDescripcion] = useState(roleDescription || "");
 
   // Cargar datos cuando se abre el modal
   useEffect(() => {
     if (open && roleId) {
+      setNombre(roleName || "");
+      setDescripcion(roleDescription || "");
       loadData();
     } else if (!open) {
       // Limpiar filtro cuando se cierra el modal
@@ -126,8 +133,14 @@ const ManageRolePermissionsModal = ({
   const handleSave = async () => {
     if (!roleId) return;
     
+    const limpio = nombre.trim();
+    if (limpio.length < 2) {
+      toast({ title: "Error", description: "El nombre del rol es muy corto", variant: "destructive" });
+      return;
+    }
     setSaving(true);
     try {
+      await rolesService.updateRole(parseInt(roleId), { nombre: limpio, descripcion: descripcion.trim() });
       const currentPermissionIds = rolePermissions.map(p => p.id);
       const permissionsToAdd = selectedPermissions.filter(id => !currentPermissionIds.includes(id));
       const permissionsToRemove = currentPermissionIds.filter(id => !selectedPermissions.includes(id));
@@ -191,6 +204,17 @@ const ManageRolePermissionsModal = ({
   return (
     <Dialog open={open} onOpenChange={guardClose}>
       <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
+        <div className="grid gap-3">
+          <div className="space-y-2">
+            <Label htmlFor="role-nombre">Nombre</Label>
+            <Input id="role-nombre" value={nombre} onChange={(event) => setNombre(event.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="role-descripcion">Descripción</Label>
+            <Textarea id="role-descripcion" value={descripcion} onChange={(event) => setDescripcion(event.target.value)} rows={2} />
+          </div>
+        </div>
+
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Shield className="h-5 w-5" />
