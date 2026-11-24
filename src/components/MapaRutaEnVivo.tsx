@@ -191,10 +191,8 @@ export function MapaRutaEnVivo({
       const query = parada?.direccion?.trim();
       const casa = query ? await geocodeDireccion(maps, query, ciudad) : null;
       if (!vivo) return;
-      setDest(casa);
-      const live = destPedido(gpsRef.current?.lat, gpsRef.current?.lng, casa);
       const guardado = destPedido(parada?.lat, parada?.lng, casa);
-      aplicarGps(live || guardado || gpsRef.current);
+      setDest(casa || guardado);
     }).catch(() => {
       if (vivo) setFailed(true);
     });
@@ -350,7 +348,8 @@ export function MapaRutaEnVivo({
       } else {
         driverRef.current?.setMap(null);
       }
-      const vista = `${dest?.lat ?? ""},${dest?.lng ?? ""}|${naranja.length}|${gps ? "1" : "0"}`;
+      const celda = gps ? `${gps.lat.toFixed(3)},${gps.lng.toFixed(3)}` : "";
+      const vista = `${dest?.lat ?? ""},${dest?.lng ?? ""}|${naranja.length}|${celda}`;
       if (vista !== selloVista.current) {
         selloVista.current = vista;
         const bounds = new maps.LatLngBounds();

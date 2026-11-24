@@ -727,7 +727,7 @@ function MonitorRepartidores({
                         const verChat = Boolean(pedido.telefono) && !entregado;
                         const enviarCodigo = puede && pedido.codigo_oculto && !entregado;
                         const comprobante = puede && !pedido.comprobante_url && !entregado;
-                        if (entregado || siguiente) {
+                        if (entregado || !esActual) {
                           return (
                             <Collapsible key={pedido.id} className={`group rounded-xl px-4 py-3 ${tono}`}>
                               <CollapsibleTrigger className="flex w-full items-center justify-between gap-3 text-left">
@@ -741,7 +741,11 @@ function MonitorRepartidores({
                                 <p>{pedido.cliente || "Sin cliente"}</p>
                                 {pedido.calificacion_servicio ? <p>El cliente calificó el servicio con {pedido.calificacion_servicio} estrellas.</p> : null}
                                 {pedido.calificacion_cliente ? <p>El repartidor calificó al cliente con {pedido.calificacion_cliente} estrellas.</p> : null}
-                                {siguiente && (enviarCodigo || verCodigo || verChat || comprobante) ? (
+                                {pedido.fecha_propuesta ? <p>Fecha propuesta: {pedido.fecha_propuesta}. Falta confirmarla.</p> : pedido.estado === "no_entregado" ? <p>Sin fecha confirmada.</p> : null}
+                                {puede && pedido.codigo_oculto && codigoPedido === pedido.id ? (
+                                  <p className="text-2xl font-semibold tracking-widest">{codigoPedidoTexto}</p>
+                                ) : null}
+                                {!cerrado && (enviarCodigo || verCodigo || verChat || comprobante) ? (
                                   <div className="flex flex-col gap-2">
                                     {enviarCodigo ? (
                                       <Button className="w-full" disabled={busy} onClick={() => {
