@@ -20,6 +20,7 @@ import {
   Globe,
   QrCode,
   Headphones,
+  Fuel,
 } from "lucide-react";
 import { canConfigureSystem, hasSectionAccess } from "@/utils/permissions";
 import { useNotificationStream } from "@/hooks/useNotificationStream";
@@ -70,15 +71,7 @@ const menuSections: { label: string | null; items: MenuItem[] }[] = [
       { title: "Conversaciones", url: "/dashboard/conversations", icon: MessageCircle, permission: "conversations" },
       { title: "Contexto de Agentes", url: "/dashboard/agents", icon: Bot, permission: "agents" },
       { title: "Clientes", url: "/dashboard/customers", icon: UserCheck, permission: "customers" },
-      {
-        title: "Repartidores",
-        icon: Truck,
-        permission: "drivers",
-        submenu: [
-          { title: "Repartidores", url: "/dashboard/drivers", permission: "drivers" },
-          { title: "Flotilla/Combustible", url: "/dashboard/drivers/combustible", permission: "drivers" },
-        ],
-      },
+      { title: "Repartidores", url: "/dashboard/drivers", icon: Truck, permission: "drivers" },
       { title: "Pedidos", url: "/dashboard/orders", icon: Package2, permission: "orders" },
       {
         title: "Planeación de Rutas",
@@ -110,6 +103,7 @@ const menuSections: { label: string | null; items: MenuItem[] }[] = [
       { title: "Inventario", url: "/dashboard/inventory", icon: Package, permission: "inventory" },
       { title: "Paquetes", url: "/dashboard/packages", icon: Package2, permission: "packages" },
       { title: "Ciudades", url: "/dashboard/cities", icon: MapPin, permission: "cities" },
+      { title: "Flotilla/Combustible", url: "/dashboard/flotilla", icon: Fuel, permission: "flotilla" },
     ],
   },
   {

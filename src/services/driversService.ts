@@ -419,7 +419,7 @@ class DriversService {
   async getFlotilla(desde: string, hasta: string): Promise<{ success: boolean; data: FlotillaFila[] }> {
     const params = new URLSearchParams({ desde, hasta });
     return authService.authenticatedRequest<{ success: boolean; data: FlotillaFila[] }>(
-      `/repartidores/flotilla?${params}`,
+      `/flotilla?${params}`,
     );
   }
 

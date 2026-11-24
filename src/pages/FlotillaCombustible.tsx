@@ -73,6 +73,7 @@ const TONO_ALERTA: Record<string, string> = {
   FUEL_BELOW_MIN: "bg-red-100 text-red-950",
   ODOMETER_REGRESSION: "bg-orange-100 text-orange-950",
   TICKET_TIME_MISMATCH: "bg-orange-100 text-orange-950",
+  AFTER_CUTOFF_TIME: "bg-orange-100 text-orange-950",
   ODOMETER_MISMATCH: "bg-orange-100 text-orange-950",
   FUEL_ABOVE_MAX: "bg-amber-100 text-amber-950",
   MATH_MISMATCH: "bg-yellow-100 text-yellow-950",
@@ -86,6 +87,7 @@ const ICONO_ALERTA: Record<string, LucideIcon> = {
   FUEL_BELOW_MIN: ArrowDown,
   FUEL_ABOVE_MAX: ArrowUp,
   TICKET_TIME_MISMATCH: Clock,
+  AFTER_CUTOFF_TIME: Clock,
   ODOMETER_MISMATCH: Gauge,
   ODOMETER_REGRESSION: Gauge,
   MATH_MISMATCH: Calculator,
@@ -97,6 +99,7 @@ const ORDEN_ALERTA = [
   "FUEL_BELOW_MIN",
   "FUEL_ABOVE_MAX",
   "TICKET_TIME_MISMATCH",
+  "AFTER_CUTOFF_TIME",
   "REUSED_IMAGE",
   "DUPLICATE_RECEIPT",
   "ODOMETER_MISMATCH",
@@ -110,6 +113,7 @@ const ETIQUETA_FILA: Record<string, string> = {
   FUEL_BELOW_MIN: "Inferior al presupuesto",
   FUEL_ABOVE_MAX: "Superior al presupuesto",
   TICKET_TIME_MISMATCH: "Fuera de tiempo",
+  AFTER_CUTOFF_TIME: "Después de las 6 p.m.",
   REUSED_IMAGE: "Foto repetida",
   DUPLICATE_RECEIPT: "Ticket repetido",
   ODOMETER_MISMATCH: "Odómetros distintos",
@@ -125,6 +129,7 @@ const TITULO_ALERTA: Record<string, string> = {
   FUEL_BELOW_MIN: "Importe menor",
   FUEL_ABOVE_MAX: "Importe mayor",
   TICKET_TIME_MISMATCH: "Hora fuera de rango",
+  AFTER_CUTOFF_TIME: "Después de las 6:00 p.m.",
   ODOMETER_MISMATCH: "Odómetros distintos",
   ODOMETER_REGRESSION: "Odómetro menor",
   MATH_MISMATCH: "Total no cuadra",
@@ -171,7 +176,9 @@ function coincideAlerta(carga: LecturaEvidencia | null, filtro: string) {
   const codigos = new Set((carga?.alertas || []).map((alerta) => alerta.codigo));
   if (filtro === "inferior") return codigos.has("FUEL_BELOW_MIN");
   if (filtro === "superior") return codigos.has("FUEL_ABOVE_MAX");
-  if (filtro === "tiempo") return codigos.has("TICKET_TIME_MISMATCH");
+  if (filtro === "tiempo") {
+    return codigos.has("TICKET_TIME_MISMATCH") || codigos.has("AFTER_CUTOFF_TIME");
+  }
   if (filtro === "odómetro") {
     return codigos.has("ODOMETER_MISMATCH") || codigos.has("ODOMETER_REGRESSION") || codigos.has("REPEATED_ODOMETER");
   }
@@ -181,11 +188,56 @@ function coincideAlerta(carga: LecturaEvidencia | null, filtro: string) {
   return true;
 }
 
-function Dato({ etiqueta, valor }: { etiqueta: string; valor: string }) {
+function MiniFoto({
+  titulo,
+  src,
+  alt,
+  onAbrir,
+}: {
+  titulo: string;
+  src: string | null;
+  alt: string;
+  onAbrir: () => void;
+}) {
   return (
-    <div className="rounded-xl bg-muted/60 p-3">
+    <div className="min-w-0">
+      <p className="mb-1.5 text-xs text-muted-foreground">{titulo}</p>
+      {src ? (
+        <button
+          type="button"
+          onClick={onAbrir}
+          className="block w-full overflow-hidden rounded-xl bg-muted/60"
+          aria-label={`Ver más grande: ${titulo}`}
+        >
+          <img src={src} alt={alt} className="h-40 w-full object-contain" />
+        </button>
+      ) : (
+        <div className="grid h-40 place-items-center rounded-xl bg-muted px-3 text-center text-sm text-muted-foreground">
+          Sin foto
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Dato({
+  etiqueta,
+  valor,
+  captura,
+  className = "",
+}: {
+  etiqueta: string;
+  valor: string;
+  captura?: string | null;
+  className?: string;
+}) {
+  return (
+    <div className={`rounded-xl bg-muted/60 p-3 ${className}`}>
       <p className="text-xs text-muted-foreground">{etiqueta}</p>
       <p className="mt-1 text-sm font-semibold tabular-nums">{valor}</p>
+      {captura ? (
+        <p className="mt-1 text-xs tabular-nums text-muted-foreground">Captura {hora(captura)}</p>
+      ) : null}
     </div>
   );
 }
@@ -201,7 +253,7 @@ export default function FlotillaCombustible() {
   const [ciudadId, setCiudadId] = useState("todas");
   const [alerta, setAlerta] = useState("todas");
   const [abierta, setAbierta] = useState<FlotillaFila | null>(null);
-  const [fotoAbierta, setFotoAbierta] = useState(false);
+  const [fotoGrande, setFotoGrande] = useState<null | "inicio" | "cierre">(null);
 
   const periodos = [
     { etiqueta: "Solo hoy", desde: hoy, hasta: hoy },
@@ -266,7 +318,9 @@ export default function FlotillaCombustible() {
     (fila) => resumenFila(fila.combustible) !== "Correcto",
   ).length;
   const cargaAbierta = abierta?.combustible;
-  const foto = fotoSrc(cargaAbierta?.url);
+  const fotoInicio = fotoSrc(abierta?.odometro?.url);
+  const fotoCierre = fotoSrc(cargaAbierta?.url);
+  const fotoModal = fotoGrande === "inicio" ? fotoInicio : fotoGrande === "cierre" ? fotoCierre : null;
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-6">
@@ -287,8 +341,8 @@ export default function FlotillaCombustible() {
         <CardHeader>
           <CardTitle>Historial de combustible</CardTitle>
           <CardDescription>
-            Pulsa una fila para ver odómetros, litros, estación, folio y la
-            foto.
+            Pulsa una fila para ver odómetros, litros, estación, folio y las
+            fotos.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -451,7 +505,7 @@ export default function FlotillaCombustible() {
         onOpenChange={(abierto) => {
           if (!abierto) {
             setAbierta(null);
-            setFotoAbierta(false);
+            setFotoGrande(null);
           }
         }}
       >
@@ -459,7 +513,7 @@ export default function FlotillaCombustible() {
           side="right"
           className="flex w-full flex-col gap-0 overflow-y-auto p-0 sm:max-w-xl"
           onInteractOutside={(event) => {
-            if (fotoAbierta) event.preventDefault();
+            if (fotoGrande) event.preventDefault();
           }}
         >
           {abierta ? (
@@ -485,24 +539,20 @@ export default function FlotillaCombustible() {
                 </SheetDescription>
               </SheetHeader>
               <div className="space-y-4 px-6 py-4">
-                {foto ? (
-                  <button
-                    type="button"
-                    onClick={() => setFotoAbierta(true)}
-                    className="block w-full overflow-hidden rounded-xl bg-muted/60"
-                    aria-label="Ver la foto más grande"
-                  >
-                    <img
-                      src={foto}
-                      alt="Ticket y odómetro"
-                      className="max-h-96 w-full object-contain"
-                    />
-                  </button>
-                ) : (
-                  <div className="rounded-xl bg-muted px-4 py-8 text-center text-sm text-muted-foreground">
-                    Sin foto de combustible
-                  </div>
-                )}
+                <div className="grid grid-cols-2 gap-3">
+                  <MiniFoto
+                    titulo="Inicio de la jornada"
+                    src={fotoInicio}
+                    alt="Odómetro al inicio"
+                    onAbrir={() => setFotoGrande("inicio")}
+                  />
+                  <MiniFoto
+                    titulo="Cierre de la jornada"
+                    src={fotoCierre}
+                    alt="Ticket y odómetro al cierre"
+                    onAbrir={() => setFotoGrande("cierre")}
+                  />
+                </div>
                 {(cargaAbierta?.alertas || []).length ? (
                   <div className="space-y-2">
                     {cargaAbierta!.alertas!.map((item) => {
@@ -528,32 +578,34 @@ export default function FlotillaCombustible() {
                 )}
                 <div className="grid grid-cols-2 gap-3">
                   <Dato
+                    etiqueta="Km al inicio"
+                    valor={
+                      abierta.odometro?.kilometraje != null
+                        ? `${abierta.odometro.kilometraje.toLocaleString("es-MX")} km`
+                        : "—"
+                    }
+                    captura={abierta.odometro?.fechaCaptura || abierta.odometro?.fechaRecepcion}
+                  />
+                  <Dato
+                    etiqueta="Última hora de captura"
+                    valor={hora(cargaAbierta?.fechaCaptura)}
+                  />
+                  <Dato
+                    etiqueta="Última hora de recepción"
+                    valor={hora(cargaAbierta?.fechaRecepcion)}
+                  />
+                  <Dato
                     etiqueta="Hora del ticket"
                     valor={hora(cargaAbierta?.fecha_hora_ticket)}
                   />
                   <Dato
-                    etiqueta="Recepción"
-                    valor={hora(cargaAbierta?.fechaRecepcion)}
-                  />
-                  <Dato
-                    etiqueta="Captura"
-                    valor={hora(cargaAbierta?.fechaCaptura)}
-                  />
-                  <Dato
-                    etiqueta="Km al inicio"
+                    etiqueta="Kilometraje en checkout"
                     valor={
-                      abierta.odometro?.kilometraje != null
-                        ? `${abierta.odometro.kilometraje} km`
+                      (cargaAbierta?.odometro_tablero ?? cargaAbierta?.kilometraje) != null
+                        ? `${(cargaAbierta?.odometro_tablero ?? cargaAbierta?.kilometraje)!.toLocaleString("es-MX")} km`
                         : "—"
                     }
-                  />
-                  <Dato
-                    etiqueta="Odómetro del tablero"
-                    valor={
-                      cargaAbierta?.odometro_tablero != null
-                        ? `${cargaAbierta.odometro_tablero} km`
-                        : "—"
-                    }
+                    captura={cargaAbierta?.fechaCaptura || cargaAbierta?.fechaRecepcion}
                   />
                   <Dato
                     etiqueta="Litros"
@@ -567,11 +619,12 @@ export default function FlotillaCombustible() {
                     etiqueta="Precio por litro"
                     valor={dinero(cargaAbierta?.precio_litro)}
                   />
+                  <Dato etiqueta="Folio" valor={cargaAbierta?.folio || "—"} />
                   <Dato
                     etiqueta="Estación"
                     valor={cargaAbierta?.estacion || "—"}
+                    className="col-span-2"
                   />
-                  <Dato etiqueta="Folio" valor={cargaAbierta?.folio || "—"} />
                 </div>
               </div>
             </>
@@ -579,12 +632,12 @@ export default function FlotillaCombustible() {
         </SheetContent>
       </Sheet>
 
-      <Dialog open={fotoAbierta && Boolean(foto)} onOpenChange={setFotoAbierta}>
+      <Dialog open={fotoModal != null} onOpenChange={(abierto) => { if (!abierto) setFotoGrande(null); }}>
         <DialogContent className="max-w-4xl">
           <DialogHeader>
-            <DialogTitle>Ticket y odómetro</DialogTitle>
+            <DialogTitle>{fotoGrande === "inicio" ? "Inicio de la jornada" : "Cierre de la jornada"}</DialogTitle>
           </DialogHeader>
-          {foto ? <img src={foto} alt="Ticket y odómetro" className="max-h-[75vh] w-full object-contain" /> : null}
+          {fotoModal ? <img src={fotoModal} alt={fotoGrande === "inicio" ? "Odómetro al inicio" : "Ticket y odómetro al cierre"} className="max-h-[75vh] w-full object-contain" /> : null}
         </DialogContent>
       </Dialog>
     </div>
