@@ -26,6 +26,29 @@ export type InventarioHit = {
   precio_venta: number;
 };
 
+export type LecturaEvidencia = {
+  estado: "validada" | "rechazada" | "revision";
+  motivo: string | null;
+  alertas?: { codigo: string; mensaje: string }[];
+  usuario?: { id: number | null; nombre: string | null } | null;
+  vehiculoId?: string | number | null;
+  origen?: string | null;
+  fechaCaptura?: string | null;
+  fechaRecepcion?: string | null;
+  fechaCapturaOrigen?: "cliente" | "recepcion" | null;
+  kilometraje: number | null;
+  odometro_tablero?: number | null;
+  odometro_ticket?: number | null;
+  costo_mxn: number | null;
+  litros: number | null;
+  fecha_hora_ticket?: string | null;
+  precio_litro?: number | null;
+  estacion?: string | null;
+  folio?: string | null;
+  confianza?: Record<string, "alta" | "media" | "baja" | null> | null;
+  url: string | null;
+};
+
 export type Solicitud = {
   id: number;
   tipo: 'check_in' | 'llamada_cliente' | 'soporte' | 'cierre_dia';
@@ -52,6 +75,10 @@ export type Solicitud = {
   espera_reenvio?: boolean;
   ya_validada?: boolean;
   cargas?: CargaLinea[];
+  evidencias?: {
+    odometro: LecturaEvidencia | null;
+    combustible: LecturaEvidencia | null;
+  } | null;
   pedidos?: { numero_pedido: string; cliente: string; productos: { nombre: string; cantidad: number }[] }[];
   cliente?: string | null;
   telefono?: string | null;

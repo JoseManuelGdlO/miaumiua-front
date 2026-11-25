@@ -145,6 +145,12 @@ export const SECTION_PERMISSIONS = {
     activate: 'activar_desactivar_repartidores',
     stats: 'ver_estadisticas_repartidores'
   },
+  flotilla: {
+    base: 'ver_flotilla',
+    create: 'ver_flotilla',
+    edit: 'ver_flotilla',
+    delete: 'ver_flotilla'
+  },
   agents: {
     base: 'ver_agentes',
     create: 'crear_agentes',

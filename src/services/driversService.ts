@@ -1,5 +1,16 @@
 import { authService } from './authService';
 import { getCurrentConfig } from '@/config/environment';
+import type { LecturaEvidencia } from './callCenterService';
+
+export type FlotillaFila = {
+  repartidorId: number;
+  nombre: string | null;
+  ciudadId: number | null;
+  ciudad: string | null;
+  fecha: string;
+  odometro: LecturaEvidencia | null;
+  combustible: LecturaEvidencia | null;
+};
 
 export type DriverEstado =
   | 'activo'
@@ -403,6 +414,13 @@ class DriversService {
       console.error('Error al obtener repartidores:', error);
       throw error;
     }
+  }
+
+  async getFlotilla(desde: string, hasta: string): Promise<{ success: boolean; data: FlotillaFila[] }> {
+    const params = new URLSearchParams({ desde, hasta });
+    return authService.authenticatedRequest<{ success: boolean; data: FlotillaFila[] }>(
+      `/flotilla?${params}`,
+    );
   }
 
   // Obtener un repartidor por ID

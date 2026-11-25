@@ -29,7 +29,8 @@ const Roles = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
+  const [editingRole, setEditingRole] = useState<Role | null>(null);
   const [permissionsModalOpen, setPermissionsModalOpen] = useState(false);
   const [selectedRole, setSelectedRole] = useState<{ id: string; name: string; descripcion: string } | null>(null);
 
@@ -100,7 +101,7 @@ const Roles = () => {
           </p>
         </div>
         {canCreate('roles') && (
-          <Button className="gap-2" onClick={() => setIsCreateModalOpen(true)}>
+          <Button className="gap-2" onClick={() => { setEditingRole(null); setIsRoleModalOpen(true); }}>
             <Shield className="h-4 w-4" />
             Nuevo Rol
           </Button>
@@ -212,7 +213,12 @@ const Roles = () => {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             {canEdit('roles') && (
-                              <DropdownMenuItem onSelect={() => abrirRol(role)}>
+                              <DropdownMenuItem
+                                onSelect={() => {
+                                  setEditingRole(role);
+                                  window.setTimeout(() => setIsRoleModalOpen(true), 0);
+                                }}
+                              >
                                 <Edit className="mr-2 h-4 w-4" />
                                 Editar Rol
                               </DropdownMenuItem>
@@ -256,8 +262,12 @@ const Roles = () => {
       </Card>
 
       <CreateRoleModal 
-        open={isCreateModalOpen} 
-        onOpenChange={setIsCreateModalOpen}
+        open={isRoleModalOpen} 
+        onOpenChange={(open) => {
+          setIsRoleModalOpen(open);
+          if (!open) setEditingRole(null);
+        }}
+        role={editingRole}
         onRoleCreated={loadRoles}
       />
 

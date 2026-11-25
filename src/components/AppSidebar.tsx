@@ -20,6 +20,7 @@ import {
   Globe,
   QrCode,
   Headphones,
+  Fuel,
 } from "lucide-react";
 import { canConfigureSystem, hasSectionAccess } from "@/utils/permissions";
 import { useNotificationStream } from "@/hooks/useNotificationStream";
@@ -102,6 +103,7 @@ const menuSections: { label: string | null; items: MenuItem[] }[] = [
       { title: "Inventario", url: "/dashboard/inventory", icon: Package, permission: "inventory" },
       { title: "Paquetes", url: "/dashboard/packages", icon: Package2, permission: "packages" },
       { title: "Ciudades", url: "/dashboard/cities", icon: MapPin, permission: "cities" },
+      { title: "Flotilla/Combustible", url: "/dashboard/flotilla", icon: Fuel, permission: "flotilla" },
     ],
   },
   {

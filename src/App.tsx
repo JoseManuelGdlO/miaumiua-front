@@ -3,6 +3,8 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Routes, Route, useParams } from "react-router-dom";
+import { useEffect } from "react";
+import { cargarConfiguracion } from "@/lib/configuracion";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import Login from "./pages/Login";
@@ -11,6 +13,7 @@ import DashboardLayout from "./pages/DashboardLayout";
 import Users from "./pages/Users";
 import Historial from "./pages/Historial";
 import Drivers from "./pages/Drivers";
+import FlotillaCombustible from "./pages/FlotillaCombustible";
 import Roles from "./pages/Roles";
 import Permissions from "./pages/Permissions";
 import Promotions from "./pages/Promotions";
@@ -47,11 +50,19 @@ import ProtectedRoute from "./components/ProtectedRoute";
 
 const queryClient = new QueryClient();
 
+function ConfiguracionBoot() {
+  useEffect(() => {
+    void cargarConfiguracion();
+  }, []);
+  return null;
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
       <Sonner />
+      <ConfiguracionBoot />
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Login />} />
@@ -72,6 +83,7 @@ const App = () => (
             <Route path="users" element={<Users />} />
             <Route path="historial" element={<Historial />} />
             <Route path="drivers" element={<Drivers />} />
+            <Route path="flotilla" element={<FlotillaCombustible />} />
             <Route path="roles" element={<Roles />} />
             <Route path="permissions" element={<Permissions />} />
             <Route path="conversations" element={<Conversations />} />
