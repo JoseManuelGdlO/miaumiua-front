@@ -2,6 +2,35 @@ import { config } from '../config/environment';
 import { falloHttp, mensajeDeError } from '@/lib/api-error';
 import { authService } from './authService';
 
+export type VentanaEntrega = 'manana' | 'tarde' | 'cualquiera';
+
+export const VENTANAS_ENTREGA: { id: VentanaEntrega; label: string; rango: string }[] = [
+  { id: 'manana', label: 'Mañana', rango: '9:30–12:00' },
+  { id: 'tarde', label: 'Tarde', rango: '12:00–17:00' },
+  { id: 'cualquiera', label: 'Cualquier hora', rango: 'Sin hora fija' },
+];
+
+export function ventanaDeHorario(value?: string | null): VentanaEntrega {
+  if (!value || !String(value).trim()) return 'cualquiera';
+  const match = String(value).trim().match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return 'cualquiera';
+  return Number(match[1]) >= 12 ? 'tarde' : 'manana';
+}
+
+export function textoVentana(ventana?: string | null, horario?: string | null) {
+  const clave = ventana === 'manana' || ventana === 'tarde' || ventana === 'cualquiera'
+    ? ventana
+    : ventanaDeHorario(horario);
+  if (clave === 'tarde') return 'Tarde · 12:00 PM – 5:00 PM';
+  if (clave === 'cualquiera') return 'Cualquier hora';
+  return 'Mañana · 9:30 AM – 12:00 PM';
+}
+
+export function fechaEntregaDia(value?: string | null) {
+  const match = String(value || '').match(/^(\d{4}-\d{2}-\d{2})/);
+  return match ? match[1] : '';
+}
+
 // Interfaces para Pedidos
 export interface Order {
   id: number;
@@ -12,6 +41,7 @@ export interface Order {
   direccion_entrega: string;
   fkid_ciudad: number;
   fecha_entrega_estimada?: string;
+  horario_preferente?: string | null;
   metodo_pago: 'efectivo' | 'tarjeta' | 'transferencia' | 'pago_movil';
   notas?: string;
   codigo_promocion?: string | null;
@@ -79,7 +109,8 @@ export interface CreateOrderData {
   direccion_entrega: string;
   fkid_ciudad: number;
   fecha_entrega_estimada?: string;
-  horario_preferente?: string;
+  horario_preferente?: string | null;
+  ventana?: VentanaEntrega;
   metodo_pago: 'efectivo' | 'tarjeta' | 'transferencia' | 'pago_movil';
   notas?: string;
   codigo_promocion?: string;
@@ -106,6 +137,8 @@ export interface UpdateOrderData {
   direccion_entrega?: string;
   fkid_ciudad?: number;
   fecha_entrega_estimada?: string;
+  horario_preferente?: string | null;
+  ventana?: VentanaEntrega;
   metodo_pago?: 'efectivo' | 'tarjeta' | 'transferencia' | 'pago_movil';
   notas?: string;
   codigo_promocion?: string;

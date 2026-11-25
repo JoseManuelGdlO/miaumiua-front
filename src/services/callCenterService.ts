@@ -97,6 +97,7 @@ export type PedidoDia = {
   direccion: string | null;
   notas?: string | null;
   franja?: "manana" | "tarde";
+  ventana?: "manana" | "tarde" | "cualquiera";
   horario_preferente?: string | null;
   metodo_pago?: string | null;
   orden_entrega?: number | null;
@@ -153,7 +154,9 @@ export type ComprobantePago = {
   nota?: string | null;
   fecha?: string | null;
   comprobante_url: string | null;
+  comprobante_urls?: string[];
   evidencia_url?: string | null;
+  evidencia_urls?: string[];
   receptor_nombre?: string | null;
   dejar_lugar?: string | null;
   deposito_url?: string | null;

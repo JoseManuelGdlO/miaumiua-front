@@ -32,7 +32,12 @@ const Roles = () => {
   const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
   const [editingRole, setEditingRole] = useState<Role | null>(null);
   const [permissionsModalOpen, setPermissionsModalOpen] = useState(false);
-  const [selectedRole, setSelectedRole] = useState<{ id: string; name: string } | null>(null);
+  const [selectedRole, setSelectedRole] = useState<{ id: string; name: string; descripcion: string } | null>(null);
+
+  const abrirRol = (role: Role) => {
+    setSelectedRole({ id: role.id.toString(), name: role.nombre, descripcion: role.descripcion || "" });
+    window.setTimeout(() => setPermissionsModalOpen(true), 0);
+  };
 
   // Cargar roles al montar el componente
   useEffect(() => {
@@ -160,7 +165,7 @@ const Roles = () => {
                         <div className="flex items-center space-x-3">
                           <span className="text-2xl">{getRoleIcon(role.nombre)}</span>
                           <div>
-                            <div className="font-medium text-foreground">{role.nombre}</div>
+                            <button type="button" className="font-medium text-foreground" onClick={() => abrirRol(role)}>{role.nombre}</button>
                           </div>
                         </div>
                       </TableCell>
@@ -200,7 +205,7 @@ const Roles = () => {
                         {role.created_at ? new Date(role.created_at).toLocaleDateString('es-ES') : 'N/A'}
                       </TableCell>
                       <TableCell className="text-right">
-                        <DropdownMenu>
+                        <DropdownMenu modal={false}>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" className="h-8 w-8 p-0">
                               <MoreHorizontal className="h-4 w-4" />
@@ -208,26 +213,25 @@ const Roles = () => {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             {canEdit('roles') && (
-                              <DropdownMenuItem onClick={() => {
-                                setEditingRole(role);
-                                setIsRoleModalOpen(true);
-                              }}>
+                              <DropdownMenuItem
+                                onSelect={() => {
+                                  setEditingRole(role);
+                                  window.setTimeout(() => setIsRoleModalOpen(true), 0);
+                                }}
+                              >
                                 <Edit className="mr-2 h-4 w-4" />
                                 Editar Rol
                               </DropdownMenuItem>
                             )}
                             {canAssignPermissions() && (
-                              <DropdownMenuItem onClick={() => {
-                                setSelectedRole({ id: role.id.toString(), name: role.nombre });
-                                setPermissionsModalOpen(true);
-                              }}>
+                              <DropdownMenuItem onSelect={() => abrirRol(role)}>
                                 <Shield className="mr-2 h-4 w-4" />
                                 Gestionar Permisos
                               </DropdownMenuItem>
                             )}
-                            <DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => abrirRol(role)}>
                               <Users className="mr-2 h-4 w-4" />
-                              Ver Usuarios
+                              Ver rol
                             </DropdownMenuItem>
                             {canDelete('roles') && (
                               <DropdownMenuItem className="text-destructive">
@@ -272,6 +276,7 @@ const Roles = () => {
         onOpenChange={setPermissionsModalOpen}
         roleId={selectedRole?.id}
         roleName={selectedRole?.name}
+        roleDescription={selectedRole?.descripcion}
         onPermissionsUpdated={loadRoles}
       />
     </div>

@@ -18,11 +18,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { DateField } from "@/components/ui/date-field";
 import { 
   Plus, 
   Trash2, 
   Package as PackageIcon,
-  Calendar,
   MapPin,
   User,
   Phone,
@@ -33,7 +33,7 @@ import {
   Edit
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { ordersService, Order, UpdateOrderData } from "@/services/ordersService";
+import { ordersService, Order, UpdateOrderData, VENTANAS_ENTREGA, fechaEntregaDia, ventanaDeHorario, type VentanaEntrega } from "@/services/ordersService";
 import { clientesService, Cliente } from "@/services/clientesService";
 import { citiesService, City } from "@/services/citiesService";
 import { inventariosService, Inventario } from "@/services/inventariosService";
@@ -91,6 +91,7 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
     direccion_entrega: "",
     codigo_postal: "",
     fecha_entrega_estimada: "",
+    ventana: "cualquiera" as VentanaEntrega,
     metodo_pago: "efectivo" as "efectivo" | "tarjeta" | "transferencia" | "pago_movil",
     notas: "",
     codigo_promocion: ""
@@ -122,6 +123,7 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
         direccion_entrega: "",
         codigo_postal: "",
         fecha_entrega_estimada: "",
+        ventana: "cualquiera",
         metodo_pago: "efectivo",
         notas: "",
         codigo_promocion: ""
@@ -157,8 +159,8 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
       fkid_ciudad: ciudadId != null ? String(ciudadId) : "",
       direccion_entrega: order.direccion_entrega,
       codigo_postal: (order.direccion_entrega || "").match(/\b(\d{5})\b/)?.[1] || "",
-      fecha_entrega_estimada: order.fecha_entrega_estimada ? 
-        new Date(order.fecha_entrega_estimada).toISOString().slice(0, 16) : "",
+      fecha_entrega_estimada: fechaEntregaDia(order.fecha_entrega_estimada),
+      ventana: ventanaDeHorario(order.horario_preferente),
       metodo_pago: order.metodo_pago,
       notas: order.notas || "",
       codigo_promocion: order.codigo_promocion || ""
@@ -403,10 +405,10 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
     if (!order) return;
 
     // Validaciones básicas
-    if (!formData.fkid_cliente || !formData.direccion_entrega || !formData.fkid_ciudad || !formData.metodo_pago) {
+    if (!formData.fkid_cliente || !formData.direccion_entrega || !formData.fkid_ciudad || !formData.metodo_pago || !formData.fecha_entrega_estimada) {
       toast({
         title: "Error",
-        description: "Por favor completa los campos obligatorios: Cliente, Dirección, Ciudad y Método de Pago",
+        description: "Por favor completa los campos obligatorios: Cliente, Dirección, Ciudad, Fecha de entrega y Método de Pago",
         variant: "destructive"
       });
       return;
@@ -500,8 +502,8 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
         email_referencia: formData.email_referencia || undefined,
         direccion_entrega: direccion,
         fkid_ciudad: parseInt(formData.fkid_ciudad),
-        fecha_entrega_estimada: formData.fecha_entrega_estimada ? 
-          new Date(formData.fecha_entrega_estimada).toISOString() : undefined,
+        fecha_entrega_estimada: formData.fecha_entrega_estimada,
+        ventana: formData.ventana,
         metodo_pago: formData.metodo_pago,
         notas: formData.notas || undefined,
         codigo_promocion: formData.codigo_promocion || undefined,
@@ -716,16 +718,31 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="fecha_entrega_estimada">Fecha de Entrega Estimada</Label>
-                  <div className="relative">
-                    <Calendar className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="fecha_entrega_estimada"
-                      type="datetime-local"
-                      value={formData.fecha_entrega_estimada}
-                      onChange={(e) => setFormData(prev => ({ ...prev, fecha_entrega_estimada: e.target.value }))}
-                      className="pl-8"
-                    />
+                  <Label htmlFor="fecha_entrega_estimada">Fecha de Entrega Estimada *</Label>
+                  <DateField
+                    id="fecha_entrega_estimada"
+                    value={formData.fecha_entrega_estimada}
+                    onChange={(value) => setFormData((prev) => ({ ...prev, fecha_entrega_estimada: value }))}
+                  />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Ventana de entrega</Label>
+                  <div role="group" aria-label="Ventana de entrega" className="grid grid-cols-3 gap-2">
+                    {VENTANAS_ENTREGA.map((item) => {
+                      const active = formData.ventana === item.id;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          aria-pressed={active}
+                          onClick={() => setFormData((prev) => ({ ...prev, ventana: item.id }))}
+                          className={`rounded-xl border px-3 py-2 text-left ${active ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background text-foreground"}`}
+                        >
+                          <span className="block text-sm font-semibold">{item.label}</span>
+                          <span className={`block text-xs ${active ? "text-primary-foreground/80" : "text-muted-foreground"}`}>{item.rango}</span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 

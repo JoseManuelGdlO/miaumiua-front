@@ -17,6 +17,8 @@ export interface Promotion {
   descuento_maximo?: number;
   baja_logica: boolean;
   aplica_a?: 'todos' | 'retail' | 'distribuidor';
+  unidades_minimas?: number | null;
+  productos_ids?: number[] | null;
   created_at: string;
   updated_at: string;
   ciudades?: City[];
@@ -34,6 +36,8 @@ export interface CreatePromotionData {
   limite_uso: number;
   compra_minima?: number;
   descuento_maximo?: number;
+  unidades_minimas?: number | null;
+  productos_ids?: number[];
   ciudades?: number[];
   aplica_a?: 'todos' | 'retail' | 'distribuidor';
 }
@@ -49,6 +53,8 @@ export interface UpdatePromotionData {
   limite_uso?: number;
   compra_minima?: number;
   descuento_maximo?: number;
+  unidades_minimas?: number | null;
+  productos_ids?: number[];
   ciudades?: number[];
   aplica_a?: 'todos' | 'retail' | 'distribuidor';
 }

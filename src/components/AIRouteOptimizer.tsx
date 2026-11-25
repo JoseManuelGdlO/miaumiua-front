@@ -336,6 +336,20 @@ interface Order {
   products: string;
   estado?: string; // Estado/departamento
   ciudad?: string; // Nombre de la ciudad
+  horario?: string | null;
+}
+
+const CORTE_TARDE_MIN = 12 * 60;
+
+function rangoHorario(horario?: string | null) {
+  const match = String(horario || "").match(/(\d{1,2}):(\d{2})/);
+  if (!match) return 1;
+  const minutos = Number(match[1]) * 60 + Number(match[2]);
+  return minutos >= CORTE_TARDE_MIN ? 2 : 0;
+}
+
+function mananaLuegoTarde(lista: Order[]) {
+  return lista.slice().sort((a, b) => rangoHorario(a.horario) - rangoHorario(b.horario));
 }
 
 interface AIRouteOptimizerProps {
@@ -482,7 +496,7 @@ const AIRouteOptimizer: React.FC<AIRouteOptimizerProps> = ({
               ordersForRoute.push(order);
             }
           }
-          optimizedRoutes['A'] = ordersForRoute;
+          optimizedRoutes['A'] = mananaLuegoTarde(ordersForRoute);
         }
       } else {
         // Usar solución de 2 repartidores
@@ -502,7 +516,7 @@ const AIRouteOptimizer: React.FC<AIRouteOptimizerProps> = ({
 
           if (ordersForRoute.length > 0) {
             const routeKey = String.fromCharCode(routeKeyCharCode);
-            optimizedRoutes[routeKey] = ordersForRoute;
+            optimizedRoutes[routeKey] = mananaLuegoTarde(ordersForRoute);
             routeKeyCharCode++;
           }
         }

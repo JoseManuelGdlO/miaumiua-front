@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { AlertTriangle, ChevronDown, ClipboardCheck, Download, Eye, Headphones, History, Inbox, LifeBuoy, Loader2, LogOut, Package, Phone, Receipt, RefreshCw, Search, Truck, Users, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateField } from "@/components/ui/date-field";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -35,6 +36,7 @@ import { vistaDeError } from "@/lib/api-error";
 import { authService } from "@/services/authService";
 import { conversationsService } from "@/services/conversationsService";
 import { MAX_PARADAS_DIA, textoCupo } from "@/lib/agenda";
+import { textoVentana } from "@/services/ordersService";
 import { descargarHoja, hojaDesdeParadas } from "@/lib/hojaRuta";
 import { MapaRutaEnVivo } from "@/components/MapaRutaEnVivo";
 
@@ -147,6 +149,15 @@ function primerDiaMesMexico() {
 function fechaCorta(iso: string) {
   const [y, m, d] = String(iso).split("-");
   return y && m && d ? `${d}/${m}/${y}` : iso;
+}
+
+function textoCheckIn(row: { fecha?: string | null; hora?: string | null }) {
+  const crudo = String(row.fecha || "");
+  const iso = crudo.slice(0, 10);
+  const dia = /^\d{4}-\d{2}-\d{2}$/.test(iso) ? fechaCorta(iso) : crudo;
+  const hhmm = String(row.hora || "").slice(0, 5);
+  if (!dia && !hhmm) return "Sin fecha";
+  return [dia, hhmm].filter(Boolean).join(" · ");
 }
 
 function agruparCortes(rows: ComprobantePago[]) {
@@ -426,6 +437,7 @@ function abrirChat(telefono: string | null | undefined, onError: (error: unknown
 function MonitorRepartidores({
   pedidos,
   solicitudes,
+  historial,
   puede,
   busy,
   codigo,
@@ -443,6 +455,7 @@ function MonitorRepartidores({
 }: {
   pedidos: PedidoDia[];
   solicitudes: Solicitud[];
+  historial: CargaValidada[];
   puede: boolean;
   busy: boolean;
   codigo: string;
@@ -467,7 +480,6 @@ function MonitorRepartidores({
   const [agentes, setAgentes] = useState<{ nombre: string; telefono: string; repartidor_ids: number[]; numeros?: { telefono: string; repartidor_ids: number[] }[] }[]>([]);
   const [codigoPedido, setCodigoPedido] = useState<number | null>(null);
   const [codigoPedidoTexto, setCodigoPedidoTexto] = useState("");
-  const [franjaMapa, setFranjaMapa] = useState<"manana" | "tarde">("manana");
   const [vivo, setVivo] = useState<{
     actual: number;
     promedio: number;
@@ -523,7 +535,7 @@ function MonitorRepartidores({
   const ficha = (id: number, nombre: string) => {
     const paradas = pedidos.filter((pedido) => pedido.repartidor?.id === id);
     const actual = paradas.find((pedido) => pedido.estado_entrega !== "entregado" && pedido.estado !== "entregado" && pedido.estado !== "no_entregado");
-    const checkIn = [...solicitudes].reverse().find((solicitud) => solicitud.tipo === "check_in" && solicitud.repartidor?.id === id);
+    const checkIn = [...solicitudes.filter((solicitud) => solicitud.tipo === "check_in" && solicitud.repartidor?.id === id), ...historial.filter((row) => row.repartidor?.id === id)].sort((a, b) => b.id - a.id)[0] || null;
     const aprobaciones = solicitudes.filter((solicitud) => solicitud.repartidor?.id === id && (pideAprobacion(solicitud) || solicitud.tipo === "soporte"));
     const velocidad = velocidades.find((row) => row.repartidor_id === id);
     const numeros = new Set(paradas.map((pedido) => pedido.numero_pedido));
@@ -591,28 +603,16 @@ function MonitorRepartidores({
             </div>
             <div className="grid gap-4 bg-muted/40 p-4 lg:grid-cols-2">
               {(() => {
-                const tieneManana = row.paradas.some((pedido) => (pedido.franja || "manana") === "manana");
-                const tieneTarde = row.paradas.some((pedido) => pedido.franja === "tarde");
-                const franja = (franjaMapa === "tarde" && tieneTarde) || (franjaMapa === "manana" && tieneManana)
-                  ? franjaMapa
-                  : (tieneTarde && !tieneManana ? "tarde" : "manana");
-                const deFranja = row.paradas.filter((pedido) => (pedido.franja || "manana") === franja);
-                const rutaId = [...deFranja, ...row.paradas]
+                const rutaId = row.paradas
                   .map((pedido) => Number(pedido.ruta_id))
                   .find((value) => Number.isInteger(value) && value > 0) ?? null;
                 return (
                   <div className="space-y-3 lg:col-span-2">
-                    {tieneManana && tieneTarde ? (
-                      <div className="flex gap-2">
-                        <Button variant={franja === "manana" ? "default" : "outline"} size="sm" onClick={() => setFranjaMapa("manana")}>Mañana</Button>
-                        <Button variant={franja === "tarde" ? "default" : "outline"} size="sm" onClick={() => setFranjaMapa("tarde")}>Tarde</Button>
-                      </div>
-                    ) : null}
                     <MapaRutaEnVivo
-                      key={`${id}-${franja}`}
+                      key={`${id}`}
                       rutaId={rutaId}
                       repartidorId={id}
-                      paradas={deFranja.length ? deFranja : row.paradas}
+                      paradas={row.paradas}
                       ciudad={row.ciudadNombre || null}
                       destinoId={row.actual?.id ?? null}
                       onTelemetria={(data) => {
@@ -642,8 +642,7 @@ function MonitorRepartidores({
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="rounded-xl bg-white p-4">
                     <p className="flex items-center gap-2 text-sm text-muted-foreground"><ClipboardCheck className="h-4 w-4 text-primary" />Último check-in</p>
-                    <p className="mt-2 text-lg font-semibold">{row.checkIn ? `${row.checkIn.fecha}` : "Sin check-in"}</p>
-                    {row.checkIn ? <p className="text-lg font-semibold">{row.checkIn.hora}</p> : null}
+                    <p className="mt-2 text-lg font-semibold">{row.checkIn ? textoCheckIn(row.checkIn) : "Sin check-in"}</p>
                   </div>
                   <div className="rounded-xl bg-white p-4">
                     <p className="flex items-center gap-2 text-sm text-muted-foreground"><Truck className="h-4 w-4 text-primary" />Velocidad</p>
@@ -671,7 +670,7 @@ function MonitorRepartidores({
                       <p className="text-lg font-semibold">{row.actual.numero_pedido}</p>
                       <p>{row.actual.cliente || "Sin cliente"}</p>
                       {row.actual.telefono ? <a className="inline-flex items-center gap-2 text-primary" href={`tel:${row.actual.telefono}`}><Phone className="h-4 w-4" />{row.actual.telefono}</a> : <p>Sin teléfono</p>}
-                      <p>{row.actual.direccion || "Sin dirección"} · {row.actual.franja === "tarde" ? "Tarde · 12:00 PM – 5:00 PM" : "Mañana · 9:30 AM – 12:00 PM"}</p>
+                      <p>{row.actual.direccion || "Sin dirección"} · {textoVentana(row.actual.ventana, row.actual.horario_preferente)}</p>
                       <div className="flex gap-2">
                         <Input value={nuevaDireccion} onChange={(event) => setNuevaDireccion(event.target.value)} placeholder="Nueva dirección de entrega" />
                         <Button variant="outline" disabled={busy || nuevaDireccion.trim().length < 10} onClick={() => {
@@ -689,28 +688,100 @@ function MonitorRepartidores({
                       <p className="font-semibold">Ruta de hoy</p>
                       {[...row.paradas].sort((a, b) => (a.orden_entrega ?? 0) - (b.orden_entrega ?? 0)).map((pedido) => {
                         const esActual = row.actual?.id === pedido.id;
-                        const cerrado = pedido.estado_entrega === "entregado" || pedido.estado === "entregado" || pedido.estado_entrega === "fallido" || pedido.estado === "no_entregado";
+                        const entregado = pedido.estado_entrega === "entregado" || pedido.estado === "entregado";
+                        const fallido = pedido.estado_entrega === "fallido" || pedido.estado === "no_entregado";
+                        const cerrado = entregado || fallido;
                         const siguienteId = [...row.paradas].sort((a, b) => (a.orden_entrega ?? 0) - (b.orden_entrega ?? 0)).find((item) => item.estado_entrega !== "entregado" && item.estado !== "entregado" && item.estado_entrega !== "fallido" && item.estado !== "no_entregado" && item.id !== row.actual?.id)?.id;
                         const siguiente = !cerrado && !esActual && siguienteId === pedido.id;
-                        const tono = cerrado ? "bg-gray-100 text-gray-400" : esActual ? "border-2 border-pink-400 bg-pink-100" : "bg-white";
-                        const chip = cerrado
+                        const tono = cerrado ? "bg-gray-100 text-gray-400" : esActual ? "border-2 border-pink-400 bg-pink-100" : siguiente ? "bg-sky-50" : "bg-white";
+                        const chip = entregado
                           ? "bg-gray-200 text-gray-700"
-                          : esActual
-                            ? "bg-pink-200 text-pink-950"
-                            : "bg-muted text-foreground";
-                        const etiqueta = pedido.estado_entrega === "entregado" || pedido.estado === "entregado"
+                          : fallido
+                            ? "bg-red-100 text-red-800"
+                            : esActual
+                              ? "bg-pink-200 text-pink-950"
+                              : siguiente
+                                ? "bg-sky-100 text-sky-900"
+                                : "bg-muted text-foreground";
+                        const etiqueta = entregado
                           ? "Entregado"
-                          : pedido.estado_entrega === "fallido" || pedido.estado === "no_entregado"
+                          : fallido
                             ? "Fallido"
                             : esActual
                               ? "En curso"
                               : siguiente
                               ? "Siguiente"
                               : "En la ruta";
-                        const verCodigo = puede && pedido.codigo_oculto && codigoPedido !== pedido.id;
-                        const verChat = Boolean(pedido.telefono);
-                        const enviarCodigo = puede && pedido.codigo_oculto;
-                        const comprobante = puede && !pedido.comprobante_url;
+                        const verCodigo = puede && pedido.codigo_oculto && codigoPedido !== pedido.id && !entregado;
+                        const verChat = Boolean(pedido.telefono) && !entregado;
+                        const enviarCodigo = puede && pedido.codigo_oculto && !entregado;
+                        const comprobante = puede && !pedido.comprobante_url && !entregado;
+                        if (entregado || !esActual) {
+                          return (
+                            <Collapsible key={pedido.id} className={`group rounded-xl px-4 py-3 ${tono}`}>
+                              <CollapsibleTrigger className="flex w-full items-center justify-between gap-3 text-left">
+                                <p className="text-lg font-semibold leading-tight">{pedido.numero_pedido}</p>
+                                <span className="flex shrink-0 items-center gap-2">
+                                  <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${chip}`}>{etiqueta}</span>
+                                  <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]:rotate-180" />
+                                </span>
+                              </CollapsibleTrigger>
+                              <CollapsibleContent className="space-y-2 pt-3">
+                                <p>{pedido.cliente || "Sin cliente"}</p>
+                                {pedido.calificacion_servicio ? <p>El cliente calificó el servicio con {pedido.calificacion_servicio} estrellas.</p> : null}
+                                {pedido.calificacion_cliente ? <p>El repartidor calificó al cliente con {pedido.calificacion_cliente} estrellas.</p> : null}
+                                {pedido.fecha_propuesta ? <p>Fecha propuesta: {pedido.fecha_propuesta}. Falta confirmarla.</p> : pedido.estado === "no_entregado" ? <p>Sin fecha confirmada.</p> : null}
+                                {puede && pedido.codigo_oculto && codigoPedido === pedido.id ? (
+                                  <p className="text-2xl font-semibold tracking-widest">{codigoPedidoTexto}</p>
+                                ) : null}
+                                {!cerrado && (enviarCodigo || verCodigo || verChat || comprobante) ? (
+                                  <div className="flex flex-col gap-2">
+                                    {enviarCodigo ? (
+                                      <Button className="w-full" disabled={busy} onClick={() => {
+                                        void callCenterService.enviarCodigo(pedido.id).then(() => onChanged()).catch(onError);
+                                      }}>Enviar código al cliente</Button>
+                                    ) : null}
+                                    {verCodigo || verChat ? (
+                                    <div className="grid grid-cols-2 gap-2">
+                                      {verCodigo ? (
+                                        <Button variant="outline" className={`w-full border-primary ${verChat ? "" : "col-span-2"}`} disabled={busy} onClick={() => {
+                                          void callCenterService.verCodigoPedido(pedido.id).then((data) => {
+                                            setCodigoPedido(pedido.id);
+                                            setCodigoPedidoTexto(data.codigo);
+                                          }).catch(onError);
+                                        }}>Ver código</Button>
+                                      ) : null}
+                                      {verChat ? (
+                                        <Button variant="outline" className={`w-full ${verCodigo ? "" : "col-span-2"}`} onClick={() => abrirChat(pedido.telefono, onError, navigate)}>Ver chat</Button>
+                                      ) : null}
+                                    </div>
+                                    ) : null}
+                                    {comprobante ? (
+                                      <Button variant="outline" className="w-full" asChild disabled={busy}>
+                                        <label htmlFor={`comp-${pedido.id}`}>
+                                          {pedido.metodo_pago === "transferencia" || pedido.metodo_pago === "mixto" ? "Subir comprobante" : "Pasar a transferencia"}
+                                          <input
+                                            id={`comp-${pedido.id}`}
+                                            type="file"
+                                            accept="image/*"
+                                            className="hidden"
+                                            disabled={busy}
+                                            onChange={(event) => {
+                                              const file = event.target.files?.[0];
+                                              event.target.value = "";
+                                              if (!file) return;
+                                              void callCenterService.subirComprobante(pedido.id, file).then(() => onChanged()).catch(onError);
+                                            }}
+                                          />
+                                        </label>
+                                      </Button>
+                                    ) : null}
+                                  </div>
+                                ) : null}
+                              </CollapsibleContent>
+                            </Collapsible>
+                          );
+                        }
                         return (
                         <div key={pedido.id} className={`flex flex-col gap-3 rounded-xl px-4 py-4 ${tono}`}>
                           <div className="flex items-start justify-between gap-3">
@@ -736,7 +807,7 @@ function MonitorRepartidores({
                             {verCodigo || verChat ? (
                             <div className="grid grid-cols-2 gap-2">
                               {verCodigo ? (
-                                <Button variant="outline" className={`w-full ${verChat ? "" : "col-span-2"}`} disabled={busy} onClick={() => {
+                                <Button variant="outline" className={`w-full border-primary ${verChat ? "" : "col-span-2"}`} disabled={busy} onClick={() => {
                                   void callCenterService.verCodigoPedido(pedido.id).then((data) => {
                                     setCodigoPedido(pedido.id);
                                     setCodigoPedidoTexto(data.codigo);
@@ -778,7 +849,7 @@ function MonitorRepartidores({
                   {row.aprobaciones.map((solicitud) => (
                     <div key={solicitud.id} className="space-y-2 rounded-xl bg-pink-50 p-3">
                       <p className="font-semibold">
-                        {solicitud.ayuda === "dejar" ? "Dejar el paquete" : solicitud.ayuda === "tercero" ? "Entrega a otra persona" : solicitud.ayuda === "codigo" ? "Ayuda con el código" : solicitud.motivo === "averia" ? "Avería" : solicitud.motivo === "clima" ? "Clima" : solicitud.motivo === "propuesta" ? "Fecha propuesta" : solicitud.tipo === "llamada_cliente" ? "Llamada al cliente" : "Incidencia"}
+                        {solicitud.ayuda === "dejar" ? "Dejar el paquete" : solicitud.ayuda === "tercero" ? "Entrega a otra persona" : solicitud.ayuda === "codigo" ? "Ayuda con el código" : solicitud.motivo === "averia" ? "Avería" : solicitud.motivo === "clima" ? "Clima" : solicitud.motivo === "propuesta" ? "Fecha propuesta" : solicitud.motivo === "no_puedo" ? "Cliente no puede recibir" : solicitud.tipo === "llamada_cliente" ? "Llamada al cliente" : "Incidencia"}
                         {solicitud.numero_pedido ? ` · ${solicitud.numero_pedido}` : ""}
                       </p>
                       {solicitud.nota ? <p>{solicitud.nota}</p> : solicitud.motivo && solicitud.motivo !== "averia" && solicitud.motivo !== "clima" && solicitud.motivo !== "propuesta" ? <p>{solicitud.motivo}</p> : null}
@@ -794,7 +865,7 @@ function MonitorRepartidores({
                       {solicitud.espera_desde ? <Cuenta desde={solicitud.espera_desde} minutos={solicitud.ayuda ? 15 : 5} /> : null}
                       {solicitud.ayuda === "codigo" ? (
                         codigoDe === solicitud.id && codigo ? <p className="text-2xl font-semibold tracking-widest">{codigo}</p> : (
-                          <Button variant="outline" disabled={busy} onClick={() => onAyuda(solicitud.id, "ver_codigo")}>Ver código</Button>
+                          <Button variant="outline" className="border-primary" disabled={busy} onClick={() => onAyuda(solicitud.id, "ver_codigo")}>Ver código</Button>
                         )
                       ) : null}
                       {solicitud.ayuda === "codigo" && puede ? (
@@ -1172,15 +1243,6 @@ const CallCenter = () => {
     { etiqueta: "Mes actual", desde: primerDiaMesMexico(), hasta: hoy },
   ];
 
-  const cambiarFranja = async (id: number, franja: "manana" | "tarde", alcance?: "ruta") => {
-    try {
-      await callCenterService.cambiarFranja(id, franja, alcance);
-      await loadLists();
-    } catch (error) {
-      notify(error);
-    }
-  };
-
   const moverParada = async (id: number, direccion: "subir" | "bajar") => {
     try {
       await callCenterService.moverParada(id, direccion);
@@ -1263,7 +1325,7 @@ const CallCenter = () => {
   }, []);
 
   useEffect(() => {
-    if (tab !== "checkin") return;
+    if (tab !== "checkin" && tab !== "soporte") return;
     let stop = false;
     void callCenterService.listCargasValidadas().then((rows) => {
       if (!stop) setHistorial(rows);
@@ -1662,7 +1724,7 @@ const CallCenter = () => {
           <FlujoPasos
             className="mb-4 rounded-lg bg-muted p-4"
             pasos={[
-              { titulo: "Horario", texto: "Mañana o Tarde elige cuándo la ve. El botón rosa es el actual. Aplicar a la ruta copia ese horario a toda la ruta." },
+              { titulo: "Ventana", texto: "La ventana es la que eligió el cliente: mañana, tarde o cualquier hora." },
               { titulo: "Orden", texto: "Subir y Bajar cambian el lugar de la parada en la ruta." },
               { titulo: "Liberar", texto: "Al cerrar una entrega, la app abre sola la siguiente parada. Liberar siguiente sigue disponible si hay que adelantarla." },
               { titulo: "Cambiar", texto: "Cambiar sirve para el estado del pedido o para pasarlo a otro repartidor." },
@@ -1677,7 +1739,7 @@ const CallCenter = () => {
                 <TableHead>Teléfono</TableHead>
                 <TableHead>Dirección</TableHead>
                 <TableHead>Estado</TableHead>
-                <TableHead>Franja</TableHead>
+                <TableHead>Ventana</TableHead>
                 <TableHead>Comprobante</TableHead>
                 <TableHead>Repartidor</TableHead>
                 <TableHead>Acciones</TableHead>
@@ -1701,32 +1763,7 @@ const CallCenter = () => {
                     {row.metodo_pago ? <p>Registrado: {row.metodo_pago}{row.modificado ? ". Cobro distinto." : ""}</p> : null}
                   </TableCell>
                   <TableCell>
-                    <div className="flex min-w-36 flex-col gap-1.5">
-                      <div role="group" aria-label={`Horario del pedido ${row.numero_pedido}`} className="flex rounded-md bg-muted p-0.5">
-                        {(["manana", "tarde"] as const).map((value) => {
-                          const active = (row.franja === "tarde" ? "tarde" : "manana") === value;
-                          return (
-                            <button
-                              key={value}
-                              type="button"
-                              aria-pressed={active}
-                              className={`flex-1 rounded px-2 py-1 text-xs font-semibold ${active ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
-                              onClick={() => void cambiarFranja(row.id, value)}
-                            >
-                              {value === "manana" ? "Mañana" : "Tarde"}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => void cambiarFranja(row.id, row.franja === "tarde" ? "tarde" : "manana", "ruta")}
-                      >
-                        Aplicar a la ruta
-                      </Button>
-                      <p className="text-sm">{row.franja === "tarde" ? "Tarde · 12:00 PM – 5:00 PM" : "Mañana · 9:30 AM – 12:00 PM"}</p>
-                    </div>
+                    <p className="text-sm">{textoVentana(row.ventana, row.horario_preferente)}</p>
                   </TableCell>
                   <TableCell>
                     {row.comprobante_url ? (
@@ -1802,12 +1839,10 @@ const CallCenter = () => {
             <div className="flex flex-wrap items-end gap-3">
               <label className="space-y-1 text-sm">
                 <span className="block">Desde</span>
-                <Input
-                  type="date"
+                <DateField
                   className="w-44"
                   value={desdeHistorico}
-                  onChange={(event) => {
-                    const desde = event.target.value;
+                  onChange={(desde) => {
                     if (!desde || !hastaHistorico) {
                       setDesdeHistorico(desde);
                       return;
@@ -1819,12 +1854,10 @@ const CallCenter = () => {
               <span className="hidden pb-2 text-muted-foreground sm:inline">→</span>
               <label className="space-y-1 text-sm">
                 <span className="block">Hasta</span>
-                <Input
-                  type="date"
+                <DateField
                   className="w-44"
                   value={hastaHistorico}
-                  onChange={(event) => {
-                    const hasta = event.target.value;
+                  onChange={(hasta) => {
                     if (!desdeHistorico || !hasta) {
                       setHastaHistorico(hasta);
                       return;
@@ -2025,12 +2058,13 @@ const CallCenter = () => {
                                         {etiquetaCobro(row.estado_cobro) ? <Badge className={`mt-1 ${claseCobro(row.estado_cobro)}`}>{etiquetaCobro(row.estado_cobro)}</Badge> : null}
                                         {row.nota ? <p>{row.nota}</p> : null}
                                       </div>
-                                      <div className="flex gap-2">
-                                        {row.comprobante_url ? (
-                                          <button type="button" className="overflow-hidden rounded-md border bg-muted" onClick={() => abrir(row.comprobante_url, `comprobante-${row.numero_pedido}`, `Comprobante ${row.numero_pedido}`)} aria-label={`Ver comprobante ${row.numero_pedido}`}>
-                                            <img src={receiptSrc(row.comprobante_url)} alt="" className="h-12 w-12 object-cover" />
+                                      <div className="flex flex-wrap gap-2">
+                                        {(row.comprobante_urls?.length ? row.comprobante_urls : row.comprobante_url ? [row.comprobante_url] : []).map((url) => (
+                                          <button key={url} type="button" className="overflow-hidden rounded-md border bg-muted" onClick={() => abrir(url, `comprobante-${row.numero_pedido}`, `Comprobante ${row.numero_pedido}`)} aria-label={`Ver comprobante ${row.numero_pedido}`}>
+                                            <img src={receiptSrc(url)} alt="" className="h-12 w-12 object-cover" />
                                           </button>
-                                        ) : row.puede_subir ? (
+                                        ))}
+                                        {!row.comprobante_url && row.puede_subir ? (
                                           <label className="cursor-pointer text-sm font-medium text-primary">
                                             Subir foto
                                             <input
@@ -2048,11 +2082,11 @@ const CallCenter = () => {
                                             />
                                           </label>
                                         ) : null}
-                                        {row.evidencia_url ? (
-                                          <button type="button" className="overflow-hidden rounded-md border bg-muted" onClick={() => abrir(row.evidencia_url, `evidencia-${row.numero_pedido}`, `Evidencia ${row.numero_pedido}`)} aria-label={`Ver evidencia ${row.numero_pedido}`}>
-                                            <img src={receiptSrc(row.evidencia_url)} alt="" className="h-12 w-12 object-cover" />
+                                        {(row.evidencia_urls?.length ? row.evidencia_urls : row.evidencia_url ? [row.evidencia_url] : []).map((url) => (
+                                          <button key={url} type="button" className="overflow-hidden rounded-md border bg-muted" onClick={() => abrir(url, `evidencia-${row.numero_pedido}`, `Evidencia ${row.numero_pedido}`)} aria-label={`Ver evidencia ${row.numero_pedido}`}>
+                                            <img src={receiptSrc(url)} alt="" className="h-12 w-12 object-cover" />
                                           </button>
-                                        ) : null}
+                                        ))}
                                       </div>
                                     </div>
                                     <div className="flex gap-2">
@@ -2164,7 +2198,7 @@ const CallCenter = () => {
                 <div className="space-y-2 rounded-md bg-primary/10 p-3">
                   <p className="text-sm">El repartidor no tiene el código del cliente.</p>
                   {codigoAyuda ? <p className="text-2xl font-semibold tracking-widest">{codigoAyuda}</p> : (
-                    <Button variant="outline" disabled={busy} onClick={() => void resolverAyuda(detail.id, "ver_codigo")}>Ver código</Button>
+                    <Button variant="outline" className="border-primary" disabled={busy} onClick={() => void resolverAyuda(detail.id, "ver_codigo")}>Ver código</Button>
                   )}
                   {puedeAutorizarExcepcion() ? (
                     <Button disabled={busy} onClick={() => void resolverAyuda(detail.id, "aprobar_codigo")}>Aprobar entrega sin código</Button>
@@ -2265,6 +2299,7 @@ const CallCenter = () => {
           <MonitorRepartidores
             pedidos={pedidos}
             solicitudes={solicitudes}
+            historial={historial}
             puede={puedeAutorizarExcepcion()}
             busy={busy}
             codigo={codigoAyuda}

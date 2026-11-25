@@ -6,7 +6,7 @@ import { textoCupo, MAX_PARADAS_DIA } from "@/lib/agenda";
 import { descargarHoja, hojaDesdeRuta } from "@/lib/hojaRuta";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { DateField } from "@/components/ui/date-field";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
@@ -135,7 +135,7 @@ const RutasPlanificadas = () => {
         </div>
         <div className="space-y-2">
           <Label>Fecha de entrega</Label>
-          <Input type="date" value={date} onChange={(event) => setDate(event.target.value)} />
+          <DateField value={date} onChange={setDate} />
         </div>
       </div>
 
