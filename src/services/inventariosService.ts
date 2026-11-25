@@ -259,7 +259,27 @@ class InventariosService {
   }
 
   async getActiveInventarios(): Promise<InventariosResponse> {
-    return this.makeRequest<InventariosResponse>('/inventarios/active');
+    const inventarios: Inventario[] = [];
+    let page = 1;
+    let totalPages = 1;
+    do {
+      const response = await this.getAllInventarios({ activos: 'true', limit: 100, page });
+      inventarios.push(...(response.data.inventarios || []));
+      totalPages = response.data.pagination?.totalPages || 1;
+      page += 1;
+    } while (page <= totalPages && page <= 20);
+    return {
+      success: true,
+      data: {
+        inventarios,
+        pagination: {
+          currentPage: 1,
+          totalPages: 1,
+          totalItems: inventarios.length,
+          itemsPerPage: inventarios.length,
+        },
+      },
+    };
   }
 }
 

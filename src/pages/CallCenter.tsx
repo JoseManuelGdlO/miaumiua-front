@@ -35,6 +35,7 @@ import { vistaDeError } from "@/lib/api-error";
 import { authService } from "@/services/authService";
 import { conversationsService } from "@/services/conversationsService";
 import { MAX_PARADAS_DIA, textoCupo } from "@/lib/agenda";
+import { textoVentana } from "@/services/ordersService";
 import { descargarHoja, hojaDesdeParadas } from "@/lib/hojaRuta";
 import { MapaRutaEnVivo } from "@/components/MapaRutaEnVivo";
 
@@ -478,7 +479,6 @@ function MonitorRepartidores({
   const [agentes, setAgentes] = useState<{ nombre: string; telefono: string; repartidor_ids: number[]; numeros?: { telefono: string; repartidor_ids: number[] }[] }[]>([]);
   const [codigoPedido, setCodigoPedido] = useState<number | null>(null);
   const [codigoPedidoTexto, setCodigoPedidoTexto] = useState("");
-  const [franjaMapa, setFranjaMapa] = useState<"manana" | "tarde">("manana");
   const [vivo, setVivo] = useState<{
     actual: number;
     promedio: number;
@@ -602,28 +602,16 @@ function MonitorRepartidores({
             </div>
             <div className="grid gap-4 bg-muted/40 p-4 lg:grid-cols-2">
               {(() => {
-                const tieneManana = row.paradas.some((pedido) => (pedido.franja || "manana") === "manana");
-                const tieneTarde = row.paradas.some((pedido) => pedido.franja === "tarde");
-                const franja = (franjaMapa === "tarde" && tieneTarde) || (franjaMapa === "manana" && tieneManana)
-                  ? franjaMapa
-                  : (tieneTarde && !tieneManana ? "tarde" : "manana");
-                const deFranja = row.paradas.filter((pedido) => (pedido.franja || "manana") === franja);
-                const rutaId = [...deFranja, ...row.paradas]
+                const rutaId = row.paradas
                   .map((pedido) => Number(pedido.ruta_id))
                   .find((value) => Number.isInteger(value) && value > 0) ?? null;
                 return (
                   <div className="space-y-3 lg:col-span-2">
-                    {tieneManana && tieneTarde ? (
-                      <div className="flex gap-2">
-                        <Button variant={franja === "manana" ? "default" : "outline"} size="sm" onClick={() => setFranjaMapa("manana")}>Mañana</Button>
-                        <Button variant={franja === "tarde" ? "default" : "outline"} size="sm" onClick={() => setFranjaMapa("tarde")}>Tarde</Button>
-                      </div>
-                    ) : null}
                     <MapaRutaEnVivo
-                      key={`${id}-${franja}`}
+                      key={`${id}`}
                       rutaId={rutaId}
                       repartidorId={id}
-                      paradas={deFranja.length ? deFranja : row.paradas}
+                      paradas={row.paradas}
                       ciudad={row.ciudadNombre || null}
                       destinoId={row.actual?.id ?? null}
                       onTelemetria={(data) => {
@@ -681,7 +669,7 @@ function MonitorRepartidores({
                       <p className="text-lg font-semibold">{row.actual.numero_pedido}</p>
                       <p>{row.actual.cliente || "Sin cliente"}</p>
                       {row.actual.telefono ? <a className="inline-flex items-center gap-2 text-primary" href={`tel:${row.actual.telefono}`}><Phone className="h-4 w-4" />{row.actual.telefono}</a> : <p>Sin teléfono</p>}
-                      <p>{row.actual.direccion || "Sin dirección"} · {row.actual.franja === "tarde" ? "Tarde · 12:00 PM – 5:00 PM" : "Mañana · 9:30 AM – 12:00 PM"}</p>
+                      <p>{row.actual.direccion || "Sin dirección"} · {textoVentana(row.actual.ventana, row.actual.horario_preferente)}</p>
                       <div className="flex gap-2">
                         <Input value={nuevaDireccion} onChange={(event) => setNuevaDireccion(event.target.value)} placeholder="Nueva dirección de entrega" />
                         <Button variant="outline" disabled={busy || nuevaDireccion.trim().length < 10} onClick={() => {
@@ -1254,15 +1242,6 @@ const CallCenter = () => {
     { etiqueta: "Mes actual", desde: primerDiaMesMexico(), hasta: hoy },
   ];
 
-  const cambiarFranja = async (id: number, franja: "manana" | "tarde", alcance?: "ruta") => {
-    try {
-      await callCenterService.cambiarFranja(id, franja, alcance);
-      await loadLists();
-    } catch (error) {
-      notify(error);
-    }
-  };
-
   const moverParada = async (id: number, direccion: "subir" | "bajar") => {
     try {
       await callCenterService.moverParada(id, direccion);
@@ -1744,7 +1723,7 @@ const CallCenter = () => {
           <FlujoPasos
             className="mb-4 rounded-lg bg-muted p-4"
             pasos={[
-              { titulo: "Horario", texto: "Mañana o Tarde elige cuándo la ve. El botón rosa es el actual. Aplicar a la ruta copia ese horario a toda la ruta." },
+              { titulo: "Ventana", texto: "La ventana es la que eligió el cliente: mañana, tarde o cualquier hora." },
               { titulo: "Orden", texto: "Subir y Bajar cambian el lugar de la parada en la ruta." },
               { titulo: "Liberar", texto: "Al cerrar una entrega, la app abre sola la siguiente parada. Liberar siguiente sigue disponible si hay que adelantarla." },
               { titulo: "Cambiar", texto: "Cambiar sirve para el estado del pedido o para pasarlo a otro repartidor." },
@@ -1759,7 +1738,7 @@ const CallCenter = () => {
                 <TableHead>Teléfono</TableHead>
                 <TableHead>Dirección</TableHead>
                 <TableHead>Estado</TableHead>
-                <TableHead>Franja</TableHead>
+                <TableHead>Ventana</TableHead>
                 <TableHead>Comprobante</TableHead>
                 <TableHead>Repartidor</TableHead>
                 <TableHead>Acciones</TableHead>
@@ -1783,32 +1762,7 @@ const CallCenter = () => {
                     {row.metodo_pago ? <p>Registrado: {row.metodo_pago}{row.modificado ? ". Cobro distinto." : ""}</p> : null}
                   </TableCell>
                   <TableCell>
-                    <div className="flex min-w-36 flex-col gap-1.5">
-                      <div role="group" aria-label={`Horario del pedido ${row.numero_pedido}`} className="flex rounded-md bg-muted p-0.5">
-                        {(["manana", "tarde"] as const).map((value) => {
-                          const active = (row.franja === "tarde" ? "tarde" : "manana") === value;
-                          return (
-                            <button
-                              key={value}
-                              type="button"
-                              aria-pressed={active}
-                              className={`flex-1 rounded px-2 py-1 text-xs font-semibold ${active ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
-                              onClick={() => void cambiarFranja(row.id, value)}
-                            >
-                              {value === "manana" ? "Mañana" : "Tarde"}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => void cambiarFranja(row.id, row.franja === "tarde" ? "tarde" : "manana", "ruta")}
-                      >
-                        Aplicar a la ruta
-                      </Button>
-                      <p className="text-sm">{row.franja === "tarde" ? "Tarde · 12:00 PM – 5:00 PM" : "Mañana · 9:30 AM – 12:00 PM"}</p>
-                    </div>
+                    <p className="text-sm">{textoVentana(row.ventana, row.horario_preferente)}</p>
                   </TableCell>
                   <TableCell>
                     {row.comprobante_url ? (

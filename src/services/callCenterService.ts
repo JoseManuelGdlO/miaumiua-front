@@ -70,6 +70,7 @@ export type PedidoDia = {
   direccion: string | null;
   notas?: string | null;
   franja?: "manana" | "tarde";
+  ventana?: "manana" | "tarde" | "cualquiera";
   horario_preferente?: string | null;
   metodo_pago?: string | null;
   orden_entrega?: number | null;

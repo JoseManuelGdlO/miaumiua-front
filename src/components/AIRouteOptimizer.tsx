@@ -341,18 +341,15 @@ interface Order {
 
 const CORTE_TARDE_MIN = 12 * 60;
 
-function esTarde(horario?: string | null) {
+function rangoHorario(horario?: string | null) {
   const match = String(horario || "").match(/(\d{1,2}):(\d{2})/);
-  if (!match) return false;
+  if (!match) return 1;
   const minutos = Number(match[1]) * 60 + Number(match[2]);
-  return minutos >= CORTE_TARDE_MIN;
+  return minutos >= CORTE_TARDE_MIN ? 2 : 0;
 }
 
 function mananaLuegoTarde(lista: Order[]) {
-  return [
-    ...lista.filter((order) => !esTarde(order.horario)),
-    ...lista.filter((order) => esTarde(order.horario)),
-  ];
+  return lista.slice().sort((a, b) => rangoHorario(a.horario) - rangoHorario(b.horario));
 }
 
 interface AIRouteOptimizerProps {

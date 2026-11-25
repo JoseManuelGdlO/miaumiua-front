@@ -4,6 +4,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Package, MapPin } from 'lucide-react';
 import { AvailableOrder } from '@/services/routesService';
+import { textoVentana } from '@/services/ordersService';
 
 interface DraggableOrderCardProps {
   order: AvailableOrder;
@@ -51,9 +52,7 @@ export const DraggableOrderCard: React.FC<DraggableOrderCardProps> = ({
           <div className="text-xs font-medium text-primary mt-1">
             ${order.total.toLocaleString('es-CO')}
           </div>
-          {order.horario_preferente ? (
-            <div className="text-xs text-muted-foreground mt-1">A partir de las {String(order.horario_preferente).slice(0, 5)}</div>
-          ) : null}
+          <div className="text-xs text-muted-foreground mt-1">{textoVentana(null, order.horario_preferente)}</div>
           {onAssign ? (
             <button
               type="button"

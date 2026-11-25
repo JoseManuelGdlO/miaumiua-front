@@ -22,7 +22,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
-import { ordersService, CreateOrderData } from "@/services/ordersService";
+import { ordersService, CreateOrderData, VENTANAS_ENTREGA, type VentanaEntrega } from "@/services/ordersService";
 import { clientesService, Cliente } from "@/services/clientesService";
 import { citiesService } from "@/services/citiesService";
 import { Inventario, precioLista } from "@/services/inventariosService";
@@ -95,7 +95,7 @@ const EMPTY_ORDER_FORM = {
   codigo_postal: "",
   fkid_ciudad: "",
   fecha_entrega_estimada: "",
-  horario_preferente: "",
+  ventana: "cualquiera" as VentanaEntrega,
   metodo_pago: "",
   notas: "",
   codigo_promocion: ""
@@ -419,16 +419,6 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
       }
     }
 
-    const horaElegida = (formData.fecha_entrega_estimada.split('T')[1] || '').slice(0, 5);
-    if (horaElegida) {
-      const [hh, mm] = horaElegida.split(':').map(Number);
-      const minutos = hh * 60 + mm;
-      if (minutos < 9 * 60 + 30 || minutos > 17 * 60) {
-        toast({ title: 'Horario', description: 'La entrega solo puede ser entre las 9:30 y las 17:00', variant: 'destructive' });
-        return;
-      }
-    }
-
     try {
       setLoading(true);
       setPendingStripeOrderId(null);
@@ -457,7 +447,7 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
          direccion_entrega: direccion,
          fkid_ciudad: parseInt(formData.fkid_ciudad),
          fecha_entrega_estimada: formData.fecha_entrega_estimada || undefined,
-         horario_preferente: (formData.fecha_entrega_estimada.split('T')[1] || '').slice(0, 5) || undefined,
+         ventana: formData.ventana,
          metodo_pago: formData.metodo_pago as any,
          notas: formData.notas || undefined,
          codigo_promocion: formData.codigo_promocion || undefined,
@@ -771,15 +761,35 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="fecha_entrega_estimada">Fecha y hora de entrega</Label>
+                    <Label htmlFor="fecha_entrega_estimada">Fecha de entrega</Label>
                     <Input
                       id="fecha_entrega_estimada"
-                      type="datetime-local"
+                      type="date"
                       value={formData.fecha_entrega_estimada}
                       onChange={(e) => handleInputChange("fecha_entrega_estimada", e.target.value)}
                     />
-                    <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                      Horario de reparto de 9:30 a 17:00. Antes de las 12:00 queda en la mañana. Desde las 12:00 queda en la tarde.
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <Label>Ventana de entrega</Label>
+                    <div role="group" aria-label="Ventana de entrega" className="grid grid-cols-3 gap-2">
+                      {VENTANAS_ENTREGA.map((item) => {
+                        const active = formData.ventana === item.id;
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            aria-pressed={active}
+                            onClick={() => handleInputChange("ventana", item.id)}
+                            className={`rounded-xl border px-3 py-2 text-left ${active ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background text-foreground"}`}
+                          >
+                            <span className="block text-sm font-semibold">{item.label}</span>
+                            <span className={`block text-xs ${active ? "text-primary-foreground/80" : "text-muted-foreground"}`}>{item.rango}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Mañana 9:30–12:00, tarde 12:00–17:00. Cualquier hora no fija un rango.
                     </p>
                   </div>
                 </div>
