@@ -14,6 +14,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { proveedoresService } from "@/services/proveedoresService";
 import { Loader2 } from "lucide-react";
+import { ConfirmCloseDialog, formDirty, useConfirmClose } from "@/components/ConfirmClose";
+
+const EMPTY_PROVEEDOR = { nombre: "", correo: "", telefono: "", descripcion: "" };
 
 interface CreateProveedorModalProps {
   isOpen: boolean;
@@ -24,22 +27,12 @@ interface CreateProveedorModalProps {
 const CreateProveedorModal = ({ isOpen, onClose, onSuccess }: CreateProveedorModalProps) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState({
-    nombre: "",
-    correo: "",
-    telefono: "",
-    descripcion: "",
-  });
+  const [formData, setFormData] = useState(EMPTY_PROVEEDOR);
 
   // Resetear formulario cuando se abre el modal
   useEffect(() => {
     if (isOpen) {
-      setFormData({
-        nombre: "",
-        correo: "",
-        telefono: "",
-        descripcion: "",
-      });
+      setFormData(EMPTY_PROVEEDOR);
     }
   }, [isOpen]);
 
@@ -78,8 +71,14 @@ const CreateProveedorModal = ({ isOpen, onClose, onSuccess }: CreateProveedorMod
     }
   };
 
+  const { ask, setAsk, requestClose, confirm, onOpenChange } = useConfirmClose(
+    onClose,
+    formDirty(formData, EMPTY_PROVEEDOR),
+    loading,
+  );
+
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Crear Nuevo Proveedor</DialogTitle>
@@ -136,7 +135,7 @@ const CreateProveedorModal = ({ isOpen, onClose, onSuccess }: CreateProveedorMod
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>
+            <Button type="button" variant="outline" onClick={requestClose}>
               Cancelar
             </Button>
             <Button type="submit" disabled={loading}>
@@ -152,6 +151,7 @@ const CreateProveedorModal = ({ isOpen, onClose, onSuccess }: CreateProveedorMod
           </DialogFooter>
         </form>
       </DialogContent>
+      <ConfirmCloseDialog open={ask} onOpenChange={setAsk} onConfirm={confirm} />
     </Dialog>
   );
 };

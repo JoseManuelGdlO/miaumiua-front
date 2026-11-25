@@ -19,8 +19,25 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { citiesService } from "@/services/citiesService";
-import { Loader2 } from "lucide-react";
+import { citiesService, HORARIO_POR_DIA_DEFAULT, type HorarioPorDia } from "@/services/citiesService";
+import { formatHour24To12, parseHour12To24 } from "@/utils/businessHoursTime";
+import { Copy, Loader2 } from "lucide-react";
+import { ConfirmCloseDialog, formDirty, useConfirmClose } from "@/components/ConfirmClose";
+
+const EMPTY_POINT = { nombre: "", direccion: "", telefono: "", encargado: "" };
+const EMPTY_CITY = {
+  nombre: "",
+  departamento: "",
+  direccion_operaciones: "",
+  manager: "",
+  telefono: "",
+  email_contacto: "",
+  numero_soporte_cliente: "",
+  estado_inicial: "activa" as const,
+  max_pedidos_por_horario: 5,
+  dias_trabajo: [1, 2, 3, 4, 5] as number[],
+  horario_por_dia: { ...HORARIO_POR_DIA_DEFAULT } as HorarioPorDia,
+};
 
 interface CreateCityModalProps {
   open: boolean;
@@ -31,31 +48,53 @@ interface CreateCityModalProps {
 const CreateCityModal = ({ open, onOpenChange, onCityCreated }: CreateCityModalProps) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState({
-    nombre: "",
-    departamento: "",
-    direccion_operaciones: "",
-    manager: "",
-    telefono: "",
-    email_contacto: "",
-    estado_inicial: "activa" as const,
-    max_pedidos_por_horario: 5,
-    dias_trabajo: [0, 1, 2, 3, 4, 5, 6] as number[]
-  });
+  const [savingPoints, setSavingPoints] = useState(false);
+  const [inviteUrl, setInviteUrl] = useState<string | null>(null);
+  const [formData, setFormData] = useState(EMPTY_CITY);
+
+  type DraftPointOfSale = {
+    nombre: string;
+    direccion: string;
+    telefono: string;
+    encargado: string;
+  };
+
+  const [pointsOfSale, setPointsOfSale] = useState<DraftPointOfSale[]>([]);
+  const [pointForm, setPointForm] = useState<DraftPointOfSale>(EMPTY_POINT);
+  const [editingHorario, setEditingHorario] = useState<string | null>(null);
+  const [horarioDraft, setHorarioDraft] = useState("");
 
   // Reset form cuando se abre el modal
   const resetForm = () => {
-    setFormData({
-      nombre: "",
-      departamento: "",
-      direccion_operaciones: "",
-      manager: "",
-      telefono: "",
-      email_contacto: "",
-      estado_inicial: "activa",
-      max_pedidos_por_horario: 5,
-      dias_trabajo: [0, 1, 2, 3, 4, 5, 6]
-    });
+    setInviteUrl(null);
+    setFormData({ ...EMPTY_CITY, horario_por_dia: { ...HORARIO_POR_DIA_DEFAULT } });
+    setPointsOfSale([]);
+    setPointForm(EMPTY_POINT);
+  };
+
+  const handlePointInputChange = (field: keyof DraftPointOfSale, value: string) => {
+    setPointForm(prev => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const handleAddPoint = () => {
+    if (!pointForm.nombre || !pointForm.direccion) {
+      toast({
+        title: "Error",
+        description: "Nombre y dirección del punto de venta son obligatorios",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setPointsOfSale(prev => [...prev, pointForm]);
+    setPointForm(EMPTY_POINT);
+  };
+
+  const handleRemovePoint = (index: number) => {
+    setPointsOfSale(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -88,6 +127,15 @@ const CreateCityModal = ({ open, onOpenChange, onCityCreated }: CreateCityModalP
       return;
     }
 
+    if (formData.numero_soporte_cliente.trim() && !/^[\+]?[0-9\s\-\(\)]+$/.test(formData.numero_soporte_cliente)) {
+      toast({
+        title: "Error",
+        description: "El número de soporte al cliente no tiene un formato válido",
+        variant: "destructive"
+      });
+      return;
+    }
+
     // Validar max_pedidos_por_horario
     if (formData.max_pedidos_por_horario < 1 || formData.max_pedidos_por_horario > 100) {
       toast({
@@ -98,7 +146,6 @@ const CreateCityModal = ({ open, onOpenChange, onCityCreated }: CreateCityModalP
       return;
     }
 
-    // Validar que haya al menos un día de trabajo
     if (!formData.dias_trabajo || formData.dias_trabajo.length === 0) {
       toast({
         title: "Error",
@@ -108,19 +155,79 @@ const CreateCityModal = ({ open, onOpenChange, onCityCreated }: CreateCityModalP
       return;
     }
 
+    // Validar horario por día: 0 <= inicio, fin <= 23 y inicio < fin
+    const diasLabels: Record<string, string> = {
+      '0': 'Domingo', '1': 'Lunes', '2': 'Martes', '3': 'Miércoles',
+      '4': 'Jueves', '5': 'Viernes', '6': 'Sábado',
+    };
+    for (const key of ['0', '1', '2', '3', '4', '5', '6']) {
+      const slot = formData.horario_por_dia[key];
+      if (!slot) continue;
+      const { inicio, fin } = slot;
+      if (inicio < 0 || inicio > 23 || fin < 0 || fin > 23) {
+        toast({
+          title: "Error",
+          description: `En ${diasLabels[key]}: hora inicio y fin deben ser válidas (ej. 9 am, 5 pm)`,
+          variant: "destructive"
+        });
+        return;
+      }
+      if (inicio >= fin) {
+        toast({
+          title: "Error",
+          description: `En ${diasLabels[key]}: la hora de inicio debe ser menor que la de fin`,
+          variant: "destructive"
+        });
+        return;
+      }
+    }
+
     try {
       setLoading(true);
 
-      const response = await citiesService.createCity(formData);
+      const response = await citiesService.createCity({
+        ...formData,
+        ...(formData.numero_soporte_cliente.trim()
+          ? { numero_soporte_cliente: formData.numero_soporte_cliente.trim() }
+          : {}),
+      });
 
       if (response.success) {
+        const createdCity = response.data?.city;
+
+        if (createdCity && pointsOfSale.length > 0) {
+          setSavingPoints(true);
+          for (const point of pointsOfSale) {
+            try {
+              await citiesService.createPointOfSale(createdCity.id, {
+                nombre: point.nombre,
+                direccion: point.direccion,
+                telefono: point.telefono || undefined,
+                encargado: point.encargado || undefined,
+              });
+            } catch (error) {
+              console.error("Error al crear punto de venta:", error);
+              toast({
+                title: "Aviso",
+                description: "La ciudad se creó, pero hubo errores creando algunos puntos de venta.",
+                variant: "destructive",
+              });
+            }
+          }
+        }
+
         toast({
           title: "Ciudad creada",
           description: `${formData.nombre} ha sido registrada exitosamente`,
         });
         onCityCreated();
-        resetForm();
-        onOpenChange(false);
+        const createdInviteUrl = response.data.whatsapp?.inviteUrl;
+        if (createdInviteUrl) {
+          setInviteUrl(createdInviteUrl);
+        } else {
+          resetForm();
+          onOpenChange(false);
+        }
       }
     } catch (error) {
       console.error('Error al crear ciudad:', error);
@@ -130,6 +237,7 @@ const CreateCityModal = ({ open, onOpenChange, onCityCreated }: CreateCityModalP
         variant: "destructive"
       });
     } finally {
+      setSavingPoints(false);
       setLoading(false);
     }
   };
@@ -141,23 +249,73 @@ const CreateCityModal = ({ open, onOpenChange, onCityCreated }: CreateCityModalP
     }));
   };
 
+  const handleCopyInviteUrl = async () => {
+    if (!inviteUrl) return;
+    try {
+      await navigator.clipboard.writeText(inviteUrl);
+      toast({ title: "Link copiado" });
+    } catch {
+      toast({
+        title: "Error",
+        description: "No se pudo copiar el link",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleHorarioChange = (diaKey: string, field: 'inicio' | 'fin', value: number) => {
+    setFormData(prev => ({
+      ...prev,
+      horario_por_dia: {
+        ...prev.horario_por_dia,
+        [diaKey]: {
+          ...prev.horario_por_dia[diaKey],
+          [field]: value,
+        },
+      },
+    }));
+  };
+
+  const getHorarioFieldKey = (diaKey: string, field: 'inicio' | 'fin') => `${diaKey}-${field}`;
+
+  const handleHorarioFocus = (diaKey: string, field: 'inicio' | 'fin', currentValue: number) => {
+    const fieldKey = getHorarioFieldKey(diaKey, field);
+    setEditingHorario(fieldKey);
+    setHorarioDraft(formatHour24To12(currentValue));
+  };
+
+  const handleHorarioBlur = (diaKey: string, field: 'inicio' | 'fin', currentValue: number, dayLabel: string) => {
+    const parsed = parseHour12To24(horarioDraft);
+    if (parsed === null) {
+      toast({
+        title: "Error",
+        description: `En ${dayLabel}: usa formato de 12 horas (ej. 9 am, 5 pm)`,
+        variant: "destructive",
+      });
+      setHorarioDraft(formatHour24To12(currentValue));
+    } else {
+      handleHorarioChange(diaKey, field, parsed);
+    }
+    setEditingHorario(null);
+    setHorarioDraft("");
+  };
+
+  const getHorarioDisplayValue = (diaKey: string, field: 'inicio' | 'fin', hour24: number) => {
+    const fieldKey = getHorarioFieldKey(diaKey, field);
+    if (editingHorario === fieldKey) return horarioDraft;
+    return formatHour24To12(hour24);
+  };
+
   const handleDiaTrabajoChange = (dia: number, checked: boolean) => {
     setFormData(prev => {
       const diasTrabajo = [...prev.dias_trabajo];
       if (checked) {
-        if (!diasTrabajo.includes(dia)) {
-          diasTrabajo.push(dia);
-        }
+        if (!diasTrabajo.includes(dia)) diasTrabajo.push(dia);
       } else {
         const index = diasTrabajo.indexOf(dia);
-        if (index > -1) {
-          diasTrabajo.splice(index, 1);
-        }
+        if (index > -1) diasTrabajo.splice(index, 1);
       }
-      return {
-        ...prev,
-        dias_trabajo: diasTrabajo.sort((a, b) => a - b)
-      };
+      return { ...prev, dias_trabajo: diasTrabajo.sort((a, b) => a - b) };
     });
   };
 
@@ -179,9 +337,18 @@ const CreateCityModal = ({ open, onOpenChange, onCityCreated }: CreateCityModalP
     { value: 6, label: "Sábado" }
   ];
 
+  const { ask, setAsk, requestClose, confirm, onOpenChange: guardClose } = useConfirmClose(
+    () => {
+      resetForm();
+      onOpenChange(false);
+    },
+    formDirty(formData, EMPTY_CITY) || pointsOfSale.length > 0 || formDirty(pointForm, EMPTY_POINT) || Boolean(inviteUrl),
+    loading,
+  );
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
+    <Dialog open={open} onOpenChange={guardClose}>
+      <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Nueva Ciudad</DialogTitle>
           <DialogDescription>
@@ -189,6 +356,29 @@ const CreateCityModal = ({ open, onOpenChange, onCityCreated }: CreateCityModalP
           </DialogDescription>
         </DialogHeader>
 
+        {inviteUrl ? (
+          <div className="space-y-4">
+            <div className="space-y-2 rounded-md border p-4">
+              <Label>Link para vincular WhatsApp</Label>
+              <div className="break-all rounded-md bg-muted p-3 text-sm">{inviteUrl}</div>
+              <Button type="button" variant="outline" onClick={handleCopyInviteUrl}>
+                <Copy className="mr-2 h-4 w-4" />
+                Copiar
+              </Button>
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                onClick={() => {
+                  resetForm();
+                  onOpenChange(false);
+                }}
+              >
+                Listo
+              </Button>
+            </DialogFooter>
+          </div>
+        ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -279,6 +469,16 @@ const CreateCityModal = ({ open, onOpenChange, onCityCreated }: CreateCityModalP
           </div>
 
           <div className="space-y-2">
+            <Label htmlFor="numero_soporte_cliente">Número de soporte al cliente</Label>
+            <Input
+              id="numero_soporte_cliente"
+              value={formData.numero_soporte_cliente}
+              onChange={(e) => handleInputChange('numero_soporte_cliente', e.target.value)}
+              placeholder="618 1892035"
+            />
+          </div>
+
+          <div className="space-y-2">
             <Label htmlFor="max_pedidos_por_horario">Máximo de Pedidos por Horario *</Label>
             <Input
               id="max_pedidos_por_horario"
@@ -305,39 +505,167 @@ const CreateCityModal = ({ open, onOpenChange, onCityCreated }: CreateCityModalP
                     checked={formData.dias_trabajo.includes(dia.value)}
                     onCheckedChange={(checked) => handleDiaTrabajoChange(dia.value, checked as boolean)}
                   />
-                  <Label
-                    htmlFor={`dia-${dia.value}`}
-                    className="text-sm font-normal cursor-pointer"
-                  >
+                  <Label htmlFor={`dia-${dia.value}`} className="text-sm font-normal cursor-pointer">
                     {dia.label}
                   </Label>
                 </div>
               ))}
             </div>
             <p className="text-sm text-muted-foreground">
-              Selecciona los días de la semana en que se realizan entregas
+              Días en que la ciudad opera y realiza entregas (ej. lunes a viernes = [1,2,3,4,5])
             </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Horario por día</Label>
+            <p className="text-sm text-muted-foreground">
+              Usa formato de 12 horas (ej. 9 am, 5 pm). Inicio debe ser menor que fin.
+            </p>
+            <div className="border rounded-md overflow-hidden">
+              <div className="grid grid-cols-[1fr_110px_110px] gap-2 p-3 bg-muted/50 text-sm font-medium">
+                <span>Día</span>
+                <span>Inicio</span>
+                <span>Fin</span>
+              </div>
+              {diasSemana
+                .filter((dia) => formData.dias_trabajo.includes(dia.value))
+                .map((dia) => {
+                  const key = String(dia.value);
+                  const slot = formData.horario_por_dia[key] ?? { inicio: 9, fin: 18 };
+                  return (
+                    <div
+                      key={dia.value}
+                      className="grid grid-cols-[1fr_110px_110px] gap-2 p-3 border-t items-center"
+                    >
+                      <span className="text-sm">{dia.label}</span>
+                      <Input
+                        type="text"
+                        value={getHorarioDisplayValue(key, 'inicio', slot.inicio)}
+                        placeholder="9 am"
+                        onFocus={() => handleHorarioFocus(key, 'inicio', slot.inicio)}
+                        onChange={(e) => setHorarioDraft(e.target.value)}
+                        onBlur={() => handleHorarioBlur(key, 'inicio', slot.inicio, dia.label)}
+                        className="h-8"
+                      />
+                      <Input
+                        type="text"
+                        value={getHorarioDisplayValue(key, 'fin', slot.fin)}
+                        placeholder="5 pm"
+                        onFocus={() => handleHorarioFocus(key, 'fin', slot.fin)}
+                        onChange={(e) => setHorarioDraft(e.target.value)}
+                        onBlur={() => handleHorarioBlur(key, 'fin', slot.fin, dia.label)}
+                        className="h-8"
+                      />
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+
+          <div className="space-y-3 border rounded-md p-4">
+            <div>
+              <Label className="font-semibold">Puntos de venta de la ciudad</Label>
+              <p className="text-sm text-muted-foreground">
+                Agrega los puntos de venta asociados a esta ciudad (nombre, dirección, teléfono y encargado).
+              </p>
+            </div>
+
+            {pointsOfSale.length > 0 && (
+              <div className="space-y-2">
+                {pointsOfSale.map((point, index) => (
+                  <div
+                    key={`${point.nombre}-${index}`}
+                    className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 border rounded-md p-2"
+                  >
+                    <div className="text-sm">
+                      <div className="font-medium">{point.nombre}</div>
+                      <div className="text-muted-foreground">{point.direccion}</div>
+                      <div className="text-muted-foreground">
+                        {point.telefono && <span className="mr-2">Tel: {point.telefono}</span>}
+                        {point.encargado && <span>Encargado: {point.encargado}</span>}
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="self-start md:self-auto text-destructive"
+                      onClick={() => handleRemovePoint(index)}
+                    >
+                      Quitar
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="pv-nombre">Nombre *</Label>
+                <Input
+                  id="pv-nombre"
+                  value={pointForm.nombre}
+                  onChange={(e) => handlePointInputChange("nombre", e.target.value)}
+                  placeholder="Nombre del punto de venta"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="pv-telefono">Teléfono</Label>
+                <Input
+                  id="pv-telefono"
+                  value={pointForm.telefono}
+                  onChange={(e) => handlePointInputChange("telefono", e.target.value)}
+                  placeholder="+52 55 0000 0000"
+                />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="pv-direccion">Dirección *</Label>
+                <Input
+                  id="pv-direccion"
+                  value={pointForm.direccion}
+                  onChange={(e) => handlePointInputChange("direccion", e.target.value)}
+                  placeholder="Dirección del punto de venta"
+                />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="pv-encargado">Encargado</Label>
+                <Input
+                  id="pv-encargado"
+                  value={pointForm.encargado}
+                  onChange={(e) => handlePointInputChange("encargado", e.target.value)}
+                  placeholder="Nombre del encargado"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={handleAddPoint}
+              >
+                Agregar punto de venta
+              </Button>
+            </div>
           </div>
 
           <DialogFooter>
             <Button
               type="button"
               variant="outline"
-              onClick={() => {
-                resetForm();
-                onOpenChange(false);
-              }}
+              onClick={requestClose}
               disabled={loading}
             >
               Cancelar
             </Button>
             <Button type="submit" disabled={loading}>
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {(loading || savingPoints) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Crear Ciudad
             </Button>
           </DialogFooter>
         </form>
+        )}
       </DialogContent>
+      <ConfirmCloseDialog open={ask} onOpenChange={setAsk} onConfirm={confirm} />
     </Dialog>
   );
 };

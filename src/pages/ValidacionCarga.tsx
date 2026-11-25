@@ -1,0 +1,515 @@
+import { useEffect, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ConfirmCloseDialog, useConfirmClose } from "@/components/ConfirmClose";
+import { Input } from "@/components/ui/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useToast } from "@/hooks/use-toast";
+import { vistaDeError } from "@/lib/api-error";
+import { cn } from "@/lib/utils";
+import {
+  callCenterService,
+  type CargaLinea,
+  type InventarioHit,
+  type Solicitud,
+} from "@/services/callCenterService";
+
+type ExtraDraft = {
+  key: string;
+  fkid_producto: number;
+  nombre: string;
+  cantidad: number;
+  precio: string;
+};
+
+function errorText(error: unknown) {
+  const raw = error instanceof Error ? error.message : "No se pudo completar la solicitud";
+  return vistaDeError(raw);
+}
+
+function formatMoney(value: number) {
+  return value.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function lineTotal(cantidad: number, precio: number) {
+  return cantidad * precio;
+}
+
+function firmaExtras(list: { fkid_producto: number; cantidad: number }[]) {
+  return [...list]
+    .map((linea) => `${Number(linea.fkid_producto)}:${Number(linea.cantidad) || 0}`)
+    .sort()
+    .join("|");
+}
+
+function draftsFrom(cargas: CargaLinea[] | undefined): ExtraDraft[] {
+  return (cargas || [])
+    .filter((linea) => linea.es_extra && linea.fkid_producto)
+    .map((linea, index) => ({
+      key: `saved-${linea.id ?? index}-${linea.fkid_producto}`,
+      fkid_producto: Number(linea.fkid_producto),
+      nombre: linea.nombre,
+      cantidad: Number(linea.cantidad) || 1,
+      precio: String(linea.precio_unitario ?? 0),
+    }));
+}
+
+type ValidacionCargaProps = {
+  solicitudId?: number;
+  embedded?: boolean;
+  onBack?: () => void;
+  onApproved?: () => void;
+};
+
+const ValidacionCarga = ({ solicitudId: solicitudIdProp, embedded = false, onBack, onApproved }: ValidacionCargaProps) => {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const solicitudId = solicitudIdProp ?? Number(id);
+  const leave = () => {
+    if (onBack) onBack();
+    else navigate("/dashboard/call-center");
+  };
+  const keyRef = useRef(0);
+  const searchRequest = useRef(0);
+  const [solicitud, setSolicitud] = useState<Solicitud | null>(null);
+  const [extras, setExtras] = useState<ExtraDraft[]>([]);
+  const [error, setError] = useState("");
+  const [accion, setAccion] = useState<"" | "guardar" | "aprobar">("");
+  const busy = accion !== "";
+  const [modalOpen, setModalOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [hits, setHits] = useState<InventarioHit[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [picked, setPicked] = useState<InventarioHit | null>(null);
+  const [cantidad, setCantidad] = useState("1");
+  const [esperaReenvio, setEsperaReenvio] = useState(false);
+  const { ask, setAsk, requestClose: requestModalClose, confirm: confirmModal, onOpenChange: guardModal } = useConfirmClose(
+    () => {
+      setModalOpen(false);
+      setPicked(null);
+      setQuery("");
+      setCantidad("1");
+    },
+    Boolean(picked) || cantidad !== "1" || Boolean(query.trim()),
+  );
+
+  useEffect(() => {
+    if (!Number.isFinite(solicitudId)) {
+      setError("La validación no existe");
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const next = await callCenterService.getSolicitud(solicitudId);
+        if (cancelled) return;
+        if (next.tipo !== "check_in") {
+          setError("Esta solicitud no es un check-in");
+          return;
+        }
+        setSolicitud(next);
+        setExtras(draftsFrom(next.cargas));
+        setEsperaReenvio(Boolean(next.espera_reenvio));
+      } catch (err) {
+        if (!cancelled) setError(errorText(err));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [solicitudId]);
+
+  useEffect(() => {
+    if (!Number.isFinite(solicitudId)) return undefined;
+    let cancelled = false;
+    const timer = window.setInterval(() => {
+      void callCenterService.getSolicitud(solicitudId).then((next) => {
+        if (cancelled || next.tipo !== "check_in") return;
+        setSolicitud(next);
+        setEsperaReenvio(Boolean(next.espera_reenvio));
+      }).catch(() => {});
+    }, 5000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [solicitudId]);
+
+  useEffect(() => {
+    if (!modalOpen) return;
+    const term = query.trim();
+    const requestId = ++searchRequest.current;
+    setSearching(true);
+    const timer = setTimeout(() => {
+      void callCenterService.buscarInventario(term).then((rows) => {
+        if (requestId !== searchRequest.current) return;
+        setHits(rows);
+        setSearching(false);
+      }).catch(() => {
+        if (requestId !== searchRequest.current) return;
+        setHits([]);
+        setSearching(false);
+      });
+    }, term ? 300 : 0);
+    return () => clearTimeout(timer);
+  }, [query, modalOpen]);
+
+  const pedidos = (solicitud?.cargas || []).filter((linea) => !linea.es_extra);
+  const sumaCargada = pedidos.reduce((sum, linea) => sum + (Number(linea.cantidad) || 0), 0)
+    + extras.reduce((sum, linea) => sum + (Number(linea.cantidad) || 0), 0);
+  const totalPedidos = pedidos.reduce((sum, linea) => sum + lineTotal(Number(linea.cantidad) || 0, Number(linea.precio_unitario) || 0), 0);
+  const totalExtras = extras.reduce((sum, linea) => sum + lineTotal(linea.cantidad, Number(linea.precio) || 0), 0);
+  const totalCarga = totalPedidos + totalExtras;
+  const dinero = Number(solicitud?.dinero_esperado) || 0;
+  const extrasCambiaron = firmaExtras(extras) !== firmaExtras(draftsFrom(solicitud?.cargas));
+  const aprobarBloqueado = busy || extrasCambiaron || esperaReenvio;
+
+  const notify = (err: unknown) => {
+    toast({ title: "Validación de carga", description: errorText(err), variant: "destructive" });
+  };
+
+  const payloadExtras = () => extras.map((linea) => {
+    const amount = Number(linea.precio);
+    if (!Number.isInteger(linea.cantidad) || linea.cantidad < 1) {
+      throw new Error("Revisa la cantidad de la carga extra");
+    }
+    if (!Number.isFinite(amount) || amount < 0) {
+      throw new Error("El producto no tiene precio de venta");
+    }
+    return {
+      fkid_producto: linea.fkid_producto,
+      cantidad: linea.cantidad,
+      precio_unitario: amount,
+    };
+  });
+
+  const guardar = async () => {
+    if (busy) return;
+    setAccion("guardar");
+    try {
+      const saved = await callCenterService.guardarExtras(solicitudId, payloadExtras());
+      if (saved.reenvio) {
+        setEsperaReenvio(true);
+        toast({
+          title: "Carga extra guardada",
+          description: "Aprobar carga quedó bloqueado. El repartidor tiene que volver a enviarla.",
+        });
+      } else {
+        toast({ title: "Carga extra guardada" });
+      }
+    } catch (err) {
+      notify(err);
+    } finally {
+      setAccion("");
+    }
+  };
+
+  const aprobar = async () => {
+    if (busy) return;
+    setAccion("aprobar");
+    try {
+      await callCenterService.guardarExtras(solicitudId, payloadExtras());
+      await callCenterService.aprobar(solicitudId);
+      toast({ title: "Check-in aprobado" });
+      if (onApproved) onApproved();
+      else navigate("/dashboard/call-center?tab=validacion");
+    } catch (err) {
+      notify(err);
+    } finally {
+      setAccion("");
+    }
+  };
+
+  const openModal = () => {
+    setQuery("");
+    setHits([]);
+    setSearching(false);
+    setPicked(null);
+    setCantidad("1");
+    setModalOpen(true);
+  };
+
+  const addExtra = () => {
+    if (!picked) return;
+    const qty = Number(cantidad);
+    const amount = Number(picked.precio_venta);
+    if (!Number.isInteger(qty) || qty < 1 || !Number.isFinite(amount) || amount < 0) {
+      notify(new Error("Revisa la cantidad de la carga extra"));
+      return;
+    }
+    setExtras((list) => {
+      const current = list.find((linea) => linea.fkid_producto === picked.id);
+      if (current) {
+        return list.map((linea) => linea.fkid_producto === picked.id
+          ? { ...linea, cantidad: qty, precio: String(amount), nombre: picked.nombre }
+          : linea);
+      }
+      keyRef.current += 1;
+      return [...list, {
+        key: `new-${keyRef.current}`,
+        fkid_producto: picked.id,
+        nombre: picked.nombre,
+        cantidad: qty,
+        precio: String(amount),
+      }];
+    });
+    setModalOpen(false);
+  };
+
+  if (error) {
+    return (
+      <div className={embedded ? "space-y-4" : "space-y-4 p-6"}>
+        <div className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          <p className="font-semibold">No hay una solicitud abierta con ese número.</p>
+          <p className="mt-1">Si la carga ya se aprobó, está en el histórico de abajo. Si el repartidor acaba de enviarla, vuelve a Por validar: la nueva aparece en esa tabla. En la app se envía desde Check-in, con Enviar a call-center.</p>
+        </div>
+        <Button variant="outline" onClick={leave}>Ver cargas por validar</Button>
+      </div>
+    );
+  }
+
+  if (!solicitud) {
+    return <div className={embedded ? "text-sm text-muted-foreground" : "p-6 text-sm text-muted-foreground"}>Cargando la validación…</div>;
+  }
+
+  if (solicitud.ya_validada) {
+    return (
+      <div className={embedded ? "space-y-4" : "space-y-4 p-6"}>
+        <div className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
+          <p className="font-semibold">Esta carga ya fue validada.</p>
+          <p className="mt-1">
+            {solicitud.repartidor?.nombre_completo || "El repartidor"} puede pulsar Iniciar ruta de pedidos en la app.
+            Si hay que validar otra vez, debe volver a pulsar Enviar a call-center. La solicitud nueva aparece en Por validar, no en esta.
+          </p>
+        </div>
+        <Button variant="outline" onClick={leave}>Ver cargas por validar</Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className={embedded ? "space-y-6" : "space-y-6 p-6"}>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold">Validación de carga</h1>
+          <p className="text-sm text-muted-foreground">
+            {solicitud.repartidor?.nombre_completo || "Repartidor"} · Total de la carga ${formatMoney(totalCarga)} · Dinero esperado ${formatMoney(dinero)} · {sumaCargada} productos · {esperaReenvio ? "Esperando el reenvío del repartidor" : "En espera de aprobación"}
+          </p>
+        </div>
+        <Button variant="outline" onClick={leave}>Volver</Button>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Histórico de pedidos</CardTitle>
+          <CardDescription>{sumaCargada} productos · Dinero esperado ${formatMoney(dinero)}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {(solicitud.pedidos || []).length === 0 ? (
+            <p className="text-sm text-muted-foreground">Esta carga no tiene pedidos en la ruta de hoy.</p>
+          ) : (
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Pedido</TableHead>
+                    <TableHead>Cliente</TableHead>
+                    <TableHead>Productos</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(solicitud.pedidos || []).map((row) => (
+                    <TableRow key={row.numero_pedido}>
+                      <TableCell>{row.numero_pedido}</TableCell>
+                      <TableCell>{row.cliente || "—"}</TableCell>
+                      <TableCell>{row.productos.map((linea) => `${linea.nombre} × ${linea.cantidad}`).join(", ") || "—"}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Carga de pedidos</CardTitle>
+          <CardDescription>Productos que salen con los pedidos del día</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="rounded-md border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Producto</TableHead>
+                <TableHead>Cantidad</TableHead>
+                <TableHead>Precio</TableHead>
+                <TableHead>Total</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {pedidos.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
+                    No hay productos de pedidos
+                  </TableCell>
+                </TableRow>
+              ) : pedidos.map((linea) => (
+                <TableRow key={`${linea.fkid_producto ?? linea.nombre}`}>
+                  <TableCell>{linea.nombre}</TableCell>
+                  <TableCell>{linea.cantidad}</TableCell>
+                  <TableCell>${formatMoney(Number(linea.precio_unitario) || 0)}</TableCell>
+                  <TableCell>${formatMoney(lineTotal(Number(linea.cantidad) || 0, Number(linea.precio_unitario) || 0))}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          </div>
+          {pedidos.length > 0 ? (
+            <p className="mt-3 text-base font-semibold">Total de la carga ${formatMoney(totalPedidos)}</p>
+          ) : null}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-start justify-between space-y-0">
+          <div>
+            <CardTitle>Carga extra</CardTitle>
+            <CardDescription>Productos que no vienen en los pedidos</CardDescription>
+          </div>
+          <Button variant="outline" disabled={esperaReenvio} onClick={openModal}>Agregar extra</Button>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="rounded-md border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Producto</TableHead>
+                <TableHead>Cantidad</TableHead>
+                <TableHead>Precio</TableHead>
+                <TableHead>Total</TableHead>
+                <TableHead className="w-[70px]">Acciones</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {extras.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                    Sin producto extra
+                  </TableCell>
+                </TableRow>
+              ) : extras.map((linea) => (
+                <TableRow key={linea.key}>
+                  <TableCell>{linea.nombre} · extra</TableCell>
+                  <TableCell>
+                    <Input
+                      aria-label={`Cantidad de ${linea.nombre}`}
+                      type="number"
+                      min={1}
+                      disabled={esperaReenvio}
+                      value={linea.cantidad}
+                      onChange={(event) => {
+                        const next = Number(event.target.value);
+                        setExtras((list) => list.map((row) => row.key === linea.key ? { ...row, cantidad: next } : row));
+                      }}
+                    />
+                  </TableCell>
+                  <TableCell>${formatMoney(Number(linea.precio) || 0)}</TableCell>
+                  <TableCell>${formatMoney(lineTotal(linea.cantidad, Number(linea.precio) || 0))}</TableCell>
+                  <TableCell>
+                    <Button variant="outline" disabled={esperaReenvio} onClick={() => setExtras((list) => list.filter((row) => row.key !== linea.key))}>Quitar</Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          </div>
+          {(extrasCambiaron || esperaReenvio) && (
+            <p className="text-sm text-muted-foreground">
+              {esperaReenvio
+                ? "Aprobar carga está bloqueado hasta que el repartidor vuelva a enviar la carga a call center."
+                : "Guarda el producto extra. Aprobar carga queda bloqueado y el repartidor podrá volver a enviarla."}
+            </p>
+          )}
+          <p className="text-base font-semibold">Total de la carga ${formatMoney(totalCarga)}</p>
+          <div className="flex gap-3">
+            <Button variant="outline" disabled={busy || esperaReenvio} onClick={() => void guardar()}>
+              {accion === "guardar" ? <Loader2 className="animate-spin" /> : null}
+              {accion === "guardar" ? "Guardando…" : "Guardar extra"}
+            </Button>
+            <Button size="lg" className="h-12 px-8 text-base" disabled={aprobarBloqueado} onClick={() => void aprobar()}>
+              {accion === "aprobar" ? <Loader2 className="animate-spin" /> : null}
+              {accion === "aprobar" ? "Aprobando…" : "Aprobar carga"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Dialog open={modalOpen} onOpenChange={guardModal}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Agregar producto extra</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <Input
+              aria-label="Filtrar inventario"
+              placeholder="Filtrar inventario"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+            <div className="max-h-64 space-y-1 overflow-y-auto rounded-md border p-1" role="listbox" aria-label="Productos del inventario">
+              {searching && hits.length === 0 ? (
+                <div className="flex items-center justify-center py-6 text-sm text-muted-foreground">
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Cargando inventario…
+                </div>
+              ) : hits.length === 0 ? (
+                <p className="py-6 text-center text-sm text-muted-foreground">No hay productos</p>
+              ) : hits.map((hit) => (
+                <button
+                  key={hit.id}
+                  type="button"
+                  role="option"
+                  aria-selected={picked?.id === hit.id}
+                  onClick={() => setPicked(hit)}
+                  className={cn(
+                    "flex w-full items-center justify-between rounded-sm px-2 py-2 text-left text-sm hover:bg-accent",
+                    picked?.id === hit.id && "bg-accent"
+                  )}
+                >
+                  <span className="truncate">{hit.nombre}</span>
+                  <span className="ml-3 shrink-0 text-xs text-muted-foreground">
+                    ${formatMoney(Number(hit.precio_venta) || 0)}
+                  </span>
+                </button>
+              ))}
+            </div>
+            <div className="space-y-1">
+              <label htmlFor="cantidad-extra" className="text-sm font-medium">Cantidad</label>
+              <Input
+                id="cantidad-extra"
+                aria-label="Cantidad extra"
+                type="number"
+                min={1}
+                value={cantidad}
+                onChange={(event) => setCantidad(event.target.value)}
+              />
+            </div>
+            {picked && (
+              <p className="text-sm text-muted-foreground">
+                {picked.nombre} se carga a ${formatMoney(Number(picked.precio_venta) || 0)}
+              </p>
+            )}
+            <Button disabled={!picked} onClick={addExtra}>Aceptar</Button>
+          </div>
+        </DialogContent>
+        <ConfirmCloseDialog open={ask} onOpenChange={setAsk} onConfirm={confirmModal} />
+      </Dialog>
+    </div>
+  );
+};
+
+export default ValidacionCarga;

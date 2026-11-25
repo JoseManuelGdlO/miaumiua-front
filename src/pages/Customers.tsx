@@ -11,14 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from "@/components/ui/pagination";
+import { TablePagination } from "@/components/TablePagination";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,10 +25,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, Plus, MoreHorizontal, Edit, Trash2, UserCheck, Star, MessageSquare, Phone, Loader2, Upload, FileSpreadsheet } from "lucide-react";
-import { canCreate, canEdit, canDelete, canViewStats } from "@/utils/permissions";
+import { Search, Plus, MoreHorizontal, Edit, Trash2, UserCheck, Star, MessageSquare, Phone, Loader2, Upload, FileSpreadsheet, KeyRound } from "lucide-react";
+import { canCreate, canEdit, canDelete, canViewStats, canResetClientePortalPassword } from "@/utils/permissions";
 import { useToast } from "@/hooks/use-toast";
 import { clientesService, Cliente } from "@/services/clientesService";
+import { citiesService, City } from "@/services/citiesService";
 import CreateCustomerModal from "@/components/modals/CreateCustomerModal";
 import BulkUploadCustomersModal from "@/components/modals/BulkUploadCustomersModal";
 
@@ -58,15 +52,20 @@ interface ClienteWithAPI extends Cliente {
 }
 import EditCustomerModal from "@/components/modals/EditCustomerModal";
 import ConfirmDeleteModal from "@/components/modals/ConfirmDeleteModal";
+import ChangeClientePortalPasswordModal from "@/components/modals/ChangeClientePortalPasswordModal";
 
 const Customers = () => {
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
+  const [ciudadFiltro, setCiudadFiltro] = useState("all");
+  const [estadoFiltro, setEstadoFiltro] = useState("all");
+  const [ciudades, setCiudades] = useState<City[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isBulkUploadModalOpen, setIsBulkUploadModalOpen] = useState(false);
+  const [isPortalPasswordModalOpen, setIsPortalPasswordModalOpen] = useState(false);
   const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
   const [clientes, setClientes] = useState<ClienteWithAPI[]>([]);
   const [loading, setLoading] = useState(true);
@@ -77,7 +76,13 @@ const Customers = () => {
   // Cargar clientes al montar el componente
   useEffect(() => {
     loadClientes();
-  }, [currentPage, searchTerm]);
+  }, [currentPage, searchTerm, ciudadFiltro, estadoFiltro]);
+
+  useEffect(() => {
+    citiesService.getAllCities().then((response) => {
+      if (response.success) setCiudades(response.data.cities || []);
+    }).catch(() => setCiudades([]));
+  }, []);
 
   const loadClientes = async () => {
     try {
@@ -85,7 +90,9 @@ const Customers = () => {
       const response = await clientesService.getAllClientes({
         search: searchTerm || undefined,
         page: currentPage,
-        limit: itemsPerPage
+        limit: itemsPerPage,
+        fkid_ciudad: ciudadFiltro === "all" ? undefined : Number(ciudadFiltro),
+        activos: estadoFiltro === "all" ? undefined : estadoFiltro as "true" | "false",
       });
       
       if (response.success) {
@@ -141,6 +148,11 @@ const Customers = () => {
   const handleEditCliente = (cliente: Cliente) => {
     setSelectedCliente(cliente);
     setIsEditModalOpen(true);
+  };
+
+  const handlePortalPasswordCliente = (cliente: Cliente) => {
+    setSelectedCliente(cliente);
+    setIsPortalPasswordModalOpen(true);
   };
 
   const handleSearch = (value: string) => {
@@ -200,16 +212,33 @@ const Customers = () => {
         </CardHeader>
         <CardContent>
           {/* Search */}
-          <div className="flex items-center space-x-2 mb-6">
+          <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-center">
             <div className="relative flex-1">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar por nombre o email..."
+                placeholder="Buscar por nombre, correo o teléfono..."
                 value={searchTerm}
                 onChange={(e) => handleSearch(e.target.value)}
                 className="pl-8"
               />
             </div>
+            <Select value={ciudadFiltro} onValueChange={(value) => { setCiudadFiltro(value); setCurrentPage(1); }}>
+              <SelectTrigger className="w-full sm:w-52"><SelectValue placeholder="Ciudad" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas las ciudades</SelectItem>
+                {ciudades.map((ciudad) => (
+                  <SelectItem key={ciudad.id} value={String(ciudad.id)}>{ciudad.nombre}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={estadoFiltro} onValueChange={(value) => { setEstadoFiltro(value); setCurrentPage(1); }}>
+              <SelectTrigger className="w-full sm:w-44"><SelectValue placeholder="Estado" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="true">Activos</SelectItem>
+                <SelectItem value="false">Inactivos</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Clientes Table */}
@@ -224,7 +253,7 @@ const Customers = () => {
                   <TableHead>Total Gastado</TableHead>
                   <TableHead>Puntos</TableHead>
                   <TableHead>Último Pedido</TableHead>
-                  <TableHead className="text-right">Acciones</TableHead>
+                  <TableHead>Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -307,6 +336,12 @@ const Customers = () => {
                                 Editar Cliente
                               </DropdownMenuItem>
                             )}
+                            {canResetClientePortalPassword() && (
+                              <DropdownMenuItem onClick={() => handlePortalPasswordCliente(cliente)}>
+                                <KeyRound className="mr-2 h-4 w-4" />
+                                Contraseña portal (web)
+                              </DropdownMenuItem>
+                            )}
                             {canDelete('customers') && (
                               <DropdownMenuItem 
                                 className="text-destructive"
@@ -326,56 +361,13 @@ const Customers = () => {
             </Table>
           </div>
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between mt-6">
-              <div className="text-sm text-muted-foreground">
-                Mostrando {((currentPage - 1) * itemsPerPage) + 1} a {Math.min(currentPage * itemsPerPage, totalClientes)} de {totalClientes} clientes
-              </div>
-              <Pagination>
-                <PaginationContent>
-                  <PaginationItem>
-                    <PaginationPrevious 
-                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                      className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                    />
-                  </PaginationItem>
-                  
-                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                    const pageNum = i + 1;
-                    return (
-                      <PaginationItem key={pageNum}>
-                        <PaginationLink
-                          onClick={() => setCurrentPage(pageNum)}
-                          isActive={currentPage === pageNum}
-                          className="cursor-pointer"
-                        >
-                          {pageNum}
-                        </PaginationLink>
-                      </PaginationItem>
-                    );
-                  })}
-                  
-                  <PaginationItem>
-                    <PaginationNext 
-                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                      className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                    />
-                  </PaginationItem>
-                </PaginationContent>
-              </Pagination>
-            </div>
-          )}
-
-          {/* Stats */}
-          <div className="flex items-center justify-between mt-6 text-sm text-muted-foreground">
-            <div>
-              Página {currentPage} de {totalPages}
-            </div>
-            <div className="flex items-center space-x-4">
-              <span>Total clientes: {totalClientes}</span>
-            </div>
-          </div>
+          <TablePagination
+            page={currentPage}
+            pageSize={itemsPerPage}
+            total={totalClientes}
+            label="clientes"
+            onPageChange={setCurrentPage}
+          />
         </CardContent>
       </Card>
 
@@ -406,6 +398,13 @@ const Customers = () => {
         open={isBulkUploadModalOpen}
         onOpenChange={setIsBulkUploadModalOpen}
         onUploadComplete={loadClientes}
+      />
+
+      <ChangeClientePortalPasswordModal
+        open={isPortalPasswordModalOpen}
+        onOpenChange={setIsPortalPasswordModalOpen}
+        cliente={selectedCliente}
+        onPasswordChanged={loadClientes}
       />
     </div>
   );

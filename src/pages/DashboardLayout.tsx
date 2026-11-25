@@ -12,17 +12,21 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import NotificationPanel from "@/components/NotificationPanel";
+import { NotificationStreamProvider } from "@/hooks/useNotificationStream";
+import { PushNotificationSync } from "@/components/PushNotificationSync";
 import { useAuth } from "@/hooks/useAuth";
+import { hasPermission } from "@/utils/permissions";
 
 const DashboardLayout = () => {
   const { logout, user } = useAuth();
+  const canViewNotifications = hasPermission("ver_notificaciones");
 
-  return (
+  const layout = (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full bg-background">
+      <div className="flex min-h-screen w-full min-w-0 overflow-x-hidden bg-background">
         <AppSidebar />
         
-        <div className="flex-1 flex flex-col">
+        <div className="flex min-w-0 flex-1 flex-col overflow-x-hidden">
           {/* Top Header */}
           <header className="h-16 border-b border-border bg-card/50 backdrop-blur-sm flex items-center justify-between px-6">
             <div className="flex items-center gap-4">
@@ -33,8 +37,7 @@ const DashboardLayout = () => {
             </div>
             
             <div className="flex items-center gap-3">
-              {/* Notifications */}
-              <NotificationPanel />
+              {canViewNotifications && <NotificationPanel />}
               
               {/* User Menu */}
               <DropdownMenu>
@@ -73,9 +76,11 @@ const DashboardLayout = () => {
               </DropdownMenu>
             </div>
           </header>
+
+          <PushNotificationSync />
           
           {/* Main Content */}
-          <main className="flex-1 overflow-auto relative">
+          <main className="relative min-w-0 flex-1 overflow-auto">
             <Outlet />
             
             {/* Intelekia Logo - Bottom Left - Ocultado temporalmente */}
@@ -101,6 +106,14 @@ const DashboardLayout = () => {
         </div>
       </div>
     </SidebarProvider>
+  );
+
+  if (!canViewNotifications) return layout;
+
+  return (
+    <NotificationStreamProvider>
+      {layout}
+    </NotificationStreamProvider>
   );
 };
 

@@ -14,6 +14,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { categoriasProductoService, UpdateCategoriaProductoData, CategoriaProducto } from "@/services/categoriasProductoService";
 import { Loader2 } from "lucide-react";
+import { ConfirmCloseDialog, formDirty, useConfirmClose } from "@/components/ConfirmClose";
 
 interface EditCategoriaProductoModalProps {
   open: boolean;
@@ -34,14 +35,17 @@ const EditCategoriaProductoModal = ({
     nombre: "",
     descripcion: ""
   });
+  const [baseline, setBaseline] = useState(formData);
 
   // Actualizar el formulario cuando cambie la categoría
   useEffect(() => {
     if (categoria) {
-      setFormData({
+      const next = {
         nombre: categoria.nombre,
         descripcion: categoria.descripcion || ""
-      });
+      };
+      setFormData(next);
+      setBaseline(next);
     }
   }, [categoria]);
 
@@ -128,8 +132,14 @@ const EditCategoriaProductoModal = ({
     }));
   };
 
+  const { ask, setAsk, requestClose, confirm, onOpenChange: guardClose } = useConfirmClose(
+    () => onOpenChange(false),
+    formDirty(formData, baseline),
+    loading,
+  );
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={guardClose}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Editar Categoría de Producto</DialogTitle>
@@ -173,7 +183,7 @@ const EditCategoriaProductoModal = ({
             <Button
               type="button"
               variant="outline"
-              onClick={() => onOpenChange(false)}
+              onClick={requestClose}
               disabled={loading}
             >
               Cancelar
@@ -185,6 +195,7 @@ const EditCategoriaProductoModal = ({
           </DialogFooter>
         </form>
       </DialogContent>
+      <ConfirmCloseDialog open={ask} onOpenChange={setAsk} onConfirm={confirm} />
     </Dialog>
   );
 };

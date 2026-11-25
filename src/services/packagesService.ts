@@ -1,4 +1,5 @@
 import { config } from '../config/environment';
+import { falloHttp } from '@/lib/api-error';
 import { authService } from './authService';
 
 // Interfaces para Paquetes
@@ -10,6 +11,7 @@ export interface Package {
   descuento?: number;
   precio_final: number;
   is_active: boolean;
+  imagen_url?: string | null;
   created_at: string;
   updated_at: string;
   productos?: Array<{
@@ -92,8 +94,7 @@ class PackagesService {
     });
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ message: 'Error desconocido' }));
-      throw new Error(error.message || `Error: ${response.statusText}`);
+      throw falloHttp(response, await response.json().catch(() => null));
     }
 
     return response.json();
@@ -147,6 +148,22 @@ class PackagesService {
       method: 'PATCH',
       body: JSON.stringify({ is_active: isActive }),
     });
+  }
+
+  async uploadPackageImage(id: number, file: File): Promise<PackageResponse> {
+    const token = authService.getToken();
+    if (!token) throw new Error('No hay token de autenticación');
+    const formData = new FormData();
+    formData.append('imagen', file);
+    const response = await fetch(`${API_BASE_URL}/paquetes/${id}/imagen`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+      body: formData,
+    });
+    if (!response.ok) {
+      throw falloHttp(response, await response.json().catch(() => null));
+    }
+    return response.json();
   }
 }
 

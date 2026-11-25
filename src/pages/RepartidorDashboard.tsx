@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { ConfirmCloseDialog, useConfirmClose } from "@/components/ConfirmClose";
 
 interface Pedido {
   id: number;
@@ -49,10 +50,29 @@ const RepartidorDashboard = () => {
   const [selectedPedido, setSelectedPedido] = useState<Pedido | null>(null);
   const [showNotasDialog, setShowNotasDialog] = useState(false);
   const [notas, setNotas] = useState("");
+  const { ask, setAsk, requestClose, confirm, onOpenChange: guardNotas } = useConfirmClose(
+    () => {
+      setShowNotasDialog(false);
+      setNotas("");
+    },
+    Boolean(notas.trim()),
+  );
   const [fechaActual, setFechaActual] = useState<string>("");
   const { repartidor, isAuthenticated, isLoading: authLoading, logout } = useRepartidorAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  // Función helper para parsear fecha en zona horaria local
+  const parseLocalDate = (dateString: string): Date => {
+    // Si la fecha viene en formato YYYY-MM-DD, parsearla manualmente
+    // para evitar problemas de zona horaria UTC
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+      const [year, month, day] = dateString.split('-').map(Number);
+      return new Date(year, month - 1, day);
+    }
+    // Si viene en otro formato, usar el constructor normal
+    return new Date(dateString);
+  };
 
   // Log para debug
   useEffect(() => {
@@ -239,7 +259,7 @@ const RepartidorDashboard = () => {
             <h1 className="text-3xl font-bold">Mis Pedidos del Día</h1>
             <p className="text-muted-foreground">
               {repartidor?.nombre_completo} - {fechaActual 
-                ? new Date(fechaActual).toLocaleDateString('es-ES', { 
+                ? parseLocalDate(fechaActual).toLocaleDateString('es-ES', { 
                     weekday: 'long', 
                     year: 'numeric', 
                     month: 'long', 
@@ -512,7 +532,7 @@ const RepartidorDashboard = () => {
       </div>
 
       {/* Dialog para notas cuando no se entrega */}
-      <Dialog open={showNotasDialog} onOpenChange={setShowNotasDialog}>
+      <Dialog open={showNotasDialog} onOpenChange={guardNotas}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Marcar como No Entregado</DialogTitle>
@@ -533,7 +553,7 @@ const RepartidorDashboard = () => {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowNotasDialog(false)}>
+            <Button variant="outline" onClick={requestClose}>
               Cancelar
             </Button>
             <Button
@@ -548,6 +568,7 @@ const RepartidorDashboard = () => {
             </Button>
           </DialogFooter>
         </DialogContent>
+        <ConfirmCloseDialog open={ask} onOpenChange={setAsk} onConfirm={confirm} />
       </Dialog>
     </div>
   );

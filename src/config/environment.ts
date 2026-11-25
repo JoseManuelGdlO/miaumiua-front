@@ -14,6 +14,14 @@ export const config = {
   // URLs base del API según el entorno (normalizada con protocolo)
   apiBaseUrl: normalizeApiUrl(import.meta.env.VITE_API_BASE_URL || 'https://intelekia-miaumiau-back.vvggha.easypanel.host/api'),
 
+  // URL base para imágenes (uploads). Sin /api. Si no se define, se deriva de apiBaseUrl.
+  imageBaseUrl: (() => {
+    const env = import.meta.env.VITE_IMAGE_BASE_URL;
+    if (env && (env.startsWith('http://') || env.startsWith('https://'))) return env.replace(/\/$/, '');
+    if (env) return `https://${env.replace(/^\//, '').replace(/\/$/, '')}`;
+    return normalizeApiUrl(import.meta.env.VITE_API_BASE_URL || 'https://intelekia-miaumiau-back.vvggha.easypanel.host/api').replace(/\/api\/?$/, '');
+  })(),
+
   // Alias para compatibilidad
   apiUrl: import.meta.env.VITE_API_BASE_URL || 'https://intelekia-miaumiau-back.vvggha.easypanel.host/api',
   
@@ -29,14 +37,14 @@ export const config = {
 
 // Configuraciones específicas para desarrollo
 export const devConfig = {
-  apiBaseUrl: normalizeApiUrl('https://intelekia-miaumiau-back.vvggha.easypanel.host/api'),
+  apiBaseUrl: config.apiBaseUrl,
   timeout: 10000, // 10 segundos
   retryAttempts: 3,
 };
 
 // Configuraciones específicas para producción
 export const prodConfig = {
-  apiBaseUrl: normalizeApiUrl('https://intelekia-miaumiau-back.vvggha.easypanel.host/api'),
+  apiBaseUrl: config.apiBaseUrl,
   timeout: 15000, // 15 segundos
   retryAttempts: 2,
 };

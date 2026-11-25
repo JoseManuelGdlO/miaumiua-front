@@ -32,6 +32,23 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { promotionsService } from "@/services/promotionsService";
 import { citiesService, City } from "@/services/citiesService";
+import { ConfirmCloseDialog, formDirty, useConfirmClose } from "@/components/ConfirmClose";
+
+const EMPTY_PROMO = {
+  nombre: "",
+  codigo: "",
+  descripcion: "",
+  tipo_promocion: "",
+  valor_descuento: "",
+  fecha_inicio: undefined as Date | undefined,
+  fecha_fin: undefined as Date | undefined,
+  limite_uso: "",
+  compra_minima: "",
+  descuento_maximo: "",
+  ciudades: [] as number[],
+  aplica_a: "todos" as "todos" | "retail" | "distribuidor",
+  departamento: "",
+};
 
 interface CreatePromotionModalProps {
   isOpen: boolean;
@@ -43,19 +60,7 @@ const CreatePromotionModal = ({ isOpen, onClose, onSuccess }: CreatePromotionMod
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [cities, setCities] = useState<City[]>([]);
-  const [formData, setFormData] = useState({
-    nombre: "",
-    codigo: "",
-    descripcion: "",
-    tipo_promocion: "",
-    valor_descuento: "",
-    fecha_inicio: undefined as Date | undefined,
-    fecha_fin: undefined as Date | undefined,
-    limite_uso: "",
-    compra_minima: "",
-    descuento_maximo: "",
-    ciudades: [] as number[],
-  });
+  const [formData, setFormData] = useState(EMPTY_PROMO);
 
   // Cargar ciudades
   useEffect(() => {
@@ -76,19 +81,7 @@ const CreatePromotionModal = ({ isOpen, onClose, onSuccess }: CreatePromotionMod
   // Resetear formulario cuando se abre el modal
   useEffect(() => {
     if (isOpen) {
-      setFormData({
-        nombre: "",
-        codigo: "",
-        descripcion: "",
-        tipo_promocion: "",
-        valor_descuento: "",
-        fecha_inicio: undefined,
-        fecha_fin: undefined,
-        limite_uso: "",
-        compra_minima: "",
-        descuento_maximo: "",
-        ciudades: [],
-      });
+      setFormData(EMPTY_PROMO);
     }
   }, [isOpen]);
 
@@ -128,6 +121,7 @@ const CreatePromotionModal = ({ isOpen, onClose, onSuccess }: CreatePromotionMod
         compra_minima: formData.compra_minima ? parseFloat(formData.compra_minima) : undefined,
         descuento_maximo: formData.descuento_maximo ? parseFloat(formData.descuento_maximo) : undefined,
         ciudades: formData.ciudades,
+        aplica_a: formData.aplica_a,
       };
 
       await promotionsService.createPromotion(createData);
@@ -160,8 +154,14 @@ const CreatePromotionModal = ({ isOpen, onClose, onSuccess }: CreatePromotionMod
     }));
   };
 
+  const { ask, setAsk, requestClose, confirm, onOpenChange } = useConfirmClose(
+    onClose,
+    formDirty(formData, EMPTY_PROMO),
+    loading,
+  );
+
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Nueva Promoción</DialogTitle>
@@ -331,6 +331,38 @@ const CreatePromotionModal = ({ isOpen, onClose, onSuccess }: CreatePromotionMod
           </div>
 
           <div className="space-y-2">
+            <Label>Aplica a</Label>
+            <Select value={formData.aplica_a} onValueChange={(value: "todos" | "retail" | "distribuidor") => setFormData((prev) => ({ ...prev, aplica_a: value }))}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos</SelectItem>
+                <SelectItem value="retail">Clientes finales</SelectItem>
+                <SelectItem value="distribuidor">Solo distribuidores</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Estado (rellena las ciudades)</Label>
+            <Select
+              value={formData.departamento ? encodeURIComponent(formData.departamento) : "none"}
+              onValueChange={(value) => {
+                const departamento = value === "none" ? "" : decodeURIComponent(value);
+                const ids = departamento
+                  ? cities.filter((city) => city.departamento === departamento).map((city) => city.id)
+                  : [];
+                setFormData((prev) => ({ ...prev, departamento, ciudades: ids.length ? ids : prev.ciudades }));
+              }}
+            >
+              <SelectTrigger><SelectValue placeholder="Elegir estado" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Sin filtro de estado</SelectItem>
+                {[...new Set(cities.map((city) => city.departamento).filter(Boolean))].map((departamento) => (
+                  <SelectItem key={departamento} value={encodeURIComponent(departamento)}>{departamento}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
             <Label>Ciudades Aplicables</Label>
             <Card>
               <CardContent className="p-4">
@@ -346,7 +378,7 @@ const CreatePromotionModal = ({ isOpen, onClose, onSuccess }: CreatePromotionMod
                         htmlFor={`city-${city.id}`}
                         className="text-sm font-normal cursor-pointer"
                       >
-                        {city.nombre}
+                        {city.nombre}{city.departamento ? ` · ${city.departamento}` : ""}
                       </Label>
                     </div>
                   ))}
@@ -356,7 +388,7 @@ const CreatePromotionModal = ({ isOpen, onClose, onSuccess }: CreatePromotionMod
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>
+            <Button type="button" variant="outline" onClick={requestClose}>
               Cancelar
             </Button>
             <Button type="submit" disabled={loading}>
@@ -365,6 +397,7 @@ const CreatePromotionModal = ({ isOpen, onClose, onSuccess }: CreatePromotionMod
           </DialogFooter>
         </form>
       </DialogContent>
+      <ConfirmCloseDialog open={ask} onOpenChange={setAsk} onConfirm={confirm} />
     </Dialog>
   );
 };

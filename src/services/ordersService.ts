@@ -1,4 +1,5 @@
 import { config } from '../config/environment';
+import { falloHttp, mensajeDeError } from '@/lib/api-error';
 import { authService } from './authService';
 
 // Interfaces para Pedidos
@@ -13,12 +14,15 @@ export interface Order {
   fecha_entrega_estimada?: string;
   metodo_pago: 'efectivo' | 'tarjeta' | 'transferencia' | 'pago_movil';
   notas?: string;
-  estado: 'pendiente' | 'confirmado' | 'en_preparacion' | 'en_camino' | 'entregado' | 'cancelado';
+  codigo_promocion?: string | null;
+  estado: 'pendiente' | 'confirmado' | 'en_preparacion' | 'en_camino' | 'entregado' | 'no_entregado' | 'cancelado';
   subtotal: number;
   descuento_total: number;
   total: number;
   is_active: boolean;
   created_at: string;
+  createdAt?: string;  // alternativo que puede devolver la API
+  fecha_creacion?: string;  // alternativo que puede devolver la API
   updated_at: string;
   cliente?: {
     id: number;
@@ -62,6 +66,10 @@ export interface Order {
       precio_final: number;
     };
   }>;
+  /** Presentes en GET cuando se generó (o reutilizó) el Payment Link de Stripe */
+  stripe_link_id?: string | null;
+  stripe_link_url?: string | null;
+  url?: string | null;
 }
 
 export interface CreateOrderData {
@@ -71,6 +79,7 @@ export interface CreateOrderData {
   direccion_entrega: string;
   fkid_ciudad: number;
   fecha_entrega_estimada?: string;
+  horario_preferente?: string;
   metodo_pago: 'efectivo' | 'tarjeta' | 'transferencia' | 'pago_movil';
   notas?: string;
   codigo_promocion?: string;
@@ -99,6 +108,7 @@ export interface UpdateOrderData {
   fecha_entrega_estimada?: string;
   metodo_pago?: 'efectivo' | 'tarjeta' | 'transferencia' | 'pago_movil';
   notas?: string;
+  codigo_promocion?: string;
   productos?: Array<{
     id?: number;
     fkid_producto: number;
@@ -121,6 +131,16 @@ export interface OrderResponse {
   success: boolean;
   data: {
     pedido: Order;
+  };
+}
+
+export interface StripePaymentLinkResponse {
+  success: boolean;
+  data: {
+    stripe_link_id: string;
+    stripe_link_url: string;
+    /** Alias de stripe_link_url en la API */
+    url?: string;
   };
 }
 
@@ -170,7 +190,7 @@ export interface OrdersQueryParams {
   limit?: number;
   fkid_cliente?: number;
   fkid_ciudad?: number;
-  estado?: 'pendiente' | 'confirmado' | 'en_preparacion' | 'en_camino' | 'entregado' | 'cancelado';
+  estado?: 'pendiente' | 'confirmado' | 'en_preparacion' | 'en_camino' | 'entregado' | 'no_entregado' | 'cancelado';
   metodo_pago?: 'efectivo' | 'tarjeta' | 'transferencia' | 'pago_movil';
   activos?: 'true' | 'false';
   search?: string;
@@ -200,8 +220,7 @@ class OrdersService {
         if (!response.ok) {
           // Manejar errores de autenticación (401/403) y desloguear automáticamente
           authService.handleAuthError(response);
-          
-          throw new Error(`Error ${response.status}: ${response.statusText}`);
+          throw new Error(await mensajeDeError(response));
         }
         return response.json();
       });
@@ -246,6 +265,40 @@ class OrdersService {
     });
   }
 
+  /** POST idempotente: crea o devuelve el link de pago Stripe (solo pedidos con metodo_pago tarjeta). */
+  async createStripePaymentLink(pedidoId: number): Promise<StripePaymentLinkResponse> {
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+      throw new Error('Token de acceso requerido');
+    }
+
+    const response = await fetch(
+      `${config.apiBaseUrl}/pedidos/${pedidoId}/stripe-payment-link`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({}),
+      }
+    );
+
+    let body: unknown;
+    try {
+      body = await response.json();
+    } catch {
+      body = null;
+    }
+
+    if (!response.ok) {
+      authService.handleAuthError(response);
+      throw falloHttp(response, body);
+    }
+
+    return body as StripePaymentLinkResponse;
+  }
+
   // Actualizar pedido
   async updateOrder(id: number, data: UpdateOrderData): Promise<OrderResponse> {
     return this.makeRequest<OrderResponse>(`/pedidos/${id}`, {
@@ -270,7 +323,70 @@ class OrdersService {
 
   // Obtener estadísticas de pedidos
   async getOrderStats(): Promise<OrderStatsResponse> {
-    return this.makeRequest<OrderStatsResponse>('/pedidos/stats');
+    // La API devuelve las estadísticas en camelCase, aquí las normalizamos
+    const raw = await this.makeRequest<{ success: boolean; data: any }>('/pedidos/stats');
+
+    const data = raw?.data ?? {};
+
+    const totalPedidos = Number(data.totalPedidos ?? 0);
+    const totalVentas = Number(data.totalVentas ?? 0);
+
+    // Normalizar estadísticas por método de pago
+    const metodoPagoStats =
+      Array.isArray(data.pedidosPorMetodoPago)
+        ? data.pedidosPorMetodoPago.map((item: any) => ({
+            metodo_pago: String(item.metodo_pago),
+            total: Number(item.total ?? 0),
+            porcentaje: 0, // No se usa actualmente en el frontend
+          }))
+        : [];
+
+    // Normalizar estadísticas por estado
+    const totalPorEstado = Array.isArray(data.pedidosPorEstado)
+      ? data.pedidosPorEstado.reduce(
+          (sum: number, item: any) => sum + Number(item.total ?? 0),
+          0
+        )
+      : 0;
+
+    const estadoStats =
+      Array.isArray(data.pedidosPorEstado)
+        ? data.pedidosPorEstado.map((item: any) => {
+            const total = Number(item.total ?? 0);
+            const porcentaje =
+              totalPorEstado > 0 ? (total / totalPorEstado) * 100 : 0;
+            return {
+              estado: String(item.estado),
+              total,
+              porcentaje,
+            };
+          })
+        : [];
+
+    const normalized: OrderStatsResponse = {
+      success: raw.success,
+      data: {
+        total_pedidos: totalPedidos,
+        pedidos_pendientes: Number(data.pedidosPendientes ?? 0),
+        pedidos_confirmados: Number(data.pedidosConfirmados ?? 0),
+        pedidos_en_preparacion: Number(data.pedidosEnPreparacion ?? 0),
+        pedidos_en_camino: Number(data.pedidosEnCamino ?? 0),
+        pedidos_entregados: Number(data.pedidosEntregados ?? 0),
+        pedidos_cancelados: Number(data.pedidosCancelados ?? 0),
+        total_ventas: totalVentas,
+        ventas_mes_actual: Number(data.ventasMesActual ?? 0),
+        ventas_mes_anterior: Number(data.ventasMesAnterior ?? 0),
+        crecimiento_ventas: Number(data.crecimientoVentas ?? 0),
+        promedio_pedido:
+          totalPedidos > 0
+            ? totalVentas / totalPedidos
+            : 0,
+        metodo_pago_stats: metodoPagoStats,
+        estado_stats: estadoStats,
+      },
+    };
+
+    return normalized;
   }
 
   // Obtener pedidos recientes

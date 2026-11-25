@@ -129,6 +129,10 @@ export const PERMISSION_CATEGORIES = {
     name: "Gestión del sistema",
     actions: ["ver_logs", "configurar", "backup", "restore"]
   },
+  configuracion_qr: {
+    name: "Configuración QR",
+    actions: ["configurar"]
+  },
   reportes: {
     name: "Gestión de reportes",
     actions: ["ver", "generar", "exportar"]

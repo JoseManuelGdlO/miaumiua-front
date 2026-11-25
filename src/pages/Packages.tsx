@@ -17,20 +17,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from "@/components/ui/pagination";
+import { TablePagination } from "@/components/TablePagination";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { 
   Search, 
   Plus, 
@@ -59,6 +54,7 @@ const Packages = () => {
   const [packages, setPackages] = useState<PackageType[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalPackages, setTotalPackages] = useState(0);
@@ -71,7 +67,7 @@ const Packages = () => {
   // Cargar paquetes al montar el componente
   useEffect(() => {
     loadPackages();
-  }, [currentPage, searchTerm]);
+  }, [currentPage, searchTerm, showArchived]);
 
   const loadPackages = async () => {
     try {
@@ -79,8 +75,8 @@ const Packages = () => {
       const response = await packagesService.getAllPackages({
         page: currentPage,
         limit: itemsPerPage,
-        search: searchTerm || undefined
-        // No filtrar por activos, mostrar todos
+        search: searchTerm || undefined,
+        activos: showArchived ? "false" : "true",
       });
       
       if (response.success) {
@@ -218,11 +214,26 @@ const Packages = () => {
 
       {/* Packages Table */}
       <Card>
-        <CardHeader>
-          <CardTitle>Paquetes Registrados</CardTitle>
-          <CardDescription>
-            Lista completa de paquetes con filtros y búsqueda
-          </CardDescription>
+        <CardHeader className="flex flex-row items-start justify-between space-y-0 gap-4">
+          <div>
+            <CardTitle>Paquetes Registrados</CardTitle>
+            <CardDescription>
+              Lista completa de paquetes con filtros y búsqueda
+            </CardDescription>
+          </div>
+          <div className="flex items-center space-x-2 shrink-0">
+            <Switch
+              id="ver-archivados"
+              checked={showArchived}
+              onCheckedChange={(checked) => {
+                setShowArchived(checked);
+                setCurrentPage(1);
+              }}
+            />
+            <Label htmlFor="ver-archivados" className="text-sm font-medium cursor-pointer whitespace-nowrap">
+              Ver archivados
+            </Label>
+          </div>
         </CardHeader>
         <CardContent>
           {/* Search */}
@@ -251,7 +262,7 @@ const Packages = () => {
                   <TableHead>Total</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead>Fecha</TableHead>
-                  <TableHead className="text-right">Acciones</TableHead>
+                  <TableHead>Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -311,9 +322,9 @@ const Packages = () => {
                             Activo
                           </Badge>
                         ) : (
-                          <Badge variant="secondary" className="flex items-center gap-1 w-fit">
+                          <Badge variant="outline" className="flex items-center gap-1 w-fit">
                             <XCircle className="h-3 w-3" />
-                            Inactivo
+                            Archivado
                           </Badge>
                         )}
                       </TableCell>
@@ -374,46 +385,13 @@ const Packages = () => {
             </Table>
           </div>
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between space-x-2 py-4">
-              <div className="text-sm text-muted-foreground">
-                Mostrando {((currentPage - 1) * itemsPerPage) + 1} a {Math.min(currentPage * itemsPerPage, totalPackages)} de {totalPackages} paquetes
-              </div>
-              <Pagination>
-                <PaginationContent>
-                  <PaginationItem>
-                    <PaginationPrevious 
-                      onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                      className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
-                    />
-                  </PaginationItem>
-                  
-                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                    const page = i + 1;
-                    return (
-                      <PaginationItem key={page}>
-                        <PaginationLink
-                          onClick={() => setCurrentPage(page)}
-                          isActive={currentPage === page}
-                          className="cursor-pointer"
-                        >
-                          {page}
-                        </PaginationLink>
-                      </PaginationItem>
-                    );
-                  })}
-                  
-                  <PaginationItem>
-                    <PaginationNext 
-                      onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                      className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
-                    />
-                  </PaginationItem>
-                </PaginationContent>
-              </Pagination>
-            </div>
-          )}
+          <TablePagination
+            page={currentPage}
+            pageSize={itemsPerPage}
+            total={totalPackages}
+            label="paquetes"
+            onPageChange={setCurrentPage}
+          />
         </CardContent>
       </Card>
 

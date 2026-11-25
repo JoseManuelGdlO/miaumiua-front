@@ -8,11 +8,13 @@ import { AvailableOrder } from '@/services/routesService';
 interface DraggableOrderCardProps {
   order: AvailableOrder;
   isAssigned?: boolean;
+  onAssign?: () => void;
 }
 
 export const DraggableOrderCard: React.FC<DraggableOrderCardProps> = ({
   order,
   isAssigned = false,
+  onAssign,
 }) => {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: `order-${order.id}`,
@@ -49,6 +51,22 @@ export const DraggableOrderCard: React.FC<DraggableOrderCardProps> = ({
           <div className="text-xs font-medium text-primary mt-1">
             ${order.total.toLocaleString('es-CO')}
           </div>
+          {order.horario_preferente ? (
+            <div className="text-xs text-muted-foreground mt-1">A partir de las {String(order.horario_preferente).slice(0, 5)}</div>
+          ) : null}
+          {onAssign ? (
+            <button
+              type="button"
+              className="mt-2 text-xs font-semibold text-primary"
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                onAssign();
+              }}
+            >
+              Asignar +
+            </button>
+          ) : null}
           {isAssigned && (
             <Badge variant="secondary" className="text-xs mt-1">
               Asignado

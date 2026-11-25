@@ -1,6 +1,34 @@
 import { config } from '@/config/environment';
+import { falloHttp } from '@/lib/api-error';
+
+// Horario por día: claves "0" (domingo) a "6" (sábado), horas 0-23, inicio < fin
+export interface HorarioSlot {
+  inicio: number;
+  fin: number;
+}
+
+export type HorarioPorDia = Record<string, HorarioSlot>;
+
+export const HORARIO_POR_DIA_DEFAULT: HorarioPorDia = {
+  '0': { inicio: 9, fin: 18 },
+  '1': { inicio: 9, fin: 18 },
+  '2': { inicio: 9, fin: 18 },
+  '3': { inicio: 9, fin: 18 },
+  '4': { inicio: 9, fin: 18 },
+  '5': { inicio: 9, fin: 18 },
+  '6': { inicio: 9, fin: 14 },
+};
 
 // Tipos para las ciudades
+export interface CityWhatsapp {
+  connected: boolean;
+  inviteStatus: 'pending' | 'expired' | 'used' | 'connected' | 'none';
+  displayPhone: string | null;
+  coexistenceEnabled: boolean;
+  expiresAt: string | null;
+  inviteUrl?: string;
+}
+
 export interface City {
   id: number;
   nombre: string;
@@ -14,12 +42,43 @@ export interface City {
   manager: string;
   telefono: string;
   email_contacto: string;
+  numero_soporte_cliente?: string | null;
   notas_adicionales: string;
   max_pedidos_por_horario?: number;
+  horario_por_dia?: HorarioPorDia;
   dias_trabajo?: number[];
+  hora_inicio_entrega?: number;
+  hora_fin_entrega?: number;
   baja_logica: boolean;
   created_at: string;
   updated_at: string;
+  whatsapp?: CityWhatsapp;
+}
+
+export interface PointOfSale {
+  id: number;
+  city_id: number;
+  nombre: string;
+  direccion: string;
+  telefono: string | null;
+  encargado: string | null;
+  baja_logica: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreatePointOfSaleData {
+  nombre: string;
+  direccion: string;
+  telefono?: string;
+  encargado?: string;
+}
+
+export interface UpdatePointOfSaleData {
+  nombre?: string;
+  direccion?: string;
+  telefono?: string;
+  encargado?: string;
 }
 
 export interface CreateCityData {
@@ -34,9 +93,11 @@ export interface CreateCityData {
   manager: string;
   telefono: string;
   email_contacto: string;
+  numero_soporte_cliente?: string | null;
   notas_adicionales?: string;
   max_pedidos_por_horario?: number;
   dias_trabajo?: number[];
+  horario_por_dia?: HorarioPorDia;
 }
 
 export interface UpdateCityData {
@@ -51,9 +112,11 @@ export interface UpdateCityData {
   manager?: string;
   telefono?: string;
   email_contacto?: string;
+  numero_soporte_cliente?: string | null;
   notas_adicionales?: string;
   max_pedidos_por_horario?: number;
   dias_trabajo?: number[];
+  horario_por_dia?: HorarioPorDia;
 }
 
 export interface CitiesResponse {
@@ -73,6 +136,7 @@ export interface CityResponse {
   success: boolean;
   data: {
     city: City;
+    whatsapp?: CityWhatsapp;
   };
   message?: string;
 }
@@ -87,6 +151,31 @@ export interface CityStatsResponse {
       estado_inicial: string;
       count: number;
     }>;
+  };
+}
+
+export interface PointsOfSaleResponse {
+  success: boolean;
+  data: {
+    pointsOfSale: PointOfSale[];
+    total: number;
+  };
+}
+
+export interface PointOfSaleResponse {
+  success: boolean;
+  data: {
+    pointOfSale: PointOfSale;
+  };
+  message?: string;
+}
+
+export interface NumeroSoporteClienteResponse {
+  success: boolean;
+  data: {
+    ciudad_id: number;
+    nombre: string;
+    numero_soporte_cliente: string | null;
   };
 }
 
@@ -123,7 +212,7 @@ class CitiesService {
       authService.handleAuthError(response);
       
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
+      throw falloHttp(response, errorData);
     }
 
     return response.json();
@@ -146,6 +235,19 @@ class CitiesService {
   // Obtener una ciudad por ID
   async getCityById(id: number): Promise<CityResponse> {
     return this.makeRequest<CityResponse>(`${this.baseUrl}/${id}`);
+  }
+
+  // Obtener número de soporte al cliente por cityId o teléfono del cliente
+  async getNumeroSoporteCliente(
+    cityIdOrTelefono: number | string,
+    by: 'city' | 'telefono' = 'city'
+  ): Promise<NumeroSoporteClienteResponse> {
+    const url =
+      by === 'city'
+        ? `${this.baseUrl}/${cityIdOrTelefono}/numero-soporte-cliente`
+        : `${this.baseUrl}/telefono/${encodeURIComponent(String(cityIdOrTelefono))}/numero-soporte-cliente`;
+
+    return this.makeRequest<NumeroSoporteClienteResponse>(url);
   }
 
   // Crear una nueva ciudad
@@ -178,6 +280,22 @@ class CitiesService {
     });
   }
 
+  async getCityWhatsapp(id: number) {
+    return this.makeRequest<{ success: boolean; data: { whatsapp: CityWhatsapp } }>(`${this.baseUrl}/${id}/whatsapp`);
+  }
+
+  async regenerateCityWhatsapp(id: number) {
+    return this.makeRequest<{ success: boolean; data: { whatsapp: CityWhatsapp } }>(`${this.baseUrl}/${id}/whatsapp/invite`, {
+      method: 'POST',
+    });
+  }
+
+  async disconnectCityWhatsapp(id: number) {
+    return this.makeRequest<{ success: boolean; data: { whatsapp: CityWhatsapp } }>(`${this.baseUrl}/${id}/whatsapp/disconnect`, {
+      method: 'POST',
+    });
+  }
+
   // Obtener estadísticas de ciudades
   async getCityStats(): Promise<CityStatsResponse> {
     return this.makeRequest<CityStatsResponse>(`${this.baseUrl}/stats`);
@@ -186,6 +304,31 @@ class CitiesService {
   // Obtener ciudades activas
   async getActiveCities(): Promise<{ success: boolean; data: { cities: City[]; total: number } }> {
     return this.makeRequest<{ success: boolean; data: { cities: City[]; total: number } }>(`${this.baseUrl}/active`);
+  }
+
+  // Puntos de venta por ciudad
+  async getPointsOfSale(cityId: number): Promise<PointsOfSaleResponse> {
+    return this.makeRequest<PointsOfSaleResponse>(`${this.baseUrl}/${cityId}/points-of-sale`);
+  }
+
+  async createPointOfSale(cityId: number, data: CreatePointOfSaleData): Promise<PointOfSaleResponse> {
+    return this.makeRequest<PointOfSaleResponse>(`${this.baseUrl}/${cityId}/points-of-sale`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updatePointOfSale(cityId: number, pointId: number, data: UpdatePointOfSaleData): Promise<PointOfSaleResponse> {
+    return this.makeRequest<PointOfSaleResponse>(`${this.baseUrl}/${cityId}/points-of-sale/${pointId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deletePointOfSale(cityId: number, pointId: number): Promise<{ success: boolean; message: string }> {
+    return this.makeRequest<{ success: boolean; message: string }>(`${this.baseUrl}/${cityId}/points-of-sale/${pointId}`, {
+      method: 'DELETE',
+    });
   }
 }
 

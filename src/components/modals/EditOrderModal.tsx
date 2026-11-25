@@ -44,6 +44,8 @@ import PromotionSelector from "@/components/ui/PromotionSelector";
 import ClienteSelector from "@/components/ui/ClienteSelector";
 import { packagesService } from "@/services/packagesService";
 import type { Package } from "@/services/packagesService";
+import { mapsService, AVISO_SIN_UBICAR, direccionConCp } from "@/services/mapsService";
+import { ConfirmCloseDialog, useConfirmClose } from "@/components/ConfirmClose";
 
 interface ProductFormData {
   id?: number;
@@ -87,11 +89,13 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
     email_referencia: "",
     fkid_ciudad: "",
     direccion_entrega: "",
+    codigo_postal: "",
     fecha_entrega_estimada: "",
     metodo_pago: "efectivo" as "efectivo" | "tarjeta" | "transferencia" | "pago_movil",
     notas: "",
     codigo_promocion: ""
   });
+  const [baseline, setBaseline] = useState("");
 
   // Cargar datos iniciales
   useEffect(() => {
@@ -116,6 +120,7 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
         email_referencia: "",
         fkid_ciudad: "",
         direccion_entrega: "",
+        codigo_postal: "",
         fecha_entrega_estimada: "",
         metodo_pago: "efectivo",
         notas: "",
@@ -141,19 +146,24 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
   const loadOrderData = async () => {
     if (!order) return;
 
+    // La ciudad puede venir como FK o solo dentro de la relación incluida.
+    const ciudadId = order.fkid_ciudad ?? order.ciudad?.id;
+
     // Cargar datos del formulario
-    setFormData({
-      fkid_cliente: order.fkid_cliente.toString(),
+    const nextForm = {
+      fkid_cliente: order.fkid_cliente != null ? String(order.fkid_cliente) : "",
       telefono_referencia: order.telefono_referencia || "",
       email_referencia: order.email_referencia || "",
-      fkid_ciudad: order.fkid_ciudad.toString(),
+      fkid_ciudad: ciudadId != null ? String(ciudadId) : "",
       direccion_entrega: order.direccion_entrega,
+      codigo_postal: (order.direccion_entrega || "").match(/\b(\d{5})\b/)?.[1] || "",
       fecha_entrega_estimada: order.fecha_entrega_estimada ? 
         new Date(order.fecha_entrega_estimada).toISOString().slice(0, 16) : "",
       metodo_pago: order.metodo_pago,
       notas: order.notas || "",
-      codigo_promocion: ""
-    });
+      codigo_promocion: order.codigo_promocion || ""
+    };
+    setFormData(nextForm);
 
     // Cargar cliente seleccionado
     if (order.fkid_cliente) {
@@ -168,8 +178,9 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
     }
 
     // Cargar productos del pedido
+    let orderProducts: ProductFormData[] = [];
     if (order.productos && order.productos.length > 0) {
-      const orderProducts: ProductFormData[] = order.productos.map(product => ({
+      orderProducts = order.productos.map(product => ({
         id: product.id,
         fkid_producto: product.fkid_producto,
         cantidad: product.cantidad,
@@ -180,16 +191,12 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
           id: product.producto.id,
           nombre: product.producto.nombre,
           descripcion: product.producto.descripcion || "",
-          precio_venta: product.precio_unidad.toString(),
+          precio_venta: Number(product.precio_unidad) || 0,
           stock_inicial: 0,
-          categoria: { id: 0, nombre: "", descripcion: "" },
-          ciudad: { id: 0, nombre: "", departamento: "" },
-          peso: { id: 0, cantidad: "0", unidad_medida: "kg" },
-          proveedor: { id: 0, nombre: "", correo: "", telefono: "" },
-          sku: "",
-          costo_unitario: "0",
           stock_maximo: 0,
           stock_minimo: 0,
+          sku: "",
+          costo_unitario: 0,
           fkid_categoria: 0,
           fkid_ciudad: 0,
           fkid_peso: 0,
@@ -205,8 +212,9 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
     }
 
     // Cargar paquetes del pedido
+    let orderPackages: PackageFormData[] = [];
     if (order.paquetes && order.paquetes.length > 0) {
-      const orderPackages: PackageFormData[] = order.paquetes.map(pkg => ({
+      orderPackages = order.paquetes.map(pkg => ({
         id: pkg.id,
         fkid_paquete: pkg.fkid_paquete,
         cantidad: pkg.cantidad,
@@ -231,13 +239,8 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
       setPackages([]);
     }
 
-    // Cargar promoción si existe
-    if (order.codigo_promocion) {
-      // Aquí podrías cargar la promoción específica si es necesario
-      setSelectedPromotion(null);
-    } else {
-      setSelectedPromotion(null);
-    }
+    setSelectedPromotion(null);
+    setBaseline(JSON.stringify({ form: nextForm, products: orderProducts, packages: orderPackages }));
   };
 
   const addProduct = () => {
@@ -314,6 +317,7 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
         ...updatedProducts[index],
         fkid_producto: product.id,
         precio_unidad: Number(product.precio_venta || 0),
+        cantidad: Number(product.compra_minima) > 0 ? Number(product.compra_minima) : 1,
         producto: product
       };
     } else {
@@ -351,8 +355,11 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
         fkid_cliente: cliente.id.toString(),
         telefono_referencia: cliente.telefono,
         email_referencia: cliente.email || "",
-        fkid_ciudad: cliente.fkid_ciudad.toString(),
-        direccion_entrega: cliente.direccion_entrega || ""
+        fkid_ciudad: cliente.fkid_ciudad != null
+          ? String(cliente.fkid_ciudad)
+          : (cliente.ciudad?.id != null ? String(cliente.ciudad.id) : prev.fkid_ciudad),
+        direccion_entrega: cliente.direccion_entrega || "",
+        codigo_postal: (cliente.direccion_entrega || "").match(/\b(\d{5})\b/)?.[1] || prev.codigo_postal,
       }));
     } else {
       setSelectedCliente(null);
@@ -362,7 +369,8 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
         telefono_referencia: "",
         email_referencia: "",
         fkid_ciudad: "",
-        direccion_entrega: ""
+        direccion_entrega: "",
+        codigo_postal: "",
       }));
     }
   };
@@ -404,8 +412,20 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
       return;
     }
 
-    // Validar que haya al menos un producto o paquete
-    if (products.length === 0 && packages.length === 0) {
+    const codigoPostal = formData.codigo_postal.replace(/\D/g, "").slice(0, 5);
+    if (codigoPostal.length !== 5) {
+      toast({
+        title: "Código postal",
+        description: "Agrega el código postal de 5 dígitos para ubicar la casa.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const productosValidos = products.filter((p) => p.fkid_producto && p.producto);
+    const paquetesValidos = packages.filter((p) => p.fkid_paquete && p.paquete);
+
+    if (productosValidos.length === 0 && paquetesValidos.length === 0) {
       toast({
         title: "Error",
         description: "Debes agregar al menos un producto o paquete al pedido",
@@ -414,19 +434,8 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
       return;
     }
 
-    // Validar cada producto
-    for (let i = 0; i < products.length; i++) {
-      const product = products[i];
-      
-      if (!product.fkid_producto || !product.producto) {
-        toast({
-          title: "Error",
-          description: `El producto ${i + 1} debe tener un producto seleccionado`,
-          variant: "destructive"
-        });
-        return;
-      }
-      
+    for (let i = 0; i < productosValidos.length; i++) {
+      const product = productosValidos[i];
       if (product.cantidad <= 0) {
         toast({
           title: "Error",
@@ -435,8 +444,7 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
         });
         return;
       }
-      
-      if (Number(product.producto.precio_venta || 0) <= 0) {
+      if (Number(product.producto?.precio_venta || 0) <= 0) {
         toast({
           title: "Error",
           description: `El producto ${i + 1} no tiene un precio válido del inventario`,
@@ -446,19 +454,8 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
       }
     }
 
-    // Validar paquetes
-    for (let i = 0; i < packages.length; i++) {
-      const pkg = packages[i];
-      
-      if (!pkg.fkid_paquete || !pkg.paquete) {
-        toast({
-          title: "Error",
-          description: `El paquete ${i + 1} debe tener un paquete seleccionado`,
-          variant: "destructive"
-        });
-        return;
-      }
-
+    for (let i = 0; i < paquetesValidos.length; i++) {
+      const pkg = paquetesValidos[i];
       if (pkg.cantidad <= 0) {
         toast({
           title: "Error",
@@ -467,8 +464,7 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
         });
         return;
       }
-
-      if (pkg.precio_unidad <= 0) {
+      if (Number(pkg.paquete?.precio_final || pkg.precio_unidad || 0) <= 0) {
         toast({
           title: "Error",
           description: `El paquete ${i + 1} debe tener un precio válido`,
@@ -481,18 +477,35 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
     setLoading(true);
 
     try {
+      const ciudad = cities.find((row) => String(row.id) === formData.fkid_ciudad) || order.ciudad;
+      const direccion = direccionConCp(formData.direccion_entrega, codigoPostal);
+      try {
+        await mapsService.geocodeAddress(
+          direccion,
+          ciudad?.nombre,
+          undefined,
+          codigoPostal,
+          ciudad?.departamento,
+        );
+      } catch {
+        toast({
+          title: "Dirección sin ubicar",
+          description: `${AVISO_SIN_UBICAR} El pedido se guarda sin pin en el mapa.`,
+        });
+      }
+
       const updateData: UpdateOrderData = {
         fkid_cliente: parseInt(formData.fkid_cliente),
         telefono_referencia: formData.telefono_referencia || undefined,
         email_referencia: formData.email_referencia || undefined,
-        direccion_entrega: formData.direccion_entrega,
+        direccion_entrega: direccion,
         fkid_ciudad: parseInt(formData.fkid_ciudad),
         fecha_entrega_estimada: formData.fecha_entrega_estimada ? 
           new Date(formData.fecha_entrega_estimada).toISOString() : undefined,
         metodo_pago: formData.metodo_pago,
         notas: formData.notas || undefined,
         codigo_promocion: formData.codigo_promocion || undefined,
-        productos: products.map(product => ({
+        productos: productosValidos.map(product => ({
           id: product.id, // Incluir ID para actualización
           fkid_producto: product.fkid_producto,
           cantidad: product.cantidad,
@@ -500,11 +513,10 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
           descuento_producto: product.descuento_producto,
           notas_producto: product.notas_producto || undefined
         })),
-        paquetes: packages.map(pkg => ({
+        paquetes: paquetesValidos.map(pkg => ({
           id: pkg.id, // Incluir ID para actualización
           fkid_paquete: pkg.fkid_paquete,
           cantidad: pkg.cantidad,
-          precio_unidad: pkg.precio_unidad,
           descuento_paquete: pkg.descuento_paquete,
           notas_paquete: pkg.notas_paquete || undefined
         }))
@@ -532,13 +544,38 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
   };
 
   const handleClose = () => {
-    onOpenChange(false);
+    requestClose();
   };
+
+  const cityOptions = cities.map((city) => ({
+    id: city.id,
+    nombre: city.nombre,
+    departamento: city.departamento,
+  }));
+  const savedCity = order?.ciudad;
+  if (
+    savedCity &&
+    formData.fkid_ciudad &&
+    String(savedCity.id) === formData.fkid_ciudad &&
+    !cityOptions.some((city) => String(city.id) === formData.fkid_ciudad)
+  ) {
+    cityOptions.unshift({
+      id: savedCity.id,
+      nombre: savedCity.nombre,
+      departamento: savedCity.departamento || "",
+    });
+  }
+
+  const { ask, setAsk, requestClose, confirm, onOpenChange: guardClose } = useConfirmClose(
+    () => onOpenChange(false),
+    JSON.stringify({ form: formData, products, packages }) !== baseline,
+    loading,
+  );
 
   if (!order) return null;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={guardClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -618,14 +655,22 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
 
                 <div className="space-y-2">
                   <Label htmlFor="fkid_ciudad">Ciudad *</Label>
-                  <Select value={formData.fkid_ciudad} onValueChange={(value) => setFormData(prev => ({ ...prev, fkid_ciudad: value }))}>
+                  <Select
+                    value={formData.fkid_ciudad || undefined}
+                    onValueChange={(value) => {
+                      // El select nativo del formulario emite "" mientras las opciones
+                      // aún no existen y eso borraba la ciudad ya guardada en el pedido.
+                      if (!value) return;
+                      setFormData(prev => ({ ...prev, fkid_ciudad: value }));
+                    }}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Selecciona una ciudad" />
                     </SelectTrigger>
                     <SelectContent>
-                      {cities.map((city) => (
+                      {cityOptions.map((city) => (
                         <SelectItem key={city.id} value={city.id.toString()}>
-                          {city.nombre} - {city.departamento}
+                          {city.departamento ? `${city.nombre} - ${city.departamento}` : city.nombre}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -645,6 +690,17 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
                     placeholder="Dirección completa de entrega"
                   />
                 </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="codigo_postal">Código postal *</Label>
+                <Input
+                  id="codigo_postal"
+                  inputMode="numeric"
+                  maxLength={5}
+                  value={formData.codigo_postal}
+                  onChange={(e) => setFormData(prev => ({ ...prev, codigo_postal: e.target.value.replace(/\D/g, "").slice(0, 5) }))}
+                  placeholder="34000"
+                />
               </div>
             </CardContent>
           </Card>
@@ -684,6 +740,7 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
                       <SelectItem value="tarjeta">Tarjeta</SelectItem>
                       <SelectItem value="transferencia">Transferencia</SelectItem>
                       <SelectItem value="pago_movil">Pago Móvil</SelectItem>
+                      <SelectItem value="mixto">Mixto</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -719,8 +776,10 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
             </CardHeader>
             <CardContent>
               <PromotionSelector
-                selectedPromotion={selectedPromotion}
+                value={formData.codigo_promocion || undefined}
                 onValueChange={handlePromotionSelect}
+                placeholder="Buscar y seleccionar promoción..."
+                disabled={loading}
               />
               {selectedPromotion && (
                 <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
@@ -730,7 +789,9 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
                       <p className="text-sm text-green-600">Código: {selectedPromotion.codigo}</p>
                     </div>
                     <Badge variant="secondary" className="bg-green-100 text-green-800">
-                      {selectedPromotion.tipo === 'porcentaje' ? `${selectedPromotion.valor}%` : `$${selectedPromotion.valor}`}
+                      {selectedPromotion.tipo_promocion === 'porcentaje'
+                        ? `${selectedPromotion.valor_descuento}%`
+                        : `$${selectedPromotion.valor_descuento}`}
                     </Badge>
                   </div>
                 </div>
@@ -746,7 +807,7 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
                 Productos
               </CardTitle>
               <CardDescription>
-                Agrega los productos que incluye este pedido
+                Sueltos, si los hay. Un combo basta para el pedido.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -857,7 +918,7 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
                     Paquetes
                   </CardTitle>
                   <CardDescription>
-                    Agrega paquetes al pedido (opcional)
+                    Se cobra el precio del combo, no la suma de las piezas.
                   </CardDescription>
                 </div>
                 <Button
@@ -1021,7 +1082,7 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
                 {selectedPromotion && (
                   <div className="flex justify-between text-green-600">
                     <span>Descuento ({selectedPromotion.nombre}):</span>
-                    <span>-${(calculateSubtotal() * (selectedPromotion.tipo === 'porcentaje' ? selectedPromotion.valor / 100 : selectedPromotion.valor / calculateSubtotal())).toFixed(2)}</span>
+                    <span>-${(calculateSubtotal() * (selectedPromotion.tipo_promocion === 'porcentaje' ? selectedPromotion.valor_descuento / 100 : (calculateSubtotal() > 0 ? selectedPromotion.valor_descuento / calculateSubtotal() : 0))).toFixed(2)}</span>
                   </div>
                 )}
                 <div className="flex justify-between font-bold text-lg border-t pt-2">
@@ -1051,6 +1112,7 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
           </div>
         </form>
       </DialogContent>
+      <ConfirmCloseDialog open={ask} onOpenChange={setAsk} onConfirm={confirm} />
     </Dialog>
   );
 };

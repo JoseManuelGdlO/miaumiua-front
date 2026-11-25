@@ -1,4 +1,6 @@
+import type { NavigateFunction } from 'react-router-dom';
 import { config } from '../config/environment';
+import { falloHttp } from '@/lib/api-error';
 import { authService } from './authService';
 
 // Interfaces para las notificaciones del backend
@@ -12,9 +14,12 @@ export interface BackendNotification {
   hora_creacion: string; // HH:mm:ss
   datos: {
     type?: 'stock' | 'order' | 'promotion' | 'route' | 'error' | 'conversation';
+    tipo?: string;
     actionUrl?: string;
     errorDetails?: string;
     conversationId?: string | number;
+    conversacionId?: string | number;
+    accion?: NotificationAction;
     [key: string]: any;
   } | null;
   created_at: string;
@@ -116,19 +121,106 @@ export interface UpdateNotificationData {
   datos?: any;
 }
 
+export interface NotificationAction {
+  tipo: string;
+  conversacionId?: string | number;
+  ruta?: string;
+}
+
 // Interfaz para el frontend (mapeada desde el backend)
 export interface Notification {
   id: string;
   type: 'stock' | 'order' | 'promotion' | 'route' | 'error' | 'conversation';
+  tipo?: string;
   title: string;
   message: string;
   timestamp: string;
   priority: 'high' | 'medium' | 'low' | 'urgent';
   read: boolean;
+  preserveUnread?: boolean;
   actionUrl?: string;
+  action?: NotificationAction;
   errorDetails?: string;
   conversationId?: string;
 }
+
+export const checkInValidationPath = (id: string | number): string =>
+  `/dashboard/call-center?tab=checkin&solicitud=${id}`;
+
+export const colaSolicitudPath = (id: string | number): string =>
+  `/dashboard/call-center?tab=operacion&aviso=${id}`;
+
+export const ORIGEN_COLA: Record<string, string> = {
+  check_in: "Check-in",
+  soporte: "Soporte",
+  llamada_cliente: "Llamada al cliente",
+  cierre_dia: "Cierre de día",
+};
+
+export const esAvisoDeCola = (tipo?: string) => Boolean(tipo && ORIGEN_COLA[tipo]);
+
+const CONVERSATION_DETAIL_PATH = '/dashboard/conversations';
+
+export const getConversationNavigationPath = (conversacionId: string | number): string =>
+  `${CONVERSATION_DETAIL_PATH}/${conversacionId}`;
+
+export const resolveNotificationNavigationPath = (notification: Notification): string | undefined => {
+  if (notification.tipo === 'check_in') {
+    return checkInValidationPath(notification.id);
+  }
+
+  if (notification.tipo === 'cierre_dia') {
+    return '/dashboard/call-center?tab=checkout';
+  }
+
+  if (notification.tipo === 'soporte') {
+    return `/dashboard/call-center?tab=soporte&aviso=${notification.id}`;
+  }
+
+  if (notification.tipo === 'llamada_cliente') {
+    return `/dashboard/call-center?tab=despacho&aviso=${notification.id}`;
+  }
+
+  if (esAvisoDeCola(notification.tipo)) {
+    return colaSolicitudPath(notification.id);
+  }
+
+  const accion = notification.action;
+  if (accion?.tipo === 'ir_conversacion') {
+    const conversacionId = accion.conversacionId ?? notification.conversationId;
+    if (conversacionId != null) {
+      return getConversationNavigationPath(conversacionId);
+    }
+
+    const rutaMatch = accion.ruta?.match(/\/conversaciones\/(\d+)/);
+    if (rutaMatch) {
+      return getConversationNavigationPath(rutaMatch[1]);
+    }
+  }
+
+  return notification.actionUrl;
+};
+
+export const handleNotificationNavigation = (
+  notification: Notification,
+  navigate: NavigateFunction,
+  options?: {
+    onClose?: () => void;
+    markAsRead?: (id: string) => void;
+  }
+): boolean => {
+  const path = resolveNotificationNavigationPath(notification);
+  if (!path) {
+    return false;
+  }
+
+  options?.onClose?.();
+  if (!notification.read && !notification.preserveUnread) {
+    options?.markAsRead?.(notification.id);
+  }
+  navigate(path);
+  return true;
+};
 
 // Interfaz para actividades recientes (formato diferente del endpoint /actividad-reciente)
 export interface RecentActivity {
@@ -193,16 +285,48 @@ class NotificationsService {
           authService.handleAuthError(response);
           
           const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
+          throw falloHttp(response, errorData);
         }
         return response.json();
       });
+  }
+
+  private resolveNotificationType(
+    datos: NonNullable<BackendNotification['datos']>
+  ): Notification['type'] {
+    if (datos.type) {
+      return datos.type;
+    }
+
+    if (
+      datos.tipo === 'modificacion_pedido_activo' ||
+      datos.accion?.tipo === 'ir_conversacion' ||
+      datos.conversacionId != null
+    ) {
+      return 'conversation';
+    }
+
+    return 'order';
+  }
+
+  private resolveConversationId(
+    datos: NonNullable<BackendNotification['datos']>
+  ): string | undefined {
+    const conversacionId =
+      datos.accion?.conversacionId ??
+      datos.conversacionId ??
+      datos.conversationId;
+
+    return conversacionId != null ? conversacionId.toString() : undefined;
   }
 
   // Mapear notificación del backend al formato del frontend
   private mapNotification(backendNotif: BackendNotification): Notification {
     const datos = backendNotif.datos || {};
     const fechaHora = `${backendNotif.fecha_creacion}T${backendNotif.hora_creacion}`;
+    const conversationId = this.resolveConversationId(datos);
+    const repartidorNombre = typeof datos.repartidor_nombre === 'string' ? datos.repartidor_nombre.trim() : '';
+    const isCheckIn = datos.tipo === 'check_in';
     
     // Mapear prioridad del backend al frontend
     const priorityMap: Record<string, 'high' | 'medium' | 'low' | 'urgent'> = {
@@ -212,18 +336,33 @@ class NotificationsService {
       'urgente': 'urgent'
     };
 
-    return {
+    const notification: Notification = {
       id: backendNotif.id.toString(),
-      type: datos.type || 'order',
-      title: backendNotif.nombre,
-      message: backendNotif.descripcion || '',
+      type: this.resolveNotificationType(datos),
+      tipo: datos.tipo,
+      title: isCheckIn && repartidorNombre && !backendNotif.nombre.includes(repartidorNombre)
+        ? `Validar carga de ${repartidorNombre}`
+        : backendNotif.nombre,
+      message: backendNotif.descripcion || repartidorNombre,
       timestamp: fechaHora,
       priority: priorityMap[backendNotif.prioridad] || 'medium',
       read: backendNotif.leida,
-      actionUrl: datos.actionUrl,
+      preserveUnread: isCheckIn,
+      actionUrl: isCheckIn ? checkInValidationPath(backendNotif.id) : datos.actionUrl,
+      action: datos.accion,
       errorDetails: datos.errorDetails,
-      conversationId: datos.conversationId?.toString()
+      conversationId,
     };
+
+    if (!notification.actionUrl) {
+      notification.actionUrl = resolveNotificationNavigationPath(notification);
+    }
+
+    return notification;
+  }
+
+  mapFromBackend(backendNotif: BackendNotification): Notification {
+    return this.mapNotification(backendNotif);
   }
 
   // Obtener todas las notificaciones con paginación y filtros
@@ -286,9 +425,17 @@ class NotificationsService {
     return this.makeRequest<NotificationStatsResponse>('/notificaciones/stats');
   }
 
-  // Obtener KPIs del dashboard
-  async getDashboardKPIs(): Promise<DashboardKPIsResponse> {
-    return this.makeRequest<DashboardKPIsResponse>('/notificaciones/dashboard-kpis');
+  // Obtener KPIs del dashboard (opcional: filtrar por mes y año)
+  async getDashboardKPIs(anio?: number, mes?: number): Promise<DashboardKPIsResponse> {
+    const params = new URLSearchParams();
+    if (anio != null && mes != null) {
+      params.append('anio', String(anio));
+      params.append('mes', String(mes));
+    }
+    const query = params.toString();
+    return this.makeRequest<DashboardKPIsResponse>(
+      `/notificaciones/dashboard-kpis${query ? `?${query}` : ''}`
+    );
   }
 
   // Crear nueva notificación

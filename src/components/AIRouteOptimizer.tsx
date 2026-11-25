@@ -1,18 +1,42 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Sparkles, MapPin, Truck, Route } from 'lucide-react';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { mapsService } from '@/services/mapsService';
+import { AlertCircle, Loader2, Sparkles, MapPin, Truck, Route } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { mapsService, AVISO_SIN_UBICAR } from '@/services/mapsService';
 import { compareOneVsTwoDrivers, type Location } from '@/utils/vrpSolver';
 
 // Utilidades para cálculo de distancias
 interface Coordinates {
   lat: number;
   lng: number;
+}
+
+// Extraer partes útiles de una dirección completa:
+// - streetAddress: calle y número
+// - colonia: colonia/barrio si se puede inferir
+// - codigo_postal: primer CP de 5 dígitos que aparezca
+function parseAddressParts(rawAddress: string) {
+  const raw = rawAddress || '';
+
+  // Buscar código postal mexicano de 5 dígitos
+  const cpMatch = raw.match(/\b(\d{5})\b/);
+  const codigo_postal = cpMatch ? cpMatch[1] : undefined;
+
+  // Partir por comas asumiendo formato común:
+  // "Calle y número, Colonia, Ciudad, CP" (puede variar)
+  const parts = raw
+    .split(',')
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  const streetAddress = parts[0] ?? raw;
+  const colonia = parts.length > 1 ? parts[1] : undefined;
+
+  return { streetAddress, colonia, codigo_postal };
 }
 
 // Calcular distancia haversine entre dos puntos (en km)
@@ -29,18 +53,70 @@ function haversineDistance(coord1: Coordinates, coord2: Coordinates): number {
 }
 
 // Geocodificar una dirección usando el backend
-async function geocodeAddress(address: string, estado?: string, ciudad?: string): Promise<Coordinates | null> {
-  try {
-    const response = await mapsService.geocodeAddress(address, estado, ciudad);
-    
-    if (response.success && response.data) {
-      return { lat: response.data.lat, lng: response.data.lng };
-    }
-    return null;
-  } catch (error) {
-    console.error('Error geocodificando dirección:', error);
+function estadoParaGeo(nombre?: string, departamento?: string) {
+  const dep = String(departamento || "").trim();
+  const nom = String(nombre || "").trim();
+  if (!dep || /bodega|almacen|almacén|sucursal/i.test(dep)) return nom;
+  return dep;
+}
+
+function esCentroCiudad(coords?: Coordinates | null) {
+  if (!coords) return false;
+  return Math.abs(coords.lat - 24.0277) < 0.0003 && Math.abs(coords.lng + 104.6532) < 0.0003;
+}
+
+function limpiarCalle(texto: string) {
+  return String(texto || "")
+    .replace(/#/g, " ")
+    .replace(/\b(chedraui|walmart|soriana|bodega aurrera|colonia|col\.|local|-?sa\d+)\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+async function geocodeAddress(
+  address: string,
+  ciudad?: string,
+  colonia?: string,
+  codigo_postal?: string,
+  estado?: string
+): Promise<(Coordinates & { aproximado?: boolean }) | null> {
+  const trimmedAddress = address?.trim();
+  if (!trimmedAddress) {
     return null;
   }
+
+  try {
+    const response = await mapsService.geocodeAddress(
+      trimmedAddress,
+      ciudad,
+      colonia,
+      codigo_postal,
+      estado
+    );
+    
+    if (response.success && response.data) {
+      return { lat: response.data.lat, lng: response.data.lng, aproximado: response.data.aproximado };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+async function ubicarDireccion(opts: {
+  address: string;
+  ciudad?: string;
+  colonia?: string;
+  codigo_postal?: string;
+  estado?: string;
+}) {
+  const calle = limpiarCalle(opts.address);
+  const estado = opts.estado;
+  const ciudad = opts.ciudad;
+  const hit = await geocodeAddress(calle, ciudad, opts.colonia, opts.codigo_postal, estado)
+    || await geocodeAddress(opts.address, ciudad, opts.colonia, opts.codigo_postal, estado);
+  if (!hit || hit.aproximado || esCentroCiudad(hit)) return null;
+  return hit;
 }
 
 // Calcular matriz de distancias usando el backend
@@ -273,8 +349,11 @@ interface AIRouteOptimizerProps {
   };
   date: string;
   driversAvailable: number;
-  onRoutesGenerated: (routes: { [key: string]: Order[] }) => void;
+  drivers?: { id: number; nombre_completo: string }[];
+  onRoutesGenerated: (routes: { [key: string]: Order[] }, opts?: { driverId?: number }) => void;
 }
+
+const UN_SOLO_HASTA = 8;
 
 const AIRouteOptimizer: React.FC<AIRouteOptimizerProps> = ({
   orders,
@@ -282,9 +361,12 @@ const AIRouteOptimizer: React.FC<AIRouteOptimizerProps> = ({
   cityInfo,
   date,
   driversAvailable,
+  drivers = [],
   onRoutesGenerated
 }) => {
   const [isOptimizing, setIsOptimizing] = useState(false);
+  const [driverId, setDriverId] = useState("auto");
+  const [error, setError] = useState("");
   const [lastOptimization, setLastOptimization] = useState<{
     routes: { [key: string]: Order[] };
     summary: string;
@@ -292,53 +374,58 @@ const AIRouteOptimizer: React.FC<AIRouteOptimizerProps> = ({
 
   const optimizeRoutes = async () => {
     if (orders.length === 0) {
-      alert('No hay pedidos para optimizar en esta ciudad/fecha');
+      setError('No hay pedidos para optimizar en esta ciudad/fecha');
+      return;
+    }
+
+    if (driversAvailable < 1) {
+      setError('No hay repartidores disponibles. Agrega al menos uno antes de optimizar.');
       return;
     }
 
     if (!cityInfo || !cityInfo.direccion_operaciones) {
-      alert('No se encontró la dirección de la bodega para esta ciudad');
+      setError('No se encontró la dirección de la bodega para esta ciudad');
       return;
     }
 
+    setError("");
     setIsOptimizing(true);
 
     try {
       // Paso 0: Geocodificar la dirección de la bodega (punto de inicio)
-      console.log('Geocodificando dirección de bodega:', cityInfo.direccion_operaciones);
-      const warehouseCoords = await geocodeAddress(
-        cityInfo.direccion_operaciones,
-        cityInfo.departamento,
-        cityInfo.nombre
-      );
+      const estado = estadoParaGeo(cityInfo.nombre, cityInfo.departamento);
+      const { streetAddress } = parseAddressParts(cityInfo.direccion_operaciones);
+      const warehouseCoords = await ubicarDireccion({
+        address: streetAddress || cityInfo.direccion_operaciones,
+        ciudad: cityInfo.nombre,
+        estado,
+      });
 
       if (!warehouseCoords) {
-        throw new Error('No se pudo geocodificar la dirección de la bodega');
+        throw new Error(`No se pudo ubicar la bodega (${cityInfo.direccion_operaciones}, ${cityInfo.nombre}). Revisa ese dato en Ciudades.`);
       }
 
-      console.log('Coordenadas de bodega:', warehouseCoords);
-
-      // Paso 1: Geocodificar direcciones de pedidos para obtener coordenadas
       const ordersWithCoordinates: Order[] = [];
-      
+      const sinUbicar: string[] = [];
+
       for (const order of orders) {
         let coords = order.coordinates;
-        
-        // Si no tiene coordenadas o son (0,0), geocodificar
-        if (!coords || (coords.lat === 0 && coords.lng === 0)) {
-          const geocoded = await geocodeAddress(
-            order.address,
-            order.estado, // Estado/departamento
-            order.ciudad  // Nombre de la ciudad
-          );
-          if (geocoded) {
-            coords = geocoded;
-          } else {
-            console.warn(`No se pudo geocodificar: ${order.address}, ${order.estado || ''}, ${order.ciudad || ''}`);
-            continue;
-          }
+        if (!coords || (coords.lat === 0 && coords.lng === 0) || esCentroCiudad(coords)) {
+          const { streetAddress, colonia, codigo_postal } = parseAddressParts(order.address);
+          const geocoded = await ubicarDireccion({
+            address: streetAddress || order.address,
+            ciudad: order.ciudad || cityInfo.nombre,
+            colonia,
+            codigo_postal,
+            estado: estadoParaGeo(order.ciudad || cityInfo.nombre, order.estado),
+          });
+          coords = geocoded || undefined;
         }
-        
+        if (!coords || esCentroCiudad(coords)) {
+          sinUbicar.push(order.orderNumber || String(order.id));
+          continue;
+        }
+
         ordersWithCoordinates.push({
           ...order,
           coordinates: coords
@@ -346,7 +433,9 @@ const AIRouteOptimizer: React.FC<AIRouteOptimizerProps> = ({
       }
 
       if (ordersWithCoordinates.length === 0) {
-        throw new Error('No se pudieron obtener coordenadas para los pedidos');
+        throw new Error(sinUbicar.length
+          ? `${AVISO_SIN_UBICAR} Pedidos: ${sinUbicar.join(', ')}.`
+          : 'No se pudieron obtener coordenadas para los pedidos');
       }
 
       // Paso 2: Construir arreglo de ubicaciones para el solver VRP
@@ -371,7 +460,8 @@ const AIRouteOptimizer: React.FC<AIRouteOptimizerProps> = ({
 
       // Determinar cuántos repartidores usar realmente según disponibilidad
       const recommendedDrivers = comparison.recommendation === '2 drivers' ? 2 : 1;
-      const driversToUse = Math.min(driversAvailable, recommendedDrivers);
+      const forceOne = ordersWithCoordinates.length <= UN_SOLO_HASTA || driverId !== 'auto';
+      const driversToUse = forceOne ? 1 : Math.min(driversAvailable, recommendedDrivers);
 
       if (comparison.recommendation === '2 drivers' && driversAvailable < 2) {
         console.warn('[AI ROUTES] La IA recomienda 2 repartidores, pero solo hay 1 disponible. Se usará 1 repartidor.');
@@ -426,18 +516,29 @@ const AIRouteOptimizer: React.FC<AIRouteOptimizerProps> = ({
       const summary =
         `Se optimizaron ${totalOrdersOptimized} pedidos usando ${driversToUse} repartidor(es). ` +
         `Recomendación de IA: ${comparison.recommendation}. ` +
-        `Motivo: ${comparison.reason}`;
+        `Motivo: ${comparison.reason}` +
+        (sinUbicar.length
+          ? ` ${sinUbicar.length} pedido(s) no se ubicaron (${sinUbicar.join(', ')}). ${AVISO_SIN_UBICAR}`
+          : '');
 
       setLastOptimization({
         routes: optimizedRoutes,
         summary: summary
       });
 
-      onRoutesGenerated(optimizedRoutes);
+      const chosenId = Number(driverId);
+      const assigned = driverId !== 'auto'
+        && Number.isFinite(chosenId)
+        && drivers.some((driver) => driver.id === chosenId);
+      if (assigned) {
+        onRoutesGenerated(optimizedRoutes, { driverId: chosenId });
+      } else {
+        onRoutesGenerated(optimizedRoutes);
+      }
 
     } catch (error) {
       console.error('Error optimizando rutas:', error);
-      alert(`Error al optimizar rutas: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+      setError(`Error al optimizar rutas: ${error instanceof Error ? error.message : 'Error desconocido'}`);
     } finally {
       setIsOptimizing(false);
     }
@@ -473,12 +574,39 @@ const AIRouteOptimizer: React.FC<AIRouteOptimizerProps> = ({
           </div>
         </div>
 
+        <div className="space-y-2">
+          <Label>Repartidor</Label>
+          <Select value={driverId} onValueChange={setDriverId}>
+            <SelectTrigger><SelectValue placeholder="Sin asignar" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="auto">Sin asignar · elige en la tarjeta</SelectItem>
+              {drivers.map((driver) => (
+                <SelectItem key={driver.id} value={String(driver.id)}>{driver.nombre_completo}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">Si no eliges uno, la ruta queda sin repartidor. 8 pedidos o menos salen en una sola ruta.</p>
+        </div>
+        {error ? (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>No se pudo optimizar</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        ) : null}
+
         {/* Optimization Button */}
-        <Button 
-          onClick={optimizeRoutes} 
-          disabled={orders.length === 0 || driversAvailable === 0 || isOptimizing}
+        <Button
+          onClick={optimizeRoutes}
+          disabled={orders.length === 0 || driversAvailable < 1 || isOptimizing}
           className="w-full gap-2"
-          title={driversAvailable === 0 ? "No hay repartidores disponibles" : orders.length === 0 ? "No hay pedidos para optimizar" : ""}
+          title={
+            orders.length === 0
+              ? "No hay pedidos para optimizar"
+              : driversAvailable < 1
+                ? "No hay repartidores disponibles"
+                : ""
+          }
         >
           {isOptimizing ? (
             <>
@@ -521,11 +649,11 @@ const AIRouteOptimizer: React.FC<AIRouteOptimizerProps> = ({
 
         {/* Warning if no drivers */}
         {driversAvailable === 0 && (
-          <Alert className="border-warning/20 bg-warning/5">
+          <Alert>
             <Truck className="h-4 w-4" />
+            <AlertTitle>Sin repartidores</AlertTitle>
             <AlertDescription className="text-sm">
-              <strong>Advertencia:</strong> No hay repartidores disponibles. Debe haber al menos un repartidor 
-              disponible para crear rutas optimizadas.
+              No hay repartidores disponibles. Agrega al menos uno antes de optimizar.
             </AlertDescription>
           </Alert>
         )}

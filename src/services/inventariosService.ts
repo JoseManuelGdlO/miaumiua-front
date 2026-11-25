@@ -1,4 +1,5 @@
 import { config } from '../config/environment';
+import { falloHttp, mensajeDeError } from '@/lib/api-error';
 
 // Interfaces para Inventarios
 export interface Inventario {
@@ -10,12 +11,17 @@ export interface Inventario {
   stock_minimo: number;
   stock_maximo: number;
   precio_venta: number;
+  precio_distribuidor?: number | null;
+  umbral_mayoreo?: number | null;
+  descuento_proveedor_pct?: number | null;
   costo_unitario: number;
   fkid_peso: number;
   fkid_categoria: number;
   fkid_ciudad: number;
   fkid_proveedor: number;
+  compra_minima?: number | null;
   baja_logica: boolean;
+  imagen_url?: string | null;
   created_at: string;
   updated_at: string;
   peso?: Peso;
@@ -60,11 +66,15 @@ export interface CreateInventarioData {
   stock_minimo: number;
   stock_maximo: number;
   precio_venta: number;
+  precio_distribuidor?: number | null;
+  umbral_mayoreo?: number | null;
+  descuento_proveedor_pct?: number | null;
   costo_unitario: number;
   fkid_peso: number;
   fkid_categoria: number;
   fkid_ciudad: number;
   fkid_proveedor: number;
+  compra_minima?: number | null;
 }
 
 export interface UpdateInventarioData {
@@ -75,11 +85,15 @@ export interface UpdateInventarioData {
   stock_minimo?: number;
   stock_maximo?: number;
   precio_venta?: number;
+  precio_distribuidor?: number | null;
+  umbral_mayoreo?: number | null;
+  descuento_proveedor_pct?: number | null;
   costo_unitario?: number;
   fkid_peso?: number;
   fkid_categoria?: number;
   fkid_ciudad?: number;
   fkid_proveedor?: number;
+  compra_minima?: number | null;
 }
 
 export interface InventariosResponse {
@@ -105,14 +119,13 @@ export interface InventarioResponse {
 export interface InventarioStatsResponse {
   success: boolean;
   data: {
-    total_inventarios: number;
-    active_inventarios: number;
-    low_stock_inventarios: number;
-    total_value: number;
-    inventarios_by_category: Array<{
-      categoria: string;
-      total: number;
-    }>;
+    totalInventarios: number;
+    inventariosActivos: number;
+    inventariosInactivos: number;
+    inventariosStockBajo: number;
+    totalStock: number;
+    valorTotalInventario: number;
+    precioPromedio: number;
   };
 }
 
@@ -128,6 +141,19 @@ export interface InventariosQueryParams {
   search?: string;
   min_price?: number;
   max_price?: number;
+  departamento?: string;
+}
+
+export function precioLista(
+  inv: Pick<Inventario, 'precio_venta' | 'precio_distribuidor' | 'umbral_mayoreo'> | null | undefined,
+  { es_distribuidor, cantidad }: { es_distribuidor?: boolean; cantidad?: number } = {},
+) {
+  const venta = Number(inv?.precio_venta) || 0;
+  const dist = Number(inv?.precio_distribuidor) || venta;
+  if (es_distribuidor) return dist;
+  const umbral = Number(inv?.umbral_mayoreo) || 0;
+  if (umbral > 0 && Number(cantidad) >= umbral) return dist;
+  return venta;
 }
 
 class InventariosService {
@@ -147,14 +173,14 @@ class InventariosService {
       },
     };
 
-    return fetch(`${config.apiBaseUrl}${endpoint}`, requestConfig)
+    return fetch(`${config.apiBaseUrl}${endpoint}`, { ...requestConfig, cache: "no-store" })
       .then(async response => {
         if (!response.ok) {
           // Manejar errores de autenticación (401/403) y desloguear automáticamente
           const { authService } = await import('./authService');
           authService.handleAuthError(response);
           
-          throw new Error(`Error ${response.status}: ${response.statusText}`);
+          throw new Error(await mensajeDeError(response));
         }
         return response.json();
       });
@@ -174,6 +200,7 @@ class InventariosService {
     if (params.search) queryParams.append('search', params.search);
     if (params.min_price) queryParams.append('min_price', params.min_price.toString());
     if (params.max_price) queryParams.append('max_price', params.max_price.toString());
+    if (params.departamento) queryParams.append('departamento', params.departamento);
 
     const queryString = queryParams.toString();
     const endpoint = `/inventarios${queryString ? `?${queryString}` : ''}`;
@@ -209,6 +236,22 @@ class InventariosService {
     return this.makeRequest<{ success: boolean; message: string }>(`/inventarios/${id}/restore`, {
       method: 'PATCH',
     });
+  }
+
+  async uploadInventarioImage(id: number, file: File): Promise<InventarioResponse> {
+    const token = localStorage.getItem('auth_token');
+    if (!token) throw new Error('Token de acceso requerido');
+    const formData = new FormData();
+    formData.append('imagen', file);
+    const response = await fetch(`${config.apiBaseUrl}/inventarios/${id}/imagen`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+      body: formData,
+    });
+    if (!response.ok) {
+      throw falloHttp(response, await response.json().catch(() => null));
+    }
+    return response.json();
   }
 
   async getInventarioStats(): Promise<InventarioStatsResponse> {

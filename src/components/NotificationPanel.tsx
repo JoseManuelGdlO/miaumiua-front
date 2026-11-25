@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { notificationsService, Notification } from "@/services/notificationsService";
+import { notificationsService, Notification, handleNotificationNavigation, ORIGEN_COLA } from "@/services/notificationsService";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -18,31 +18,51 @@ import {
   Tag, 
   Route, 
   X, 
-  Clock,
-  MapPin,
-  TrendingDown,
   MessageCircle,
   XCircle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
+import { useNotificationStream } from "@/hooks/useNotificationStream";
 
 const NotificationPanel = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const openRef = useRef(open);
+  openRef.current = open;
+  const stream = useNotificationStream();
 
-  // Cargar notificaciones recientes del backend
   useEffect(() => {
     loadNotifications();
-    
-    // Recargar cada 60 segundos para mantener las notificaciones actualizadas
-    const interval = setInterval(() => {
-      loadNotifications();
-    }, 60000); // 60 segundos
-    
-    return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (!stream) return;
+
+    return stream.subscribe((event) => {
+      if (event.type === "reconnect") {
+        loadNotifications();
+        return;
+      }
+
+      const mapped = notificationsService.mapFromBackend(event.payload);
+      setNotifications((prev) => {
+        const withoutDup = prev.filter((item) => item.id !== mapped.id);
+        return [mapped, ...withoutDup].slice(0, 10);
+      });
+
+      if (!openRef.current && !mapped.read) {
+        toast({
+          title: mapped.title,
+          description: mapped.message || undefined,
+        });
+      }
+    });
+  }, [stream, toast]);
 
   const loadNotifications = async () => {
     try {
@@ -114,6 +134,7 @@ const NotificationPanel = () => {
   const markAsRead = async (id: string) => {
     try {
       await notificationsService.markAsRead(parseInt(id));
+      stream?.dismissAviso(id);
       setNotifications(prev =>
         prev.map(n => n.id === id ? { ...n, read: true } : n)
       );
@@ -125,8 +146,9 @@ const NotificationPanel = () => {
   const markAllAsRead = async () => {
     try {
       await notificationsService.markAllAsRead();
+      stream?.dismissAvisos((aviso) => aviso.origen === "check_in");
       setNotifications(prev =>
-        prev.map(n => ({ ...n, read: true }))
+        prev.map(n => n.preserveUnread ? n : { ...n, read: true })
       );
     } catch (error) {
       console.error('Error al marcar todas como leídas:', error);
@@ -134,11 +156,36 @@ const NotificationPanel = () => {
   };
 
   const removeNotification = async (id: string) => {
+    if (!window.confirm("¿Estás seguro de que deseas eliminar esta notificación?")) return;
+    setDeletingId(id);
     try {
       await notificationsService.deleteNotification(parseInt(id));
+      stream?.dismissAviso(id);
       setNotifications(prev => prev.filter(n => n.id !== id));
+      toast({
+        title: "Notificación eliminada",
+        description: "La notificación se eliminó correctamente.",
+      });
     } catch (error) {
       console.error('Error al eliminar notificación:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo eliminar la notificación.",
+        variant: "destructive",
+      });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleNotificacionClick = (notification: Notification) => {
+    const navigated = handleNotificationNavigation(notification, navigate, {
+      onClose: () => setOpen(false),
+      markAsRead,
+    });
+
+    if (!navigated && !notification.read) {
+      markAsRead(notification.id);
     }
   };
 
@@ -166,7 +213,7 @@ const NotificationPanel = () => {
         </Button>
       </PopoverTrigger>
       <PopoverContent 
-        className="w-96 p-0" 
+        className="flex w-[560px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden p-0 max-h-[min(560px,85vh)]" 
         align="end"
         sideOffset={5}
       >
@@ -204,54 +251,62 @@ const NotificationPanel = () => {
               <p className="text-sm">No hay notificaciones</p>
             </div>
           ) : (
-            <div className="p-2">
+            <div className="p-2 pr-3">
               {notifications.map((notification, index) => (
                 <div key={notification.id}>
                   <Card 
+                    role="button"
+                    tabIndex={0}
                     className={cn(
-                      "mb-2 cursor-pointer transition-colors hover:bg-accent/50",
+                      "group mb-2 cursor-pointer transition-colors hover:bg-muted/50",
                       !notification.read && "bg-primary/5 border-primary/20"
                     )}
-                    onClick={() => {
-                      markAsRead(notification.id);
-                      setOpen(false);
-                      if (notification.actionUrl) {
-                        navigate(notification.actionUrl);
+                    onClick={() => handleNotificacionClick(notification)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handleNotificacionClick(notification);
                       }
                     }}
                   >
                     <CardContent className="p-3">
                       <div className="flex items-start gap-3">
-                        <div className={cn("mt-0.5", getTypeColor(notification.type))}>
+                        <div className={cn("mt-0.5 shrink-0", getTypeColor(notification.type))}>
                           {getNotificationIcon(notification.type)}
                         </div>
                         
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between mb-1">
+                        <div className="min-w-0 flex-1">
+                          <div className="mb-1 flex items-start justify-between gap-2">
                             <h4 className={cn(
-                              "text-sm font-medium truncate",
+                              "text-sm font-medium leading-snug",
                               !notification.read && "font-semibold"
                             )}>
                               {notification.title}
                             </h4>
-                            <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                            <div className="flex shrink-0 items-center gap-2">
                               <span className="text-xs text-muted-foreground">
                                 {getRelativeTime(notification.timestamp)}
                               </span>
                               <Button
+                                type="button"
                                 variant="ghost"
-                                size="sm"
-                                className="h-4 w-4 p-0 opacity-0 group-hover:opacity-100"
+                                size="icon"
+                                aria-label="Eliminar notificación"
+                                className="h-6 w-6 shrink-0 text-muted-foreground opacity-70 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
+                                disabled={deletingId === notification.id}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   removeNotification(notification.id);
                                 }}
                               >
-                                <X className="h-3 w-3" />
+                                <X className="h-3.5 w-3.5" />
                               </Button>
                             </div>
                           </div>
                           
+                          {notification.tipo && ORIGEN_COLA[notification.tipo] && (
+                            <p className="mb-1 text-[11px] font-semibold text-primary">Viene de {ORIGEN_COLA[notification.tipo]}</p>
+                          )}
                           <p className="text-xs text-muted-foreground line-clamp-2 mb-2">
                             {notification.message}
                           </p>

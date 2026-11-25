@@ -15,7 +15,9 @@ import { proveedoresService, Proveedor } from "@/services/proveedoresService";
 import { CreateProveedorModal } from "@/components/modals/CreateProveedorModal";
 import { EditProveedorModal } from "@/components/modals/EditProveedorModal";
 import ConfirmDeleteModal from "@/components/modals/ConfirmDeleteModal";
-import { Search, Plus, MoreHorizontal, Edit, Trash2, Loader2 } from "lucide-react";
+import { Search, Plus, MoreHorizontal, Edit, Trash2, Loader2, Store, UserCheck, UserX } from "lucide-react";
+import { StatCard } from "@/components/StatCard";
+import { TablePagination } from "@/components/TablePagination";
 import { canCreate, canEdit, canDelete } from "@/utils/permissions";
 
 const Proveedores = () => {
@@ -144,30 +146,9 @@ const Proveedores = () => {
 
       {/* Estadísticas */}
       <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Proveedores</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalProveedores}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Proveedores Activos</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">{stats.proveedoresActivos}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Proveedores Inactivos</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">{stats.proveedoresInactivos}</div>
-          </CardContent>
-        </Card>
+        <StatCard title="Total Proveedores" value={stats.totalProveedores} icon={Store} tone="primary" />
+        <StatCard title="Proveedores Activos" value={stats.proveedoresActivos} icon={UserCheck} tone="success" />
+        <StatCard title="Proveedores Inactivos" value={stats.proveedoresInactivos} icon={UserX} tone="destructive" />
       </div>
 
       {/* Lista de Proveedores */}
@@ -271,35 +252,13 @@ const Proveedores = () => {
             </Table>
           </div>
 
-          {/* Paginación */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between space-x-2 py-4">
-              <div className="text-sm text-muted-foreground">
-                Mostrando {((currentPage - 1) * itemsPerPage) + 1} a {Math.min(currentPage * itemsPerPage, totalItems)} de {totalItems} proveedores
-              </div>
-              <div className="flex items-center space-x-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                  disabled={currentPage === 1}
-                >
-                  Anterior
-                </Button>
-                <span className="text-sm">
-                  Página {currentPage} de {totalPages}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                  disabled={currentPage === totalPages}
-                >
-                  Siguiente
-                </Button>
-              </div>
-            </div>
-          )}
+          <TablePagination
+            page={currentPage}
+            pageSize={itemsPerPage}
+            total={totalItems}
+            label="proveedores"
+            onPageChange={setCurrentPage}
+          />
         </CardContent>
       </Card>
 

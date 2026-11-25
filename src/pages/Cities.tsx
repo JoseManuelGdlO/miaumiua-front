@@ -11,14 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from "@/components/ui/pagination";
+import { TablePagination } from "@/components/TablePagination";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -167,6 +160,25 @@ const Cities = () => {
     return new Date(dateString).toLocaleDateString('es-ES');
   };
 
+  const getWhatsappStatus = (city: City) => {
+    const whatsapp = city.whatsapp;
+
+    if (whatsapp?.connected) {
+      return (
+        <div className="text-sm">
+          <div className="font-medium">{whatsapp.displayPhone || "WhatsApp conectado"}</div>
+          {whatsapp.coexistenceEnabled && (
+            <div className="text-muted-foreground">coexistencia activa</div>
+          )}
+        </div>
+      );
+    }
+
+    if (whatsapp?.inviteStatus === "expired") return "Link vencido";
+    if (!whatsapp || whatsapp.inviteStatus === "none") return "Sin link";
+    return "Pendiente de vincular";
+  };
+
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
       <div className="flex items-center justify-between">
@@ -225,14 +237,15 @@ const Cities = () => {
                   <TableHead>Manager</TableHead>
                   <TableHead>Contacto</TableHead>
                   <TableHead>Estado</TableHead>
+                  <TableHead>WhatsApp</TableHead>
                   <TableHead>Creado</TableHead>
-                  <TableHead className="text-right">Acciones</TableHead>
+                  <TableHead>Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8">
+                    <TableCell colSpan={8} className="text-center py-8">
                       <div className="flex items-center justify-center space-x-2">
                         <Loader2 className="h-4 w-4 animate-spin" />
                         <span>Cargando ciudades...</span>
@@ -241,7 +254,7 @@ const Cities = () => {
                   </TableRow>
                 ) : cities.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                       No se encontraron ciudades
                     </TableCell>
                   </TableRow>
@@ -286,6 +299,9 @@ const Cities = () => {
                       <TableCell>
                         {getStatusBadge(city)}
                       </TableCell>
+                      <TableCell className="text-sm">
+                        {getWhatsappStatus(city)}
+                      </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {formatDate(city.created_at)}
                       </TableCell>
@@ -322,56 +338,13 @@ const Cities = () => {
             </Table>
           </div>
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between mt-6">
-              <div className="text-sm text-muted-foreground">
-                Mostrando {((currentPage - 1) * itemsPerPage) + 1} a {Math.min(currentPage * itemsPerPage, totalCities)} de {totalCities} ciudades
-              </div>
-              <Pagination>
-                <PaginationContent>
-                  <PaginationItem>
-                    <PaginationPrevious 
-                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                      className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                    />
-                  </PaginationItem>
-                  
-                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                    const pageNum = i + 1;
-                    return (
-                      <PaginationItem key={pageNum}>
-                        <PaginationLink
-                          onClick={() => setCurrentPage(pageNum)}
-                          isActive={currentPage === pageNum}
-                          className="cursor-pointer"
-                        >
-                          {pageNum}
-                        </PaginationLink>
-                      </PaginationItem>
-                    );
-                  })}
-                  
-                  <PaginationItem>
-                    <PaginationNext 
-                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                      className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                    />
-                  </PaginationItem>
-                </PaginationContent>
-              </Pagination>
-            </div>
-          )}
-
-          {/* Stats */}
-          <div className="flex items-center justify-between mt-6 text-sm text-muted-foreground">
-            <div>
-              Página {currentPage} de {totalPages}
-            </div>
-            <div className="flex items-center space-x-4">
-              <span>Total ciudades: {totalCities}</span>
-            </div>
-          </div>
+          <TablePagination
+            page={currentPage}
+            pageSize={itemsPerPage}
+            total={totalCities}
+            label="ciudades"
+            onPageChange={setCurrentPage}
+          />
         </CardContent>
       </Card>
 

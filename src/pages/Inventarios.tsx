@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -11,33 +11,58 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Pagination,
-  PaginationContent,
-  PaginationEllipsis,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from "@/components/ui/pagination";
+import { TablePagination } from "@/components/TablePagination";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Search, Plus, MoreHorizontal, Edit, Trash2, Package, Package2, Loader2, AlertTriangle, RotateCcw } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Search, Plus, MoreHorizontal, Edit, Trash2, Package, Package2, Loader2, AlertTriangle, RotateCcw, DollarSign } from "lucide-react";
+import { StatCard } from "@/components/StatCard";
 import { canCreate, canEdit, canDelete } from "@/utils/permissions";
 import CreateInventarioModal from "@/components/modals/CreateInventarioModal";
 import EditInventarioModal from "@/components/modals/EditInventarioModal";
 import ConfirmDeleteModal from "@/components/modals/ConfirmDeleteModal";
 import { inventariosService, Inventario } from "@/services/inventariosService";
+import { citiesService } from "@/services/citiesService";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { formatCount, formatMoney } from "@/utils/format";
+
+const CATEGORY_CHIP_COLORS = [
+  "bg-pink-100 text-pink-800 border-pink-200",
+  "bg-rose-100 text-rose-800 border-rose-200",
+  "bg-fuchsia-100 text-fuchsia-800 border-fuchsia-200",
+  "bg-violet-100 text-violet-800 border-violet-200",
+  "bg-sky-100 text-sky-800 border-sky-200",
+  "bg-blue-100 text-blue-800 border-blue-200",
+  "bg-teal-100 text-teal-800 border-teal-200",
+  "bg-emerald-100 text-emerald-800 border-emerald-200",
+  "bg-amber-100 text-amber-800 border-amber-200",
+  "bg-orange-100 text-orange-800 border-orange-200",
+];
+
+function categoryChipClass(name: string) {
+  const index = [...name].reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  return CATEGORY_CHIP_COLORS[index % CATEGORY_CHIP_COLORS.length];
+}
 
 const Inventarios = () => {
   const [inventarios, setInventarios] = useState<Inventario[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [ciudadFiltro, setCiudadFiltro] = useState("todos");
+  const [ciudades, setCiudades] = useState<Array<{ id: number; nombre: string; departamento: string }>>([]);
+  const [showArchived, setShowArchived] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
@@ -47,35 +72,48 @@ const Inventarios = () => {
   const [selectedInventario, setSelectedInventario] = useState<Inventario | null>(null);
   const itemsPerPage = 8;
   const { toast } = useToast();
+  const loadSeq = useRef(0);
 
   // Cargar inventarios
   const loadInventarios = async () => {
+    const seq = ++loadSeq.current;
     try {
       setLoading(true);
       const response = await inventariosService.getAllInventarios({
         page: currentPage,
         limit: itemsPerPage,
         search: searchTerm || undefined,
+        activos: showArchived ? "false" : "true",
+        ciudad: ciudadFiltro !== "todos" ? ciudadFiltro : undefined,
       });
+      if (seq !== loadSeq.current) return;
 
-      setInventarios(response.data.inventarios);
-      setTotalPages(response.data.pagination.totalPages);
-      setTotalItems(response.data.pagination.totalItems);
+      const pag = response.data?.pagination ?? {};
+      setInventarios(response.data?.inventarios ?? []);
+      setTotalItems(pag.totalItems ?? pag.total ?? 0);
+      setTotalPages(pag.totalPages || 1);
     } catch (error) {
       console.error('Error al cargar inventarios:', error);
+      if (seq !== loadSeq.current) return;
       toast({
         title: "Error",
         description: "No se pudieron cargar los inventarios",
         variant: "destructive",
       });
     } finally {
-      setLoading(false);
+      if (seq === loadSeq.current) setLoading(false);
     }
   };
 
   useEffect(() => {
     loadInventarios();
-  }, [currentPage, searchTerm]);
+  }, [currentPage, searchTerm, showArchived, ciudadFiltro]);
+
+  useEffect(() => {
+    void citiesService.getAllCities({ activos: "true" }).then((response) => {
+      setCiudades(response.data?.cities || []);
+    }).catch(() => {});
+  }, []);
 
   // Manejar búsqueda
   const handleSearch = (value: string) => {
@@ -179,56 +217,42 @@ const Inventarios = () => {
 
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Productos</CardTitle>
-            <Package className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalItems}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Productos Activos</CardTitle>
-            <Package2 className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{inventarios.length}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Stock Bajo</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-destructive">{lowStockCount}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Valor Total</CardTitle>
-            <Package className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {formatPrice(inventarios.reduce((sum, inv) => sum + (inv.precio_venta * inv.stock_inicial), 0))}
-            </div>
-          </CardContent>
-        </Card>
+        <StatCard title="Total Productos" value={totalItems} icon={Package} tone="primary" />
+        <StatCard title="Productos Activos" value={inventarios.length} icon={Package2} tone="success" />
+        <StatCard title="Stock Bajo" value={lowStockCount} icon={AlertTriangle} tone="destructive" />
+        <StatCard
+          title="Valor Total"
+          value={formatPrice(inventarios.reduce((sum, inv) => sum + (inv.precio_venta * inv.stock_inicial), 0))}
+          icon={DollarSign}
+          tone="primary"
+        />
       </div>
 
       {/* Search and Filters */}
       <Card>
-        <CardHeader>
-          <CardTitle>Inventarios</CardTitle>
-          <CardDescription>
-            Lista de todos los productos en inventario
-          </CardDescription>
+        <CardHeader className="flex flex-row items-start justify-between space-y-0 gap-4">
+          <div>
+            <CardTitle>Inventarios</CardTitle>
+            <CardDescription>
+              Lista de todos los productos en inventario
+            </CardDescription>
+          </div>
+          <div className="flex items-center space-x-2 shrink-0">
+            <Switch
+              id="ver-archivados"
+              checked={showArchived}
+              onCheckedChange={(checked) => {
+                setShowArchived(checked);
+                setCurrentPage(1);
+              }}
+            />
+            <Label htmlFor="ver-archivados" className="text-sm font-medium cursor-pointer whitespace-nowrap">
+              Ver archivados
+            </Label>
+          </div>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center space-x-2 mb-4">
+          <div className="mb-4 flex items-center gap-2">
             <div className="relative flex-1">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
@@ -238,6 +262,25 @@ const Inventarios = () => {
                 className="pl-8"
               />
             </div>
+            <Select
+              value={ciudadFiltro}
+              onValueChange={(value) => {
+                setCiudadFiltro(value);
+                setCurrentPage(1);
+              }}
+            >
+              <SelectTrigger className="w-72">
+                <SelectValue placeholder="Ciudad" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todas las ciudades</SelectItem>
+                {ciudades.map((city) => (
+                  <SelectItem key={city.id} value={String(city.id)}>
+                    {city.nombre} — {city.departamento}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Table */}
@@ -246,10 +289,11 @@ const Inventarios = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead>SKU</TableHead>
-                  <TableHead>Producto</TableHead>
+                  <TableHead className="min-w-[16rem]">Producto</TableHead>
                   <TableHead>Categoría</TableHead>
                   <TableHead>Stock</TableHead>
                   <TableHead>Precio</TableHead>
+                  <TableHead>Precio distribuidor</TableHead>
                   <TableHead>Ciudad</TableHead>
                   <TableHead>Proveedor</TableHead>
                   <TableHead>Estado</TableHead>
@@ -260,14 +304,14 @@ const Inventarios = () => {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center py-8">
+                    <TableCell colSpan={11} className="text-center py-8">
                       <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
                       Cargando inventarios...
                     </TableCell>
                   </TableRow>
                 ) : inventarios.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={11} className="text-center py-8 text-muted-foreground">
                       No se encontraron inventarios
                     </TableCell>
                   </TableRow>
@@ -276,40 +320,66 @@ const Inventarios = () => {
                     const stockStatus = getStockStatus(inventario);
                     return (
                       <TableRow key={inventario.id}>
-                        <TableCell className="font-mono text-sm">
+                        <TableCell className="whitespace-nowrap font-mono text-sm">
                           {inventario.sku}
                         </TableCell>
-                        <TableCell>
-                          <div>
-                            <div className="font-medium">{inventario.nombre}</div>
+                        <TableCell className="min-w-[16rem] max-w-[28rem] whitespace-normal align-middle">
+                          <div className="space-y-1 text-left">
+                            <div className="font-medium break-words">{inventario.nombre}</div>
                             {inventario.descripcion && (
-                              <div className="text-sm text-muted-foreground">
+                              <div className="break-words text-sm text-muted-foreground">
                                 {inventario.descripcion}
                               </div>
                             )}
                           </div>
                         </TableCell>
                         <TableCell>
-                          {inventario.categoria?.nombre || 'N/A'}
+                          {inventario.categoria?.nombre ? (
+                            <Badge variant="outline" className={`whitespace-nowrap ${categoryChipClass(inventario.categoria.nombre)}`}>
+                              {inventario.categoria.nombre}
+                            </Badge>
+                          ) : (
+                            "N/A"
+                          )}
                         </TableCell>
-                        <TableCell>
-                          <div className="text-sm">
-                            <div>Actual: {inventario.stock_inicial}</div>
+                        <TableCell className="text-center">
+                          <div className="mx-auto inline-block whitespace-nowrap text-left text-sm leading-5">
+                            <div>
+                              <span className="text-muted-foreground">Total: </span>
+                              <span className="font-bold text-foreground">{formatCount(inventario.stock_inicial)}</span>
+                            </div>
                             <div className="text-muted-foreground">
-                              Mín: {inventario.stock_minimo}
+                              Mín: {formatCount(inventario.stock_minimo)}
+                            </div>
+                            {Number(inventario.compra_minima) > 0 ? (
+                              <div className="text-muted-foreground">
+                                Compra: {formatCount(Number(inventario.compra_minima))}
+                              </div>
+                            ) : null}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <div className="mx-auto inline-block whitespace-nowrap text-left text-sm leading-5">
+                            <div>
+                              <span className="text-muted-foreground">Venta: </span>
+                              <span className="font-bold text-foreground">{formatMoney(inventario.precio_venta)}</span>
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell>
-                          <div className="text-sm">
-                            <div>Venta: {formatPrice(inventario.precio_venta)}</div>
-                            <div className="text-muted-foreground">
-                              Costo: {formatPrice(inventario.costo_unitario)}
-                            </div>
-                          </div>
+                        <TableCell className="whitespace-nowrap">
+                          {formatMoney(
+                            inventario.precio_distribuidor != null && Number(inventario.precio_distribuidor) > 0
+                              ? inventario.precio_distribuidor
+                              : inventario.precio_venta,
+                          )}
                         </TableCell>
                         <TableCell>
-                          {inventario.ciudad?.nombre || 'N/A'}
+                          <div>
+                            {inventario.ciudad?.nombre || 'N/A'}
+                            {inventario.ciudad?.departamento && (
+                              <div className="text-xs text-muted-foreground">{inventario.ciudad.departamento}</div>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell>
                           {inventario.proveedor?.nombre || 'N/A'}
@@ -376,62 +446,13 @@ const Inventarios = () => {
             </Table>
           </div>
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between space-x-2 py-4">
-              <div className="text-sm text-muted-foreground">
-                Mostrando {((currentPage - 1) * itemsPerPage) + 1} a {Math.min(currentPage * itemsPerPage, totalItems)} de {totalItems} inventarios
-              </div>
-              <Pagination>
-                <PaginationContent>
-                  <PaginationItem>
-                    <PaginationPrevious
-                      onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                      className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
-                    />
-                  </PaginationItem>
-                  
-                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                    const page = i + 1;
-                    return (
-                      <PaginationItem key={page}>
-                        <PaginationLink
-                          onClick={() => setCurrentPage(page)}
-                          isActive={currentPage === page}
-                          className="cursor-pointer"
-                        >
-                          {page}
-                        </PaginationLink>
-                      </PaginationItem>
-                    );
-                  })}
-                  
-                  {totalPages > 5 && (
-                    <>
-                      <PaginationItem>
-                        <PaginationEllipsis />
-                      </PaginationItem>
-                      <PaginationItem>
-                        <PaginationLink
-                          onClick={() => setCurrentPage(totalPages)}
-                          className="cursor-pointer"
-                        >
-                          {totalPages}
-                        </PaginationLink>
-                      </PaginationItem>
-                    </>
-                  )}
-                  
-                  <PaginationItem>
-                    <PaginationNext
-                      onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                      className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
-                    />
-                  </PaginationItem>
-                </PaginationContent>
-              </Pagination>
-            </div>
-          )}
+          <TablePagination
+            page={currentPage}
+            pageSize={itemsPerPage}
+            total={totalItems}
+            label="inventarios"
+            onPageChange={setCurrentPage}
+          />
         </CardContent>
       </Card>
 
@@ -449,7 +470,14 @@ const Inventarios = () => {
             setIsEditModalOpen(false);
             setSelectedInventario(null);
           }}
-          onSuccess={loadInventarios}
+          onSuccess={(saved) => {
+            if (!saved) {
+              void loadInventarios();
+              return;
+            }
+            loadSeq.current += 1;
+            setInventarios((rows) => rows.map((row) => (row.id === saved.id ? { ...row, ...saved } : row)));
+          }}
           inventario={selectedInventario}
         />
       )}

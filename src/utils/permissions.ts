@@ -46,6 +46,12 @@ export const SECTION_PERMISSIONS = {
     cancel: 'cancelar_pedidos',
     stats: 'ver_stats_pedidos'
   },
+  callCenter: {
+    base: 'operar_call_center',
+    create: 'operar_call_center',
+    edit: 'operar_call_center',
+    delete: 'operar_call_center'
+  },
   orderProducts: {
     base: 'ver_productos_pedido',
     create: 'crear_productos_pedido',
@@ -139,6 +145,12 @@ export const SECTION_PERMISSIONS = {
     activate: 'activar_desactivar_repartidores',
     stats: 'ver_estadisticas_repartidores'
   },
+  flotilla: {
+    base: 'ver_flotilla',
+    create: 'ver_flotilla',
+    edit: 'ver_flotilla',
+    delete: 'ver_flotilla'
+  },
   agents: {
     base: 'ver_agentes',
     create: 'crear_agentes',
@@ -152,6 +164,12 @@ export const SECTION_PERMISSIONS = {
     create: 'crear_paquetes',
     edit: 'editar_paquetes',
     delete: 'eliminar_paquetes'
+  },
+  qr: {
+    base: 'configurar_qr',
+    create: 'configurar_qr',
+    edit: 'configurar_qr',
+    delete: 'configurar_qr'
   }
 } as const;
 
@@ -183,6 +201,11 @@ export const canEdit = (section: keyof typeof SECTION_PERMISSIONS): boolean => {
 export const canDelete = (section: keyof typeof SECTION_PERMISSIONS): boolean => {
   const sectionPermissions = SECTION_PERMISSIONS[section];
   return hasPermission(sectionPermissions.delete);
+};
+
+/** Restablecer contraseña del portal (tienda web) del cliente — soporte suele tener solo lectura de clientes */
+export const canResetClientePortalPassword = (): boolean => {
+  return hasPermission('editar_clientes') || hasPermission('ver_clientes');
 };
 
 // Función para verificar si el usuario puede ver estadísticas

@@ -11,28 +11,26 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Pagination,
-  PaginationContent,
-  PaginationEllipsis,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from "@/components/ui/pagination";
+import { TablePagination } from "@/components/TablePagination";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Search, Plus, MoreHorizontal, Edit, Trash2, User, Phone, MapPin, Calendar, Truck, Loader2, Star, Activity } from "lucide-react";
+import { StatCard } from "@/components/StatCard";
 import { canCreate, canEdit, canDelete, canActivateDriver, canViewDriverStats } from "@/utils/permissions";
-import { driversService, Driver } from "@/services/driversService";
+import { driversService, Driver, DriverEstado } from "@/services/driversService";
 import { useToast } from "@/hooks/use-toast";
 import CreateDriverModal from "@/components/modals/CreateDriverModal";
 import EditDriverModal from "@/components/modals/EditDriverModal";
 import ConfirmDeleteDriverModal from "@/components/modals/ConfirmDeleteDriverModal";
+import DriverProfileSheet from "@/components/DriverProfileSheet";
+import { ESTADOS_ADMIN, ESTADOS_LABEL } from "@/components/modals/DriverWizard";
 
 // Usar la interfaz Driver del servicio
 
@@ -47,6 +45,7 @@ const Drivers = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null);
+  const [profileDriver, setProfileDriver] = useState<Driver | null>(null);
   const itemsPerPage = 8;
   const { toast } = useToast();
 
@@ -105,19 +104,33 @@ const Drivers = () => {
 
   // Obtener estado del repartidor
   const getDriverStatus = (driver: Driver) => {
-    switch (driver.estado) {
-      case 'activo':
-        return { status: "Activo", variant: "default" as const };
-      case 'inactivo':
-        return { status: "Inactivo", variant: "secondary" as const };
-      case 'ocupado':
-        return { status: "Ocupado", variant: "destructive" as const };
-      case 'disponible':
-        return { status: "Disponible", variant: "default" as const };
-      case 'en_ruta':
-        return { status: "En Ruta", variant: "outline" as const };
-      default:
-        return { status: "Desconocido", variant: "secondary" as const };
+    const status = ESTADOS_LABEL[driver.estado] || driver.estado || "Sin estado";
+    if (driver.estado === "disponible" || driver.estado === "activo") {
+      return { status, variant: "default" as const };
+    }
+    if (driver.estado === "ocupado" || driver.estado === "en_ruta") {
+      return { status, variant: "outline" as const };
+    }
+    return { status, variant: "secondary" as const };
+  };
+
+  const parseRating = (value: Driver["calificacion_promedio"]) => {
+    if (value === null || value === undefined || value === "") return "N/A";
+    const n = Number(value);
+    return Number.isFinite(n) ? n.toFixed(1) : "N/A";
+  };
+
+  const changeStatus = async (driver: Driver, estado: DriverEstado) => {
+    try {
+      const response = await driversService.changeDriverStatus(driver.id, { estado });
+      if (response.success) {
+        toast({ title: "Estado actualizado", description: `${driver.nombre_completo}: ${ESTADOS_LABEL[estado]}` });
+        loadDrivers();
+      } else {
+        toast({ title: "Error", description: response.message || "No se pudo cambiar el estado", variant: "destructive" });
+      }
+    } catch (error) {
+      toast({ title: "Error", description: "No se pudo cambiar el estado", variant: "destructive" });
     }
   };
 
@@ -159,52 +172,25 @@ const Drivers = () => {
 
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Repartidores</CardTitle>
-            <Truck className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalItems}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Disponibles</CardTitle>
-            <Activity className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {drivers.filter(d => d.estado === 'disponible').length}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">En Ruta</CardTitle>
-            <MapPin className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {drivers.filter(d => d.estado === 'en_ruta').length}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Mejor Calificados</CardTitle>
-            <Star className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {drivers.filter(d => 
-                d.calificacion_promedio && 
-                typeof d.calificacion_promedio === 'number' && 
-                d.calificacion_promedio >= 4.5
-              ).length}
-            </div>
-          </CardContent>
-        </Card>
+        <StatCard title="Total Repartidores" value={totalItems} icon={Truck} tone="primary" />
+        <StatCard
+          title="Disponibles"
+          value={drivers.filter(d => d.estado === 'disponible').length}
+          icon={Activity}
+          tone="success"
+        />
+        <StatCard
+          title="En Ruta"
+          value={drivers.filter(d => d.estado === 'en_ruta').length}
+          icon={MapPin}
+          tone="info"
+        />
+        <StatCard
+          title="Mejor Calificados"
+          value={drivers.filter((d) => Number(d.calificacion_promedio) >= 4.5).length}
+          icon={Star}
+          tone="info"
+        />
       </div>
 
       {/* Search and Filters */}
@@ -262,12 +248,19 @@ const Drivers = () => {
                   paginatedDrivers.map((driver) => {
                     const status = getDriverStatus(driver);
                     return (
-                      <TableRow key={driver.id}>
+                      <TableRow
+                        key={driver.id}
+                        className="cursor-pointer"
+                        onClick={() => setProfileDriver(driver)}
+                      >
                         <TableCell>
                           <Badge variant="outline">{driver.codigo_repartidor}</Badge>
                         </TableCell>
                         <TableCell className="font-medium">
-                          {driver.nombre_completo}
+                          <span className="inline-flex items-center gap-2">
+                            {driver.nombre_completo}
+                            {driver.es_prueba ? <Badge variant="secondary">Prueba</Badge> : null}
+                          </span>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center space-x-2">
@@ -293,11 +286,7 @@ const Drivers = () => {
                         <TableCell>
                           <div className="flex items-center space-x-1">
                             <Star className="h-3 w-3 text-yellow-500" />
-                            <span className="font-medium">
-                              {driver.calificacion_promedio && typeof driver.calificacion_promedio === 'number' 
-                                ? driver.calificacion_promedio.toFixed(1) 
-                                : 'N/A'}
-                            </span>
+                            <span className="font-medium">{parseRating(driver.calificacion_promedio)}</span>
                           </div>
                         </TableCell>
                         <TableCell>
@@ -314,7 +303,7 @@ const Drivers = () => {
                             <span className="text-muted-foreground">Nunca</span>
                           )}
                         </TableCell>
-                        <TableCell>
+                        <TableCell onClick={(event) => event.stopPropagation()}>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" className="h-8 w-8 p-0">
@@ -334,10 +323,23 @@ const Drivers = () => {
                                 </DropdownMenuItem>
                               )}
                               {canActivateDriver() && (
-                                <DropdownMenuItem>
-                                  <Activity className="mr-2 h-4 w-4" />
-                                  Cambiar Estado
-                                </DropdownMenuItem>
+                                <DropdownMenuSub>
+                                  <DropdownMenuSubTrigger>
+                                    <Activity className="mr-2 h-4 w-4" />
+                                    Cambiar estado
+                                  </DropdownMenuSubTrigger>
+                                  <DropdownMenuSubContent>
+                                    {ESTADOS_ADMIN.map((item) => (
+                                      <DropdownMenuItem
+                                        key={item.value}
+                                        disabled={driver.estado === item.value}
+                                        onClick={() => changeStatus(driver, item.value)}
+                                      >
+                                        {item.label}
+                                      </DropdownMenuItem>
+                                    ))}
+                                  </DropdownMenuSubContent>
+                                </DropdownMenuSub>
                               )}
                               {canDelete('drivers') && (
                                 <DropdownMenuItem
@@ -362,62 +364,13 @@ const Drivers = () => {
             </Table>
           </div>
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between space-x-2 py-4">
-              <div className="text-sm text-muted-foreground">
-                Mostrando {((currentPage - 1) * itemsPerPage) + 1} a {Math.min(currentPage * itemsPerPage, totalItems)} de {totalItems} repartidores
-              </div>
-              <Pagination>
-                <PaginationContent>
-                  <PaginationItem>
-                    <PaginationPrevious
-                      onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                      className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
-                    />
-                  </PaginationItem>
-                  
-                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                    const page = i + 1;
-                    return (
-                      <PaginationItem key={page}>
-                        <PaginationLink
-                          onClick={() => setCurrentPage(page)}
-                          isActive={currentPage === page}
-                          className="cursor-pointer"
-                        >
-                          {page}
-                        </PaginationLink>
-                      </PaginationItem>
-                    );
-                  })}
-                  
-                  {totalPages > 5 && (
-                    <>
-                      <PaginationItem>
-                        <PaginationEllipsis />
-                      </PaginationItem>
-                      <PaginationItem>
-                        <PaginationLink
-                          onClick={() => setCurrentPage(totalPages)}
-                          className="cursor-pointer"
-                        >
-                          {totalPages}
-                        </PaginationLink>
-                      </PaginationItem>
-                    </>
-                  )}
-                  
-                  <PaginationItem>
-                    <PaginationNext
-                      onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                      className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
-                    />
-                  </PaginationItem>
-                </PaginationContent>
-              </Pagination>
-            </div>
-          )}
+          <TablePagination
+            page={currentPage}
+            pageSize={itemsPerPage}
+            total={totalItems}
+            label="repartidores"
+            onPageChange={setCurrentPage}
+          />
         </CardContent>
       </Card>
 
@@ -426,6 +379,17 @@ const Drivers = () => {
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         onSuccess={loadDrivers}
+      />
+
+      <DriverProfileSheet
+        driver={profileDriver}
+        onClose={() => setProfileDriver(null)}
+        onChanged={loadDrivers}
+        onEdit={(driver) => {
+          setProfileDriver(null);
+          setSelectedDriver(driver);
+          setIsEditModalOpen(true);
+        }}
       />
 
       {selectedDriver && (

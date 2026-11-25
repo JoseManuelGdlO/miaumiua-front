@@ -11,7 +11,9 @@ import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Upload, FileSpreadsheet, X, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { vistaDeError } from "@/lib/api-error";
 import { clientesService } from "@/services/clientesService";
+import { ConfirmCloseDialog, useConfirmClose } from "@/components/ConfirmClose";
 
 interface BulkUploadCustomersModalProps {
   open: boolean;
@@ -105,13 +107,14 @@ export default function BulkUploadCustomersModal({
         // Llamar al callback para recargar la lista (sin cerrar el modal)
         onUploadComplete();
       } else {
-        setError(response.message || 'Error al procesar el archivo');
+        setError(vistaDeError(response.message || 'Error al procesar el archivo'));
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al cargar el archivo');
+      const aviso = vistaDeError(err instanceof Error ? err.message : 'Error al cargar el archivo');
+      setError(aviso);
       toast({
-        title: "Error",
-        description: err instanceof Error ? err.message : 'Error al cargar el archivo',
+        title: "Clientes",
+        description: aviso,
         variant: "destructive",
       });
     } finally {
@@ -119,18 +122,22 @@ export default function BulkUploadCustomersModal({
     }
   };
 
-  const handleClose = () => {
-    if (!uploading) {
-      setFile(null);
-      setError(null);
-      setResult(null);
-      setProgress(0);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-      onOpenChange(false);
+  const closeAlready = () => {
+    setFile(null);
+    setError(null);
+    setResult(null);
+    setProgress(0);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
+    onOpenChange(false);
   };
+
+  const { ask, setAsk, requestClose, confirm } = useConfirmClose(
+    closeAlready,
+    Boolean(file) && !result,
+    uploading,
+  );
 
   const handleDownloadTemplate = async () => {
     try {
@@ -158,12 +165,7 @@ export default function BulkUploadCustomersModal({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => {
-      // Solo permitir cerrar si no está cargando
-      if (!uploading && !isOpen) {
-        handleClose();
-      }
-    }}>
+    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) requestClose(); }}>
       <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Carga Masiva de Clientes</DialogTitle>
@@ -322,7 +324,7 @@ export default function BulkUploadCustomersModal({
           {error && (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
+              <AlertDescription className="whitespace-pre-line">{error}</AlertDescription>
             </Alert>
           )}
 
@@ -330,7 +332,7 @@ export default function BulkUploadCustomersModal({
           <div className="flex justify-end gap-2">
             <Button
               variant="outline"
-              onClick={handleClose}
+              onClick={result ? closeAlready : requestClose}
               disabled={uploading}
             >
               {result ? 'Cerrar' : 'Cancelar'}
@@ -375,6 +377,7 @@ export default function BulkUploadCustomersModal({
           </div>
         </div>
       </DialogContent>
+      <ConfirmCloseDialog open={ask} onOpenChange={setAsk} onConfirm={confirm} />
     </Dialog>
   );
 }

@@ -25,13 +25,26 @@ interface PromotionSelectorProps {
   onValueChange: (promotion: Promotion | null) => void;
   placeholder?: string;
   disabled?: boolean;
+  cityId?: number;
+  esDistribuidor?: boolean;
+}
+
+function visiblePara(promo: Promotion, cityId?: number, esDistribuidor?: boolean) {
+  if (promo.aplica_a === "distribuidor" && !esDistribuidor) return false;
+  if (promo.aplica_a === "retail" && esDistribuidor) return false;
+  if (!cityId) return true;
+  const cities = promo.ciudades || [];
+  if (!cities.length) return true;
+  return cities.some((city) => city.id === cityId);
 }
 
 const PromotionSelector = ({ 
   value, 
   onValueChange, 
   placeholder = "Seleccionar promoción...",
-  disabled = false 
+  disabled = false,
+  cityId,
+  esDistribuidor,
 }: PromotionSelectorProps) => {
   const [open, setOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -43,7 +56,7 @@ const PromotionSelector = ({
   // Cargar promociones iniciales
   useEffect(() => {
     loadPromotions("");
-  }, []);
+  }, [cityId, esDistribuidor]);
 
   // Buscar promociones cuando cambie el término de búsqueda
   useEffect(() => {
@@ -84,7 +97,7 @@ const PromotionSelector = ({
         include_cities: true
       });
       if (response.success) {
-        setPromotions(response.data.promotions);
+        setPromotions((response.data.promotions || []).filter((promo) => visiblePara(promo, cityId, esDistribuidor)));
       }
     } catch (error) {
       console.error('Error al cargar promociones:', error);

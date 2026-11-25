@@ -32,6 +32,7 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { promotionsService, Promotion } from "@/services/promotionsService";
 import { citiesService, City } from "@/services/citiesService";
+import { ConfirmCloseDialog, formDirty, useConfirmClose } from "@/components/ConfirmClose";
 
 interface EditPromotionModalProps {
   isOpen: boolean;
@@ -56,7 +57,10 @@ const EditPromotionModal = ({ isOpen, onClose, onSuccess, promotion }: EditPromo
     compra_minima: "",
     descuento_maximo: "",
     ciudades: [] as number[],
+    aplica_a: "todos" as "todos" | "retail" | "distribuidor",
+    departamento: "",
   });
+  const [baseline, setBaseline] = useState(formData);
 
   // Cargar ciudades
   useEffect(() => {
@@ -77,7 +81,7 @@ const EditPromotionModal = ({ isOpen, onClose, onSuccess, promotion }: EditPromo
   // Inicializar formulario con datos de la promoción
   useEffect(() => {
     if (promotion && isOpen) {
-      setFormData({
+      const next = {
         nombre: promotion.nombre,
         codigo: promotion.codigo,
         descripcion: promotion.descripcion || "",
@@ -89,7 +93,11 @@ const EditPromotionModal = ({ isOpen, onClose, onSuccess, promotion }: EditPromo
         compra_minima: promotion.compra_minima?.toString() || "",
         descuento_maximo: promotion.descuento_maximo?.toString() || "",
         ciudades: promotion.ciudades?.map(c => c.id) || [],
-      });
+        aplica_a: promotion.aplica_a || "todos",
+        departamento: "",
+      };
+      setFormData(next);
+      setBaseline(next);
     }
   }, [promotion, isOpen]);
 
@@ -129,6 +137,7 @@ const EditPromotionModal = ({ isOpen, onClose, onSuccess, promotion }: EditPromo
         compra_minima: formData.compra_minima ? parseFloat(formData.compra_minima) : undefined,
         descuento_maximo: formData.descuento_maximo ? parseFloat(formData.descuento_maximo) : undefined,
         ciudades: formData.ciudades,
+        aplica_a: formData.aplica_a,
       };
 
       await promotionsService.updatePromotion(promotion.id, updateData);
@@ -161,8 +170,14 @@ const EditPromotionModal = ({ isOpen, onClose, onSuccess, promotion }: EditPromo
     }));
   };
 
+  const { ask, setAsk, requestClose, confirm, onOpenChange } = useConfirmClose(
+    onClose,
+    formDirty(formData, baseline),
+    loading,
+  );
+
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Editar Promoción</DialogTitle>
@@ -332,6 +347,38 @@ const EditPromotionModal = ({ isOpen, onClose, onSuccess, promotion }: EditPromo
           </div>
 
           <div className="space-y-2">
+            <Label>Aplica a</Label>
+            <Select value={formData.aplica_a} onValueChange={(value: "todos" | "retail" | "distribuidor") => setFormData((prev) => ({ ...prev, aplica_a: value }))}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos</SelectItem>
+                <SelectItem value="retail">Clientes finales</SelectItem>
+                <SelectItem value="distribuidor">Solo distribuidores</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Estado (rellena las ciudades)</Label>
+            <Select
+              value={formData.departamento ? encodeURIComponent(formData.departamento) : "none"}
+              onValueChange={(value) => {
+                const departamento = value === "none" ? "" : decodeURIComponent(value);
+                const ids = departamento
+                  ? cities.filter((city) => city.departamento === departamento).map((city) => city.id)
+                  : [];
+                setFormData((prev) => ({ ...prev, departamento, ciudades: ids.length ? ids : prev.ciudades }));
+              }}
+            >
+              <SelectTrigger><SelectValue placeholder="Elegir estado" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Sin filtro de estado</SelectItem>
+                {[...new Set(cities.map((city) => city.departamento).filter(Boolean))].map((departamento) => (
+                  <SelectItem key={departamento} value={encodeURIComponent(departamento)}>{departamento}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
             <Label>Ciudades Aplicables</Label>
             <Card>
               <CardContent className="p-4">
@@ -347,7 +394,7 @@ const EditPromotionModal = ({ isOpen, onClose, onSuccess, promotion }: EditPromo
                         htmlFor={`city-${city.id}`}
                         className="text-sm font-normal cursor-pointer"
                       >
-                        {city.nombre}
+                        {city.nombre}{city.departamento ? ` · ${city.departamento}` : ""}
                       </Label>
                     </div>
                   ))}
@@ -357,7 +404,7 @@ const EditPromotionModal = ({ isOpen, onClose, onSuccess, promotion }: EditPromo
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>
+            <Button type="button" variant="outline" onClick={requestClose}>
               Cancelar
             </Button>
             <Button type="submit" disabled={loading}>
@@ -366,6 +413,7 @@ const EditPromotionModal = ({ isOpen, onClose, onSuccess, promotion }: EditPromo
           </DialogFooter>
         </form>
       </DialogContent>
+      <ConfirmCloseDialog open={ask} onOpenChange={setAsk} onConfirm={confirm} />
     </Dialog>
   );
 };

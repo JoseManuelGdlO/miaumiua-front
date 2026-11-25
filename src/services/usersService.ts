@@ -33,14 +33,14 @@ export interface CreateUserData {
   correo_electronico: string;
   contrasena: string;
   rol_id: number;
-  ciudad_id?: number;
+  ciudad_id?: number | null;
 }
 
 export interface UpdateUserData {
   nombre_completo?: string;
   correo_electronico?: string;
   rol_id?: number;
-  ciudad_id?: number;
+  ciudad_id?: number | null;
   isActive?: boolean;
 }
 

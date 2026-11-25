@@ -18,6 +18,12 @@ import { packagesService, CreatePackageData, UpdatePackageData, Package } from "
 import { Inventario } from "@/services/inventariosService";
 import ProductSelector from "@/components/ui/ProductSelector";
 import { Loader2, Plus, Trash2, Package as PackageIcon, DollarSign, Percent } from "lucide-react";
+import { config } from "@/config/environment";
+import { ConfirmCloseDialog, formDirty, useConfirmClose } from "@/components/ConfirmClose";
+
+const EMPTY_PACKAGE = { nombre: "", descripcion: "", precio: "", descuento: "" };
+
+const TITLE_MAX_LENGTH = 24; // Límite de WhatsApp para títulos de paquete
 
 interface CreatePackageModalProps {
   open: boolean;
@@ -26,59 +32,80 @@ interface CreatePackageModalProps {
   editingPackage?: Package | null;
 }
 
+/** Campos de producto que usa el modal; compatible con Inventario y con la respuesta parcial del API de paquetes */
+type ProductoEnPaquete = Pick<Inventario, 'id' | 'nombre' | 'descripcion'> & { precio_venta?: number };
+
 interface ProductFormData {
   fkid_producto: number;
   cantidad: number;
-  producto?: Inventario;
+  producto?: ProductoEnPaquete;
+}
+
+function imageUrl(url: string | null | undefined): string {
+  if (!url) return '';
+  if (url.startsWith('http')) return url;
+  return `${config.imageBaseUrl}${url.startsWith('/') ? '' : '/'}${url}`;
 }
 
 const CreatePackageModal = ({ open, onOpenChange, onPackageCreated, editingPackage }: CreatePackageModalProps) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [products, setProducts] = useState<ProductFormData[]>([]);
   const isEditing = !!editingPackage;
-  
-  const [formData, setFormData] = useState({
-    nombre: "",
-    descripcion: "",
-    precio: "",
-    descuento: ""
-  });
+
+  const [formData, setFormData] = useState(EMPTY_PACKAGE);
+  const [baseline, setBaseline] = useState(EMPTY_PACKAGE);
+  const [productsBaseline, setProductsBaseline] = useState<ProductFormData[]>([]);
 
   // Reset form cuando se abre el modal o cambia el paquete a editar
   useEffect(() => {
     if (open) {
       if (editingPackage) {
         // Cargar datos del paquete a editar
-        setFormData({
+        const next = {
           nombre: editingPackage.nombre || "",
           descripcion: editingPackage.descripcion || "",
           precio: editingPackage.precio?.toString() || "",
           descuento: editingPackage.descuento?.toString() || ""
-        });
-        
-        // Cargar productos del paquete
-        if (editingPackage.productos && editingPackage.productos.length > 0) {
-          setProducts(editingPackage.productos.map(p => ({
+        };
+        setFormData(next);
+        setBaseline(next);
+        const nextProducts = editingPackage.productos && editingPackage.productos.length > 0
+          ? editingPackage.productos.map(p => ({
             fkid_producto: p.fkid_producto,
             cantidad: p.cantidad,
             producto: p.producto
-          })));
-        } else {
-          setProducts([]);
-        }
+          }))
+          : [];
+        setProducts(nextProducts);
+        setProductsBaseline(nextProducts);
       } else {
-        // Reset para crear nuevo
-        setFormData({
-          nombre: "",
-          descripcion: "",
-          precio: "",
-          descuento: ""
-        });
+        setFormData(EMPTY_PACKAGE);
+        setBaseline(EMPTY_PACKAGE);
         setProducts([]);
+        setProductsBaseline([]);
       }
+      setImageFile(null);
+      setImagePreview(null);
     }
   }, [open, editingPackage]);
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (!file.type.startsWith('image/')) {
+        toast({ title: "Error", description: "Solo se permiten imágenes (JPG, PNG, GIF, WEBP)", variant: "destructive" });
+        return;
+      }
+      setImageFile(file);
+      setImagePreview(URL.createObjectURL(file));
+    } else {
+      setImageFile(null);
+      setImagePreview(null);
+    }
+  };
 
   const addProduct = () => {
     setProducts([...products, {
@@ -154,6 +181,15 @@ const CreatePackageModal = ({ open, onOpenChange, onPackageCreated, editingPacka
       return;
     }
 
+    if (formData.nombre.trim().length > TITLE_MAX_LENGTH) {
+      toast({
+        title: "Error",
+        description: `El título del paquete no puede superar ${TITLE_MAX_LENGTH} caracteres (límite de WhatsApp)`,
+        variant: "destructive"
+      });
+      return;
+    }
+
     if (!formData.precio || Number(formData.precio) <= 0) {
       toast({
         title: "Error",
@@ -199,17 +235,16 @@ const CreatePackageModal = ({ open, onOpenChange, onPackageCreated, editingPacka
           }))
         };
 
-        const response = await packagesService.updatePackage(editingPackage.id, updateData);
-        
-        if (response.success) {
-          toast({
-            title: "Paquete actualizado",
-            description: `Paquete "${response.data.paquete.nombre}" actualizado exitosamente`,
-          });
-          
-          onPackageCreated();
-          onOpenChange(false);
+        await packagesService.updatePackage(editingPackage.id, updateData);
+        if (imageFile) {
+          await packagesService.uploadPackageImage(editingPackage.id, imageFile);
         }
+        toast({
+          title: "Paquete actualizado",
+          description: `Paquete "${formData.nombre.trim()}" actualizado exitosamente`,
+        });
+        onPackageCreated();
+        onOpenChange(false);
       } else {
         // Crear nuevo paquete
         const packageData: CreatePackageData = {
@@ -224,16 +259,15 @@ const CreatePackageModal = ({ open, onOpenChange, onPackageCreated, editingPacka
         };
 
         const response = await packagesService.createPackage(packageData);
-        
-        if (response.success) {
-          toast({
-            title: "Paquete creado",
-            description: `Paquete "${response.data.paquete.nombre}" creado exitosamente`,
-          });
-          
-          onPackageCreated();
-          onOpenChange(false);
+        if (response.success && response.data.paquete.id && imageFile) {
+          await packagesService.uploadPackageImage(response.data.paquete.id, imageFile);
         }
+        toast({
+          title: "Paquete creado",
+          description: `Paquete "${formData.nombre.trim()}" creado exitosamente`,
+        });
+        onPackageCreated();
+        onOpenChange(false);
       }
     } catch (error) {
       console.error(`Error al ${isEditing ? 'actualizar' : 'crear'} paquete:`, error);
@@ -254,8 +288,14 @@ const CreatePackageModal = ({ open, onOpenChange, onPackageCreated, editingPacka
     }));
   };
 
+  const { ask, setAsk, requestClose, confirm, onOpenChange: guardClose } = useConfirmClose(
+    () => onOpenChange(false),
+    formDirty(formData, baseline) || formDirty(products, productsBaseline) || Boolean(imageFile),
+    loading,
+  );
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={guardClose}>
       <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEditing ? 'Editar Paquete' : 'Crear Nuevo Paquete'}</DialogTitle>
@@ -282,11 +322,15 @@ const CreatePackageModal = ({ open, onOpenChange, onPackageCreated, editingPacka
                 <Input
                   id="nombre"
                   value={formData.nombre}
-                  onChange={(e) => handleInputChange("nombre", e.target.value)}
+                  onChange={(e) => handleInputChange("nombre", e.target.value.slice(0, TITLE_MAX_LENGTH))}
                   placeholder="Ej: Paquete Premium 3 Meses"
+                  maxLength={TITLE_MAX_LENGTH}
                   required
                   disabled={loading}
                 />
+                <p className="text-xs text-muted-foreground">
+                  Máximo {TITLE_MAX_LENGTH} caracteres (límite de WhatsApp). {formData.nombre.length}/{TITLE_MAX_LENGTH}
+                </p>
               </div>
 
               <div className="space-y-2">
@@ -299,6 +343,26 @@ const CreatePackageModal = ({ open, onOpenChange, onPackageCreated, editingPacka
                   rows={3}
                   disabled={loading}
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Imagen del combo</Label>
+                <div className="flex items-center gap-4">
+                  <Input
+                    type="file"
+                    accept="image/jpeg,image/png,image/gif,image/webp"
+                    onChange={handleImageChange}
+                    className="max-w-xs"
+                    disabled={loading}
+                  />
+                  {(imagePreview || (isEditing && editingPackage?.imagen_url)) && (
+                    <img
+                      src={imagePreview || (editingPackage && imageUrl(editingPackage.imagen_url))}
+                      alt="Combo"
+                      className="h-20 w-20 object-cover rounded border"
+                    />
+                  )}
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -483,7 +547,7 @@ const CreatePackageModal = ({ open, onOpenChange, onPackageCreated, editingPacka
             <Button
               type="button"
               variant="outline"
-              onClick={() => onOpenChange(false)}
+              onClick={requestClose}
               disabled={loading}
             >
               Cancelar
@@ -495,6 +559,7 @@ const CreatePackageModal = ({ open, onOpenChange, onPackageCreated, editingPacka
           </DialogFooter>
         </form>
       </DialogContent>
+      <ConfirmCloseDialog open={ask} onOpenChange={setAsk} onConfirm={confirm} />
     </Dialog>
   );
 };

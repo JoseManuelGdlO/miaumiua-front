@@ -16,6 +16,7 @@ import { usersService, User, UpdateUserData, Role } from "@/services/usersServic
 import { rolesService } from "@/services/rolesService";
 import { citiesService, City } from "@/services/citiesService";
 import { Loader2 } from "lucide-react";
+import { ConfirmCloseDialog, formDirty, useConfirmClose } from "@/components/ConfirmClose";
 
 interface EditUserModalProps {
   open: boolean;
@@ -36,6 +37,7 @@ const EditUserModal = ({ open, onOpenChange, user, onUserUpdated }: EditUserModa
     ciudad_id: "",
     isActive: true
   });
+  const [baseline, setBaseline] = useState(formData);
 
   // Cargar datos al abrir el modal o cuando cambia el usuario
   useEffect(() => {
@@ -62,13 +64,15 @@ const EditUserModal = ({ open, onOpenChange, user, onUserUpdated }: EditUserModa
 
       // Establecer los datos del formulario después de cargar roles y ciudades
       if (user) {
-        setFormData({
+        const next = {
           nombre_completo: user.nombre_completo || "",
           correo_electronico: user.correo_electronico || "",
           rol_id: user.rol_id?.toString() || "",
           ciudad_id: user.ciudad_id?.toString() || "",
           isActive: user.isActive ?? true
-        });
+        };
+        setFormData(next);
+        setBaseline(next);
       }
     } catch (error) {
       console.error('Error al cargar datos:', error);
@@ -119,7 +123,7 @@ const EditUserModal = ({ open, onOpenChange, user, onUserUpdated }: EditUserModa
         nombre_completo: formData.nombre_completo,
         correo_electronico: formData.correo_electronico,
         rol_id: parseInt(formData.rol_id),
-        ciudad_id: formData.ciudad_id ? parseInt(formData.ciudad_id) : undefined,
+        ciudad_id: formData.ciudad_id ? parseInt(formData.ciudad_id) : null,
         isActive: formData.isActive
       };
 
@@ -146,10 +150,16 @@ const EditUserModal = ({ open, onOpenChange, user, onUserUpdated }: EditUserModa
     }
   };
 
+  const { ask, setAsk, requestClose, confirm, onOpenChange: guardClose } = useConfirmClose(
+    () => onOpenChange(false),
+    formDirty(formData, baseline),
+    loading,
+  );
+
   if (!user) return null;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={guardClose}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Editar Usuario</DialogTitle>
@@ -233,7 +243,7 @@ const EditUserModal = ({ open, onOpenChange, user, onUserUpdated }: EditUserModa
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
+            <Button type="button" variant="outline" onClick={requestClose} disabled={loading}>
               Cancelar
             </Button>
             <Button type="submit" disabled={loading}>
@@ -249,6 +259,7 @@ const EditUserModal = ({ open, onOpenChange, user, onUserUpdated }: EditUserModa
           </DialogFooter>
         </form>
       </DialogContent>
+      <ConfirmCloseDialog open={ask} onOpenChange={setAsk} onConfirm={confirm} />
     </Dialog>
   );
 };

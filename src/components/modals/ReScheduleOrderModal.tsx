@@ -30,6 +30,18 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { ConfirmCloseDialog, formDirty, useConfirmClose } from "@/components/ConfirmClose";
+
+const EMPTY_RESCHEDULE = {
+  newDeliveryDate: undefined as Date | undefined,
+  newTimeSlot: "",
+  rescheduleReason: "",
+  rescheduledBy: "",
+  customerNotified: false,
+  urgentDelivery: false,
+  newComments: "",
+  newPaymentMethod: ""
+};
 
 interface ReScheduleOrderModalProps {
   open: boolean;
@@ -51,16 +63,11 @@ interface ReScheduleOrderModalProps {
 
 const ReScheduleOrderModal = ({ open, onOpenChange, order }: ReScheduleOrderModalProps) => {
   const { toast } = useToast();
-  const [formData, setFormData] = useState({
-    newDeliveryDate: undefined as Date | undefined,
-    newTimeSlot: "",
-    rescheduleReason: "",
-    rescheduledBy: "",
-    customerNotified: false,
-    urgentDelivery: false,
-    newComments: "",
-    newPaymentMethod: ""
-  });
+  const [formData, setFormData] = useState(EMPTY_RESCHEDULE);
+  const { ask, setAsk, requestClose, confirm, onOpenChange: guardClose } = useConfirmClose(
+    () => onOpenChange(false),
+    formDirty(formData, EMPTY_RESCHEDULE),
+  );
 
   const timeSlots = [
     "8:00 AM - 10:00 AM",
@@ -169,7 +176,7 @@ const ReScheduleOrderModal = ({ open, onOpenChange, order }: ReScheduleOrderModa
   if (!order) return null;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={guardClose}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -369,7 +376,7 @@ const ReScheduleOrderModal = ({ open, onOpenChange, order }: ReScheduleOrderModa
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button type="button" variant="outline" onClick={requestClose}>
               Cancelar
             </Button>
             <Button type="submit">
@@ -378,6 +385,7 @@ const ReScheduleOrderModal = ({ open, onOpenChange, order }: ReScheduleOrderModa
           </DialogFooter>
         </form>
       </DialogContent>
+      <ConfirmCloseDialog open={ask} onOpenChange={setAsk} onConfirm={confirm} />
     </Dialog>
   );
 };

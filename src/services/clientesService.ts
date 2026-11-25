@@ -1,4 +1,5 @@
 import { config } from '@/config/environment';
+import { falloHttp } from '@/lib/api-error';
 
 // Interfaces - Updated to match API response
 export interface Cliente {
@@ -11,6 +12,8 @@ export interface Cliente {
   direccion_entrega?: string;
   puntos_lealtad: number;
   notas_especiales?: string;
+  es_distribuidor?: boolean;
+  tipo_cuenta?: 'general' | 'veterinaria' | 'distribuidor';
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -40,6 +43,8 @@ export interface CreateClienteData {
   canal_contacto?: string;
   direccion_entrega?: string;
   notas_especiales?: string;
+  es_distribuidor?: boolean;
+  tipo_cuenta?: 'general' | 'veterinaria' | 'distribuidor';
 }
 
 export interface UpdateClienteData {
@@ -50,6 +55,8 @@ export interface UpdateClienteData {
   canal_contacto?: string;
   direccion_entrega?: string;
   notas_especiales?: string;
+  es_distribuidor?: boolean;
+  tipo_cuenta?: 'general' | 'veterinaria' | 'distribuidor';
 }
 
 export interface ClienteResponse {
@@ -130,7 +137,7 @@ class ClientesService {
       authService.handleAuthError(response);
       
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
+      throw falloHttp(response, errorData);
     }
 
     return response.json();
@@ -171,6 +178,24 @@ class ClientesService {
     });
   }
 
+  /** Contraseña del portal de clientes (sitio web público) */
+  async resetPortalPassword(
+    id: number,
+    data: { newPassword: string; forcePasswordChange?: boolean }
+  ): Promise<{
+    success: boolean;
+    message?: string;
+    data?: { cliente: { id: number; must_change_password: boolean } };
+  }> {
+    return this.makeRequest(`${this.baseUrl}/${id}/portal-password`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        newPassword: data.newPassword,
+        forcePasswordChange: data.forcePasswordChange ?? true,
+      }),
+    });
+  }
+
   // Eliminar cliente (baja lógica)
   async deleteCliente(id: number): Promise<{ success: boolean; message: string }> {
     return this.makeRequest<{ success: boolean; message: string }>(`${this.baseUrl}/${id}`, {
@@ -206,7 +231,7 @@ class ClientesService {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
+      throw falloHttp(response, errorData);
     }
 
     return response.blob();
@@ -240,7 +265,7 @@ class ClientesService {
       authService.handleAuthError(response);
       
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
+      throw falloHttp(response, errorData);
     }
 
     return response.json();

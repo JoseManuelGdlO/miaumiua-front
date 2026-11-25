@@ -25,6 +25,19 @@ import { clientesService, CreateClienteData } from "@/services/clientesService";
 import { petsService, CreatePetData } from "@/services/petsService";
 import { citiesService } from "@/services/citiesService";
 import { Loader2, Plus, Trash2, Heart } from "lucide-react";
+import { TipoCuenta, TipoCuentaCards } from "@/components/TipoCuentaCards";
+import { ConfirmCloseDialog, formDirty, useConfirmClose } from "@/components/ConfirmClose";
+
+const EMPTY_CUSTOMER = {
+  nombre_completo: "",
+  telefono: "",
+  email: "",
+  fkid_ciudad: "",
+  canal_contacto: "",
+  direccion_entrega: "",
+  notas_especiales: "",
+  tipo_cuenta: "general" as TipoCuenta,
+};
 
 interface CreateCustomerModalProps {
   open: boolean;
@@ -46,17 +59,12 @@ const CreateCustomerModal = ({ open, onOpenChange, onClienteCreated }: CreateCus
   const [loading, setLoading] = useState(false);
   const [cities, setCities] = useState<Array<{ id: number; nombre: string; departamento: string }>>([]);
   
-  const [formData, setFormData] = useState({
-    nombre_completo: "",
-    telefono: "",
-    email: "",
-    fkid_ciudad: "",
-    canal_contacto: "",
-    direccion_entrega: "",
-    notas_especiales: ""
-  });
+  const [formData, setFormData] = useState(EMPTY_CUSTOMER);
 
   const [pets, setPets] = useState<PetFormData[]>([]);
+  const [estado, setEstado] = useState("todos");
+  const estados = [...new Set(cities.map((city) => city.departamento).filter(Boolean))].sort();
+  const ciudadesVisibles = estado === "todos" ? cities : cities.filter((city) => city.departamento === estado);
 
   // Cargar ciudades al abrir el modal
   useEffect(() => {
@@ -68,16 +76,9 @@ const CreateCustomerModal = ({ open, onOpenChange, onClienteCreated }: CreateCus
   // Reset form cuando se abre el modal
   useEffect(() => {
     if (open) {
-      setFormData({
-        nombre_completo: "",
-        telefono: "",
-        email: "",
-        fkid_ciudad: "",
-        canal_contacto: "",
-        direccion_entrega: "",
-        notas_especiales: ""
-      });
+      setFormData(EMPTY_CUSTOMER);
       setPets([]);
+      setEstado("todos");
     }
   }, [open]);
 
@@ -177,6 +178,8 @@ const CreateCustomerModal = ({ open, onOpenChange, onClienteCreated }: CreateCus
         email: formData.email || undefined,
         fkid_ciudad: parseInt(formData.fkid_ciudad),
         canal_contacto: formData.canal_contacto || undefined,
+        tipo_cuenta: formData.tipo_cuenta,
+        es_distribuidor: formData.tipo_cuenta !== "general",
         direccion_entrega: formData.direccion_entrega || undefined,
         notas_especiales: formData.notas_especiales || undefined
       };
@@ -223,6 +226,12 @@ const CreateCustomerModal = ({ open, onOpenChange, onClienteCreated }: CreateCus
     }
   };
 
+  const { ask, setAsk, requestClose, confirm, onOpenChange: guardClose } = useConfirmClose(
+    () => onOpenChange(false),
+    formDirty(formData, EMPTY_CUSTOMER) || pets.length > 0,
+    loading,
+  );
+
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({
       ...prev,
@@ -231,7 +240,7 @@ const CreateCustomerModal = ({ open, onOpenChange, onClienteCreated }: CreateCus
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={guardClose}>
       <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Nuevo Cliente</DialogTitle>
@@ -285,22 +294,44 @@ const CreateCustomerModal = ({ open, onOpenChange, onClienteCreated }: CreateCus
                     placeholder="correo@ejemplo.com"
                   />
                 </div>
-
                 <div className="space-y-2">
-                  <Label htmlFor="fkid_ciudad">Ciudad *</Label>
-                  <Select value={formData.fkid_ciudad} onValueChange={(value) => handleInputChange('fkid_ciudad', value)}>
+                  <Label>Estado</Label>
+                  <Select
+                    value={estado}
+                    onValueChange={(value) => {
+                      setEstado(value);
+                      const still = (value === "todos" ? cities : cities.filter((city) => city.departamento === value))
+                        .some((city) => city.id.toString() === formData.fkid_ciudad);
+                      if (!still) handleInputChange("fkid_ciudad", "");
+                    }}
+                  >
                     <SelectTrigger>
-                      <SelectValue placeholder="Selecciona una ciudad" />
+                      <SelectValue placeholder="Estado" />
                     </SelectTrigger>
                     <SelectContent>
-                      {cities.map((city) => (
-                        <SelectItem key={city.id} value={city.id.toString()}>
-                          {city.nombre} - {city.departamento}
-                        </SelectItem>
+                      <SelectItem value="todos">Todos</SelectItem>
+                      {estados.map((name) => (
+                        <SelectItem key={name} value={name}>{name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="fkid_ciudad">Ciudad *</Label>
+                <Select value={formData.fkid_ciudad} onValueChange={(value) => handleInputChange('fkid_ciudad', value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecciona una ciudad" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ciudadesVisibles.map((city) => (
+                      <SelectItem key={city.id} value={city.id.toString()}>
+                        {city.nombre} - {city.departamento}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-2">
@@ -329,6 +360,14 @@ const CreateCustomerModal = ({ open, onOpenChange, onClienteCreated }: CreateCus
                   onChange={(e) => handleInputChange('direccion_entrega', e.target.value)}
                   placeholder="Dirección completa para entregas"
                   rows={3}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Tipo de cuenta</Label>
+                <TipoCuentaCards
+                  value={formData.tipo_cuenta}
+                  onChange={(tipo_cuenta) => setFormData((prev) => ({ ...prev, tipo_cuenta }))}
                 />
               </div>
 
@@ -474,7 +513,7 @@ const CreateCustomerModal = ({ open, onOpenChange, onClienteCreated }: CreateCus
             <Button
               type="button"
               variant="outline"
-              onClick={() => onOpenChange(false)}
+              onClick={requestClose}
               disabled={loading}
             >
               Cancelar
@@ -486,6 +525,7 @@ const CreateCustomerModal = ({ open, onOpenChange, onClienteCreated }: CreateCus
           </DialogFooter>
         </form>
       </DialogContent>
+      <ConfirmCloseDialog open={ask} onOpenChange={setAsk} onConfirm={confirm} />
     </Dialog>
   );
 };

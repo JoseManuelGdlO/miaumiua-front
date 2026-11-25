@@ -1,4 +1,5 @@
 import { config } from '../config/environment';
+import { mensajeDeError } from '@/lib/api-error';
 import { authService } from './authService';
 
 // Interfaces para Productos
@@ -95,7 +96,7 @@ class ProductsService {
           // Manejar errores de autenticación (401/403) y desloguear automáticamente
           authService.handleAuthError(response);
           
-          throw new Error(`Error ${response.status}: ${response.statusText}`);
+          throw new Error(await mensajeDeError(response));
         }
         return response.json();
       });

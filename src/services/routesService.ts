@@ -1,3 +1,4 @@
+import { falloHttp } from '@/lib/api-error';
 import { config } from '@/config/environment';
 import { authService } from './authService';
 
@@ -14,6 +15,7 @@ export interface Route {
   total_entregados: number;
   distancia_estimada: number;
   tiempo_estimado: number;
+  polyline_encoded?: string | null;
   notas?: string;
   orden_prioridad?: number;
   baja_logica?: boolean;
@@ -65,7 +67,15 @@ export interface RouteOrder {
       id: number;
       nombre_completo: string;
       telefono: string;
+      lat?: number;
+      lng?: number;
     };
+    cobro_entrega?: {
+      metodo?: string;
+      monto_efectivo?: number;
+      monto_transferencia?: number;
+      comprobante_path?: string | null;
+    } | null;
     productos?: Array<{
       id: number;
       cantidad: number;
@@ -97,9 +107,10 @@ export interface CreateRouteRequest {
   nombre_ruta: string;
   fecha_ruta: string;
   fkid_ciudad: number;
-  fkid_repartidor: number;
+  fkid_repartidor?: number;
   notas?: string;
   orden_prioridad?: number;
+  estado?: string;
 }
 
 export interface UpdateRouteRequest {
@@ -152,6 +163,7 @@ export interface AvailableOrder {
   estado: string;
   fecha_pedido?: string;
   fecha_entrega?: string;
+  horario_preferente?: string | null;
   cliente?: {
     id: number;
     nombre_completo: string;
@@ -259,7 +271,7 @@ class RoutesService {
       authService.handleAuthError(response);
       
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      throw falloHttp(response, errorData);
     }
 
     return response.json();
@@ -354,7 +366,7 @@ class RoutesService {
     if (ciudad) queryParams.append('ciudad', ciudad.toString());
     
     const queryString = queryParams.toString();
-    return this.makeRequest(`/rutas/estadisticas${queryString ? `?${queryString}` : ''}`);
+    return this.makeRequest(`/rutas/estadisticas/general${queryString ? `?${queryString}` : ''}`);
   }
 
   // Rutas-Pedidos

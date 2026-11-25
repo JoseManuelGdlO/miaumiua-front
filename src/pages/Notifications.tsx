@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
-import { notificationsService, Notification } from "@/services/notificationsService";
+import { useNotificationStream } from "@/hooks/useNotificationStream";
+import { notificationsService, Notification, handleNotificationNavigation } from "@/services/notificationsService";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +16,7 @@ import {
 } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { TablePagination } from "@/components/TablePagination";
 import {
   Bell,
   Package,
@@ -59,10 +61,11 @@ const Notifications = () => {
   const [readFilter, setReadFilter] = useState<string>("all");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [notificationToDelete, setNotificationToDelete] = useState<string | null>(null);
+  const stream = useNotificationStream();
 
-  const loadNotifications = useCallback(async () => {
+  const loadNotifications = useCallback(async (options?: { silent?: boolean }) => {
     try {
-      setLoading(true);
+      if (!options?.silent) setLoading(true);
       
       // Mapear filtros del frontend al backend
       const params: any = {
@@ -113,15 +116,15 @@ const Notifications = () => {
     loadNotifications();
   }, [loadNotifications]);
 
-  // Actualización automática periódica (respeta los filtros actuales)
   useEffect(() => {
-    // Actualizar automáticamente cada 60 segundos
-    const interval = setInterval(() => {
-      loadNotifications();
-    }, 60000); // 60 segundos
-    
-    return () => clearInterval(interval);
-  }, [loadNotifications]);
+    if (!stream) return;
+
+    return stream.subscribe((event) => {
+      if (event.type === "notification" || event.type === "reconnect") {
+        loadNotifications({ silent: true });
+      }
+    });
+  }, [stream, loadNotifications]);
 
   // El filtrado ya se hace en el backend, pero podemos mantener un filtro local para el tipo
   const filteredNotifications = useMemo(() => {
@@ -233,7 +236,7 @@ const Notifications = () => {
     try {
       await notificationsService.markAllAsRead();
       setNotifications(prev =>
-        prev.map(n => ({ ...n, read: true }))
+        prev.map(n => n.preserveUnread ? n : { ...n, read: true })
       );
       toast({
         title: 'Todas las notificaciones marcadas como leídas',
@@ -302,9 +305,12 @@ const Notifications = () => {
   };
 
   const handleNotificationClick = (notification: Notification) => {
-    markAsRead(notification.id);
-    if (notification.actionUrl) {
-      navigate(notification.actionUrl);
+    const navigated = handleNotificationNavigation(notification, navigate, {
+      markAsRead,
+    });
+
+    if (!navigated && !notification.read) {
+      markAsRead(notification.id);
     }
   };
 
@@ -535,30 +541,14 @@ const Notifications = () => {
               </div>
             </ScrollArea>
           )}
-          {!loading && totalPages > 1 && (
-            <div className="flex items-center justify-between mt-4 pt-4 border-t">
-              <div className="text-sm text-muted-foreground">
-                Página {currentPage} de {totalPages} ({total} notificaciones)
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                  disabled={currentPage === 1}
-                >
-                  Anterior
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                  disabled={currentPage === totalPages}
-                >
-                  Siguiente
-                </Button>
-              </div>
-            </div>
+          {!loading && (
+            <TablePagination
+              page={currentPage}
+              pageSize={20}
+              total={total}
+              label="notificaciones"
+              onPageChange={setCurrentPage}
+            />
           )}
         </CardContent>
       </Card>

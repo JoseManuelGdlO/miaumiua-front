@@ -36,7 +36,7 @@ const WhatsAppMessageStatus = ({ status, className = '' }: WhatsAppMessageStatus
       case 'read':
         return {
           icon: CheckCheck,
-          color: 'text-blue-400',
+          color: 'text-green-500',
           tooltip: 'Mensaje leído'
         };
       case 'failed':
@@ -62,7 +62,7 @@ const WhatsAppMessageStatus = ({ status, className = '' }: WhatsAppMessageStatus
       <Tooltip>
         <TooltipTrigger asChild>
           <span className={`inline-flex items-center ${config.color} ${className}`}>
-            <Icon className="h-3 w-3" />
+            <Icon className="h-5 w-5" />
           </span>
         </TooltipTrigger>
         <TooltipContent>

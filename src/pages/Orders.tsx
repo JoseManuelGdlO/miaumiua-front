@@ -17,14 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from "@/components/ui/pagination";
+import { TablePagination } from "@/components/TablePagination";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -68,13 +61,19 @@ import {
 } from "@/utils/permissions";
 import { useToast } from "@/hooks/use-toast";
 import { ordersService, Order, OrderStatsResponse } from "@/services/ordersService";
+import { notificationsService } from "@/services/notificationsService";
+import { formatCount, formatMoney } from "@/utils/format";
+import { StatCard } from "@/components/StatCard";
 import { clientesService } from "@/services/clientesService";
 import { citiesService } from "@/services/citiesService";
 import CreateOrderModal from "@/components/modals/CreateOrderModal";
 import EditOrderModal from "@/components/modals/EditOrderModal";
+import ConfirmDeleteModal from "@/components/modals/ConfirmDeleteModal";
 
 // Extend the Order interface to match API response
 interface OrderWithAPI extends Order {
+  createdAt?: string;
+  fecha_creacion?: string;
   cliente?: {
     id: number;
     nombre_completo: string;
@@ -93,6 +92,7 @@ const Orders = () => {
   const [orders, setOrders] = useState<OrderWithAPI[]>([]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<OrderStatsResponse['data'] | null>(null);
+  const [ventasDelMes, setVentasDelMes] = useState<{ valor: number; formatoMoneda: string; cambioFormato: string } | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [paymentMethodFilter, setPaymentMethodFilter] = useState<string>("all");
@@ -104,8 +104,14 @@ const Orders = () => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<OrderWithAPI | null>(null);
+  const [selectedOrderForDelete, setSelectedOrderForDelete] = useState<OrderWithAPI | null>(null);
+  const [detailsStripeRetryLoading, setDetailsStripeRetryLoading] = useState(false);
   const itemsPerPage = 10;
+
+  const getStripeCheckoutUrl = (order: OrderWithAPI): string | null =>
+    order.stripe_link_url ?? order.url ?? null;
 
   // Cargar pedidos y estadísticas al montar el componente
   useEffect(() => {
@@ -146,9 +152,21 @@ const Orders = () => {
 
   const loadStats = async () => {
     try {
-      const response = await ordersService.getOrderStats();
-      if (response.success) {
-        setStats(response.data);
+      const [orderStatsRes, dashboardRes] = await Promise.all([
+        ordersService.getOrderStats(),
+        notificationsService.getDashboardKPIs(new Date().getFullYear(), new Date().getMonth() + 1),
+      ]);
+      if (orderStatsRes.success) {
+        setStats(orderStatsRes.data);
+      }
+      if (dashboardRes?.success && dashboardRes.data?.ventasDelMes) {
+        setVentasDelMes({
+          valor: dashboardRes.data.ventasDelMes.valor,
+          formatoMoneda: dashboardRes.data.ventasDelMes.formatoMoneda,
+          cambioFormato: dashboardRes.data.ventasDelMes.cambioFormato,
+        });
+      } else {
+        setVentasDelMes(null);
       }
     } catch (error) {
       console.error('Error al cargar estadísticas:', error);
@@ -186,13 +204,7 @@ const Orders = () => {
     setCurrentPage(1);
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('es-CO', {
-      style: 'currency',
-      currency: 'COP',
-      minimumFractionDigits: 0,
-    }).format(amount);
-  };
+  const formatCurrency = (amount: number) => formatMoney(amount);
 
   const formatDate = (dateString: string | null | undefined) => {
     if (!dateString) return 'N/A';
@@ -211,6 +223,12 @@ const Orders = () => {
     } catch (error) {
       return 'Fecha inválida';
     }
+  };
+
+  // Obtener fecha de creación del pedido (la API puede devolverla en diferentes campos)
+  const getOrderCreatedDate = (order: OrderWithAPI | null | undefined): string | undefined => {
+    if (!order) return undefined;
+    return order.created_at ?? order.createdAt ?? order.fecha_creacion;
   };
 
   const handleViewDetails = async (order: OrderWithAPI) => {
@@ -263,19 +281,20 @@ const Orders = () => {
 
   const getStatusBadge = (status: string) => {
     const statusConfig = {
-      pendiente: { label: 'Pendiente', variant: 'secondary' as const, icon: Clock },
-      confirmado: { label: 'Confirmado', variant: 'default' as const, icon: CheckCircle },
-      en_preparacion: { label: 'En Preparación', variant: 'default' as const, icon: Package },
-      en_camino: { label: 'En Camino', variant: 'default' as const, icon: Truck },
-      entregado: { label: 'Entregado', variant: 'default' as const, icon: CheckCircle },
-      cancelado: { label: 'Cancelado', variant: 'destructive' as const, icon: XCircle }
+      pendiente: { label: 'Pendiente', className: 'bg-yellow-100 text-yellow-800 border-yellow-200', icon: Clock },
+      confirmado: { label: 'Confirmado', className: 'bg-blue-100 text-blue-800 border-blue-200', icon: CheckCircle },
+      en_preparacion: { label: 'En Preparación', className: 'bg-orange-100 text-orange-800 border-orange-200', icon: Package },
+      en_camino: { label: 'En Camino', className: 'bg-sky-100 text-sky-800 border-sky-200', icon: Truck },
+      entregado: { label: 'Entregado', className: 'bg-green-100 text-green-800 border-green-200', icon: CheckCircle },
+      no_entregado: { label: 'No Entregado', className: 'bg-red-100 text-red-800 border-red-200', icon: XCircle },
+      cancelado: { label: 'Cancelado', className: 'bg-rose-100 text-rose-800 border-rose-200', icon: XCircle }
     };
 
     const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.pendiente;
     const Icon = config.icon;
 
     return (
-      <Badge variant={config.variant} className="flex items-center gap-1">
+      <Badge variant="outline" className={`flex items-center gap-1 ${config.className}`}>
         <Icon className="h-3 w-3" />
         {config.label}
       </Badge>
@@ -284,14 +303,14 @@ const Orders = () => {
 
   const getPaymentMethodBadge = (method: string) => {
     const methodConfig = {
-      efectivo: { label: 'Efectivo', variant: 'secondary' as const },
-      tarjeta: { label: 'Tarjeta', variant: 'default' as const },
-      transferencia: { label: 'Transferencia', variant: 'default' as const },
-      pago_movil: { label: 'Pago Móvil', variant: 'default' as const }
+      efectivo: { label: 'Efectivo', className: 'bg-green-100 text-green-800 border-green-200' },
+      tarjeta: { label: 'Tarjeta', className: 'bg-blue-100 text-blue-800 border-blue-200' },
+      transferencia: { label: 'Transferencia', className: 'bg-purple-100 text-purple-800 border-purple-200' },
+      pago_movil: { label: 'Pago Móvil', className: 'bg-orange-100 text-orange-800 border-orange-200' }
     };
 
     const config = methodConfig[method as keyof typeof methodConfig] || methodConfig.efectivo;
-    return <Badge variant={config.variant}>{config.label}</Badge>;
+    return <Badge variant="outline" className={config.className}>{config.label}</Badge>;
   };
 
   const handleStatusChange = async (orderId: number, newStatus: string) => {
@@ -312,13 +331,44 @@ const Orders = () => {
     }
   };
 
-  const handleDeleteOrder = async (orderId: number) => {
+  const handleRetryStripeFromDetails = async () => {
+    if (!selectedOrder) return;
     try {
-      await ordersService.deleteOrder(orderId);
+      setDetailsStripeRetryLoading(true);
+      await ordersService.createStripePaymentLink(selectedOrder.id);
+      const refreshed = await ordersService.getOrderById(selectedOrder.id);
+      if (refreshed.success) {
+        setSelectedOrder(refreshed.data.pedido as OrderWithAPI);
+        const url = getStripeCheckoutUrl(refreshed.data.pedido as OrderWithAPI);
+        toast({
+          title: url ? "Enlace listo" : "Actualizado",
+          description: url
+            ? "El enlace de pago con Stripe está disponible."
+            : "Se procesó la solicitud; revisa el enlace en unos segundos.",
+        });
+      }
+    } catch (error) {
+      console.error("Error al generar link Stripe:", error);
+      toast({
+        title: "No se pudo generar el link",
+        description: error instanceof Error ? error.message : "Error desconocido",
+        variant: "destructive",
+      });
+    } finally {
+      setDetailsStripeRetryLoading(false);
+    }
+  };
+
+  const handleDeleteOrder = async () => {
+    if (!selectedOrderForDelete) return;
+
+    try {
+      await ordersService.deleteOrder(selectedOrderForDelete.id);
       toast({
         title: "Pedido eliminado",
         description: "El pedido ha sido eliminado correctamente",
       });
+      setSelectedOrderForDelete(null);
       loadOrders();
     } catch (error) {
       console.error('Error al eliminar pedido:', error);
@@ -351,57 +401,34 @@ const Orders = () => {
       {/* Stats Cards */}
       {stats && (
         <div className="grid gap-4 md:grid-cols-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Pedidos</CardTitle>
-              <Package className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.total_pedidos || 0}</div>
-              <p className="text-xs text-muted-foreground">
-                {stats.pedidos_pendientes || 0} pendientes
-              </p>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Ventas Totales</CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{formatCurrency(stats.total_ventas || 0)}</div>
-              <p className="text-xs text-muted-foreground">
-                Promedio: {formatCurrency(stats.promedio_pedido || 0)}
-              </p>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Ventas del Mes</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{formatCurrency(stats.ventas_mes_actual || 0)}</div>
-              <p className="text-xs text-muted-foreground">
-                {stats.crecimiento_ventas && stats.crecimiento_ventas > 0 ? '+' : ''}{stats.crecimiento_ventas?.toFixed(1) || '0.0'}% vs mes anterior
-              </p>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Entregados</CardTitle>
-              <CheckCircle className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.pedidos_entregados || 0}</div>
-              <p className="text-xs text-muted-foreground">
-                {stats.pedidos_en_camino || 0} en camino
-              </p>
-            </CardContent>
-          </Card>
+          <StatCard
+            title="Total Pedidos"
+            value={formatCount(stats.total_pedidos || 0)}
+            hint={`${formatCount(stats.pedidos_pendientes || 0)} pendientes`}
+            icon={Package}
+            tone="primary"
+          />
+          <StatCard
+            title="Ventas Totales"
+            value={formatCurrency(stats.total_ventas || 0)}
+            hint={`Promedio: ${formatCurrency(stats.promedio_pedido || 0)}`}
+            icon={DollarSign}
+            tone="primary"
+          />
+          <StatCard
+            title="Ventas del Mes"
+            value={ventasDelMes ? formatMoney(ventasDelMes.valor) : formatCurrency(stats.ventas_mes_actual || 0)}
+            hint={ventasDelMes ? ventasDelMes.cambioFormato : `${stats.crecimiento_ventas != null && stats.crecimiento_ventas > 0 ? '+' : ''}${(stats.crecimiento_ventas ?? 0).toFixed(1)}% vs mes anterior`}
+            icon={TrendingUp}
+            tone="info"
+          />
+          <StatCard
+            title="Entregados"
+            value={formatCount(stats.pedidos_entregados || 0)}
+            hint={`${formatCount(stats.pedidos_en_camino || 0)} en camino`}
+            icon={CheckCircle}
+            tone="success"
+          />
         </div>
       )}
 
@@ -437,6 +464,7 @@ const Orders = () => {
                   <SelectItem value="en_preparacion">En Preparación</SelectItem>
                   <SelectItem value="en_camino">En Camino</SelectItem>
                   <SelectItem value="entregado">Entregado</SelectItem>
+                  <SelectItem value="no_entregado">No Entregado</SelectItem>
                   <SelectItem value="cancelado">Cancelado</SelectItem>
                 </SelectContent>
               </Select>
@@ -503,7 +531,7 @@ const Orders = () => {
                   <TableHead>Método Pago</TableHead>
                   <TableHead>Total</TableHead>
                   <TableHead>Fecha Entrega</TableHead>
-                  <TableHead className="text-right">Acciones</TableHead>
+                  <TableHead>Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -569,7 +597,7 @@ const Orders = () => {
                             <div className="text-muted-foreground">Sin fecha</div>
                           )}
                           <div className="text-xs text-muted-foreground">
-                            Creado: {formatDate(order.created_at)}
+                            Creado: {formatDate(getOrderCreatedDate(order))}
                           </div>
                         </div>
                       </TableCell>
@@ -615,10 +643,25 @@ const Orders = () => {
                                 Marcar Entregado
                               </DropdownMenuItem>
                             )}
+                            {canDeliverOrder() && (order.estado as string) === 'no_entregado' && (
+                              <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'entregado')}>
+                                <CheckCircle className="mr-2 h-4 w-4" />
+                                Marcar Entregado
+                              </DropdownMenuItem>
+                            )}
+                            {canChangeOrderStatus() && (order.estado === 'pendiente' || order.estado === 'en_camino' || order.estado === 'confirmado') && (
+                              <DropdownMenuItem 
+                                onClick={() => handleStatusChange(order.id, 'no_entregado')}
+                                className="text-red-500"
+                              >
+                                <XCircle className="mr-2 h-4 w-4" />
+                                No Entregado
+                              </DropdownMenuItem>
+                            )}
                             {canCancelOrder() && order.estado !== 'cancelado' && order.estado !== 'entregado' && (
                               <DropdownMenuItem 
                                 onClick={() => handleStatusChange(order.id, 'cancelado')}
-                                className="text-red-600"
+                                className="text-red-700"
                               >
                                 <XCircle className="mr-2 h-4 w-4" />
                                 Cancelar
@@ -626,8 +669,11 @@ const Orders = () => {
                             )}
                             {canDelete('orders') && (
                               <DropdownMenuItem 
-                                onClick={() => handleDeleteOrder(order.id)}
-                                className="text-red-600"
+                                onClick={() => {
+                                  setSelectedOrderForDelete(order);
+                                  setIsDeleteModalOpen(true);
+                                }}
+                                className="text-red-900"
                               >
                                 <Trash2 className="mr-2 h-4 w-4" />
                                 Eliminar
@@ -643,46 +689,13 @@ const Orders = () => {
             </Table>
           </div>
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between space-x-2 py-4">
-            <div className="text-sm text-muted-foreground">
-                Mostrando {((currentPage - 1) * itemsPerPage) + 1} a {Math.min(currentPage * itemsPerPage, totalOrders)} de {totalOrders} pedidos
-            </div>
-            <Pagination>
-              <PaginationContent>
-                <PaginationItem>
-                  <PaginationPrevious 
-                      onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                      className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
-                  />
-                </PaginationItem>
-                  
-                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                    const page = i + 1;
-                  return (
-                    <PaginationItem key={page}>
-                      <PaginationLink
-                          onClick={() => setCurrentPage(page)}
-                        isActive={currentPage === page}
-                        className="cursor-pointer"
-                      >
-                        {page}
-                      </PaginationLink>
-                    </PaginationItem>
-                  );
-                })}
-                
-                <PaginationItem>
-                  <PaginationNext 
-                      onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                      className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
-                  />
-                </PaginationItem>
-              </PaginationContent>
-            </Pagination>
-          </div>
-          )}
+          <TablePagination
+            page={currentPage}
+            pageSize={itemsPerPage}
+            total={totalOrders}
+            label="pedidos"
+            onPageChange={setCurrentPage}
+          />
         </CardContent>
       </Card>
 
@@ -696,11 +709,11 @@ const Orders = () => {
       {/* Order Details Modal */}
       {selectedOrder && (
         <Dialog open={isDetailsModalOpen} onOpenChange={setIsDetailsModalOpen}>
-          <DialogContent className="max-w-4xl">
-            <DialogHeader>
+          <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+            <DialogHeader className="flex-shrink-0">
               <DialogTitle>Detalles del Pedido #{selectedOrder.numero_pedido}</DialogTitle>
             </DialogHeader>
-            <div className="space-y-6">
+            <div className="space-y-6 overflow-y-auto min-h-0 flex-1 pr-2">
               {/* Order Info */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -708,9 +721,48 @@ const Orders = () => {
                   <div className="space-y-1 text-sm">
                     <p><strong>Número:</strong> {selectedOrder.numero_pedido}</p>
                     <p><strong>Estado:</strong> {getStatusBadge(selectedOrder.estado)}</p>
-                    <p><strong>Fecha:</strong> {formatDate(selectedOrder.created_at)}</p>
+                    <p><strong>Fecha:</strong> {formatDate(getOrderCreatedDate(selectedOrder))}</p>
                     <p><strong>Método de Pago:</strong> {selectedOrder.metodo_pago}</p>
                     <p><strong>Total:</strong> {formatCurrency(selectedOrder.total)}</p>
+                    {selectedOrder.metodo_pago === "tarjeta" &&
+                      (() => {
+                        const checkoutUrl = getStripeCheckoutUrl(selectedOrder);
+                        return (
+                          <div className="mt-3 space-y-2 rounded-md border bg-muted/40 p-3">
+                            <p className="text-xs font-medium text-muted-foreground">
+                              Pago con tarjeta (Stripe)
+                            </p>
+                            {checkoutUrl ? (
+                              <a
+                                href={checkoutUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm text-primary underline break-all"
+                              >
+                                {checkoutUrl}
+                              </a>
+                            ) : (
+                              <div className="space-y-2">
+                                <p className="text-sm text-muted-foreground">
+                                  El enlace de pago aún no está disponible. Puedes generarlo de nuevo.
+                                </p>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={handleRetryStripeFromDetails}
+                                  disabled={detailsStripeRetryLoading}
+                                >
+                                  {detailsStripeRetryLoading && (
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                  )}
+                                  Reintentar generar link
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                   </div>
                 </div>
                 <div>
@@ -804,6 +856,21 @@ const Orders = () => {
           onOrderUpdated={loadOrders}
       />
       )}
+
+      {/* Confirm Delete Modal */}
+      <ConfirmDeleteModal
+        open={isDeleteModalOpen}
+        onOpenChange={(open) => {
+          setIsDeleteModalOpen(open);
+          if (!open) {
+            setSelectedOrderForDelete(null);
+          }
+        }}
+        onConfirm={handleDeleteOrder}
+        title="Eliminar Pedido"
+        description={`¿Estás seguro de que deseas eliminar el pedido #${selectedOrderForDelete?.numero_pedido}? Esta acción no se puede deshacer.`}
+        itemType="pedido"
+      />
     </div>
   );
 };

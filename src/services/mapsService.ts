@@ -1,7 +1,18 @@
+import { falloHttp } from '@/lib/api-error';
 import { config } from '../config/environment';
 import { authService } from './authService';
 
 const API_BASE_URL = config.apiBaseUrl;
+
+export const AVISO_SIN_UBICAR = 'Esa dirección no se encontró en el mapa de esa ciudad. Comunícate a soporte para confirmarla.';
+
+export function direccionConCp(direccion: string, cp?: string) {
+  const d = String(direccion || '').trim();
+  const c = String(cp || '').replace(/\D/g, '').slice(0, 5);
+  if (!c) return d;
+  if (d.includes(c)) return d;
+  return `${d}, ${c}`;
+}
 
 interface Coordinates {
   lat: number;
@@ -14,6 +25,7 @@ interface GeocodeResponse {
     lat: number;
     lng: number;
     formatted_address?: string;
+    aproximado?: boolean;
   };
 }
 
@@ -64,20 +76,28 @@ class MapsService {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ message: 'Error desconocido' }));
-      throw new Error(error.message || `Error ${response.status}`);
+      throw falloHttp(response, error);
     }
 
     return response.json();
   }
 
-  async geocodeAddress(address: string, estado?: string, ciudad?: string): Promise<GeocodeResponse> {
+  async geocodeAddress(
+    address: string,
+    ciudad?: string,
+    colonia?: string,
+    codigo_postal?: string,
+    estado?: string
+  ): Promise<GeocodeResponse> {
     return this.request<GeocodeResponse>('/maps/geocode', {
       method: 'POST',
-      body: JSON.stringify({ address, estado, ciudad }),
+      body: JSON.stringify({ address, ciudad, colonia, codigo_postal, estado }),
     });
   }
 
-  async geocodeMultipleAddresses(addresses: string[]): Promise<GeocodeMultipleResponse> {
+  async geocodeMultipleAddresses(
+    addresses: Array<string | { address: string; ciudad?: string; colonia?: string; codigo_postal?: string }>
+  ): Promise<GeocodeMultipleResponse> {
     return this.request<GeocodeMultipleResponse>('/maps/geocode-multiple', {
       method: 'POST',
       body: JSON.stringify({ addresses }),
@@ -92,6 +112,20 @@ class MapsService {
       method: 'POST',
       body: JSON.stringify({ origins, destinations }),
     });
+  }
+
+  async getTrazado(rutaId: number) {
+    const payload = await this.request<{ success: boolean; data: {
+      ruta_id: number;
+      franja: "manana" | "tarde";
+      ciudad: string | null;
+      repartidor: { id: number | null; lat: number | null; lng: number | null; ubicacion_at: string | null };
+      paradas: { orden: number; pedido_id: number; numero: string | null; lat: number; lng: number; estado_entrega: string }[];
+      polyline: Coordinates[];
+      eta: { pedido_id: number; numero: string | null; minutos: number; km: number | null } | null;
+      sin_coords: { pedido_id: number; direccion: string | null }[];
+    } }>(`/rutas/${rutaId}/trazado`);
+    return payload.data;
   }
 }
 

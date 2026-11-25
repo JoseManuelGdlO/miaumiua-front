@@ -2,14 +2,18 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Navigate, Routes, Route, useParams } from "react-router-dom";
+import { useEffect } from "react";
+import { cargarConfiguracion } from "@/lib/configuracion";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import DashboardLayout from "./pages/DashboardLayout";
 import Users from "./pages/Users";
+import Historial from "./pages/Historial";
 import Drivers from "./pages/Drivers";
+import FlotillaCombustible from "./pages/FlotillaCombustible";
 import Roles from "./pages/Roles";
 import Permissions from "./pages/Permissions";
 import Promotions from "./pages/Promotions";
@@ -17,7 +21,14 @@ import Inventarios from "./pages/Inventarios";
 import Cities from "./pages/Cities";
 import Customers from "./pages/Customers";
 import Orders from "./pages/Orders";
+import CallCenter from "./pages/CallCenter";
+
+function ValidacionRedirect() {
+  const { id } = useParams();
+  return <Navigate to={`/dashboard/call-center?tab=validacion&solicitud=${id ?? ""}`} replace />;
+}
 import RouteManagement from "./pages/RouteManagement";
+import RutasPlanificadas from "./pages/RutasPlanificadas";
 import Agents from "./pages/Agents";
 import Conversations from "./pages/Conversations";
 import ConversationDetail from "./pages/ConversationDetail";
@@ -26,7 +37,10 @@ import Pesos from "./pages/Pesos";
 import Proveedores from "./pages/Proveedores";
 import Packages from "./pages/Packages";
 import Notifications from "./pages/Notifications";
+import SiteSettings from "./pages/SiteSettings";
+import ConfiguracionMaps from "./pages/ConfiguracionMaps";
 import Flags from "./pages/Flags";
+import ConfiguracionQr from "./pages/ConfiguracionQr";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
 import DataDeletion from "./pages/DataDeletion";
@@ -36,11 +50,19 @@ import ProtectedRoute from "./components/ProtectedRoute";
 
 const queryClient = new QueryClient();
 
+function ConfiguracionBoot() {
+  useEffect(() => {
+    void cargarConfiguracion();
+  }, []);
+  return null;
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
       <Sonner />
+      <ConfiguracionBoot />
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Login />} />
@@ -57,13 +79,19 @@ const App = () => (
             </ProtectedRoute>
           }>
             <Route index element={<Dashboard />} />
+            <Route path="configuracion-qr" element={<ConfiguracionQr />} />
             <Route path="users" element={<Users />} />
+            <Route path="historial" element={<Historial />} />
             <Route path="drivers" element={<Drivers />} />
+            <Route path="flotilla" element={<FlotillaCombustible />} />
             <Route path="roles" element={<Roles />} />
             <Route path="permissions" element={<Permissions />} />
             <Route path="conversations" element={<Conversations />} />
             <Route path="conversations/:id" element={<ConversationDetail />} />
             <Route path="orders" element={<Orders />} />
+            <Route path="call-center/validacion/:id" element={<ValidacionRedirect />} />
+            <Route path="call-center" element={<CallCenter />} />
+            <Route path="routes/planificadas" element={<RutasPlanificadas />} />
             <Route path="routes" element={<RouteManagement />} />
             <Route path="promotions" element={<Promotions />} />
             <Route path="inventory" element={<Inventarios />} />
@@ -76,7 +104,8 @@ const App = () => (
             <Route path="flags" element={<Flags />} />
             <Route path="packages" element={<Packages />} />
             <Route path="notifications" element={<Notifications />} />
-            <Route path="settings" element={<div className="p-6"><h1 className="text-2xl font-bold">Configuración</h1><p className="text-muted-foreground">Configuración general del sistema</p></div>} />
+            <Route path="settings" element={<SiteSettings />} />
+            <Route path="maps" element={<ConfiguracionMaps />} />
           </Route>
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />

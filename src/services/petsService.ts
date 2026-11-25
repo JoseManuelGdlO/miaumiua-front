@@ -1,4 +1,5 @@
 import { config } from '../config/environment';
+import { mensajeDeError } from '@/lib/api-error';
 
 // Interfaces para Mascotas
 export interface Pet {
@@ -88,7 +89,7 @@ class PetsService {
           const { authService } = await import('./authService');
           authService.handleAuthError(response);
           
-          throw new Error(`Error ${response.status}: ${response.statusText}`);
+          throw new Error(await mensajeDeError(response));
         }
         return response.json();
       });

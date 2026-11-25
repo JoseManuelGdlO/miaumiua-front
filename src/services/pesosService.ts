@@ -1,4 +1,5 @@
 import { config } from '../config/environment';
+import { mensajeDeError } from '@/lib/api-error';
 
 // Tipos para los pesos
 export interface Peso {
@@ -83,7 +84,7 @@ class PesosService {
           const { authService } = await import('./authService');
           authService.handleAuthError(response);
           
-          throw new Error(`Error ${response.status}: ${response.statusText}`);
+          throw new Error(await mensajeDeError(response));
         }
         return response.json();
       });
