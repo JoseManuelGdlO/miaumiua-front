@@ -15,14 +15,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Calendar } from "@/components/ui/calendar";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { CalendarIcon, DollarSign, Percent, X } from "lucide-react";
-import { format } from "date-fns";
+import { DateField, formatDay, parseDay } from "@/components/ui/date-field";
+import { DollarSign, Percent, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { promotionsService, Promotion } from "@/services/promotionsService";
@@ -398,53 +392,17 @@ const CreatePromotionModal = ({ isOpen, onClose, onSuccess, promotion }: CreateP
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Fecha de Inicio *</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "w-full justify-start text-left font-normal",
-                          !formData.fecha_inicio && "text-muted-foreground",
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {formData.fecha_inicio ? format(formData.fecha_inicio, "PPP") : "Selecciona fecha"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <Calendar
-                        mode="single"
-                        selected={formData.fecha_inicio}
-                        onSelect={(date) => setFormData((prev) => ({ ...prev, fecha_inicio: date }))}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
+                  <DateField
+                    value={formData.fecha_inicio ? formatDay(formData.fecha_inicio) : ""}
+                    onChange={(value) => setFormData((prev) => ({ ...prev, fecha_inicio: parseDay(value) }))}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Fecha de Fin *</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "w-full justify-start text-left font-normal",
-                          !formData.fecha_fin && "text-muted-foreground",
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {formData.fecha_fin ? format(formData.fecha_fin, "PPP") : "Selecciona fecha"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <Calendar
-                        mode="single"
-                        selected={formData.fecha_fin}
-                        onSelect={(date) => setFormData((prev) => ({ ...prev, fecha_fin: date }))}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
+                  <DateField
+                    value={formData.fecha_fin ? formatDay(formData.fecha_fin) : ""}
+                    onChange={(value) => setFormData((prev) => ({ ...prev, fecha_fin: parseDay(value) }))}
+                  />
                 </div>
               </div>
             </>

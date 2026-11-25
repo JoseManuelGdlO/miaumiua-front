@@ -4,6 +4,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { DateField } from "@/components/ui/date-field";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { TablePagination } from "@/components/TablePagination";
@@ -198,7 +199,7 @@ export default function IncidenciasPanel({ pedidos, solicitudes, superAdmin, onC
         <CardContent className="space-y-3 text-sm">
           <div className="flex flex-wrap gap-3">
             <Input aria-label="Filtrar por repartidor" value={q} onChange={(event) => { setQ(event.target.value); setPage(1); }} placeholder="Filtrar por repartidor" className="w-56" />
-            <Input aria-label="Día en que surgió la incidencia" type="date" value={dia} onChange={(event) => { setDia(event.target.value); setPage(1); }} className="w-56" />
+            <DateField aria-label="Día en que surgió la incidencia" value={dia} onChange={(value) => { setDia(value); setPage(1); }} className="w-56" />
             <Select value={estado} onValueChange={(value) => { setEstado(value); setPage(1); }}>
               <SelectTrigger className="w-56" aria-label="Filtrar por estado"><SelectValue placeholder="Estado" /></SelectTrigger>
               <SelectContent>
@@ -215,7 +216,7 @@ export default function IncidenciasPanel({ pedidos, solicitudes, superAdmin, onC
           {visibles.map((item) => item.kind === "solicitud" ? (
             <div key={`s-${item.row.id}`} className={`${verArchivadas || item.row.alerta === false ? "" : "aviso-borde "}flex items-start justify-between gap-3 rounded-md bg-background px-3 py-2`}>
               <button type="button" className="text-left" onClick={() => setAbierto((current) => current === `s-${item.row.id}` ? null : `s-${item.row.id}`)}>
-                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${item.row.tipo === "llamada_cliente" ? "bg-sky-100 text-sky-900" : "bg-amber-100 text-amber-900"}`}>{item.row.tipo === "llamada_cliente" ? "Llamada" : "Incidencia"}</span>
+                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${item.row.tipo === "llamada_cliente" ? "bg-sky-100 text-sky-900" : "bg-amber-100 text-amber-900"}`}>{item.row.tipo === "llamada_cliente" ? "Llamada" : item.row.motivo === "propuesta" ? "Fecha propuesta" : item.row.motivo === "no_puedo" ? "No puede recibir" : "Incidencia"}</span>
                 <span className="mt-1 block font-semibold">{item.row.repartidor?.nombre_completo || "Sin repartidor"} · {item.row.numero_pedido || "Sin pedido"}</span>
                 <span className="mt-1 block text-muted-foreground">{item.row.fecha} {item.row.hora} · {item.row.nota || item.row.motivo || "Sin motivo"}</span>
                 {abierto === `s-${item.row.id}` ? (
@@ -300,7 +301,7 @@ export default function IncidenciasPanel({ pedidos, solicitudes, superAdmin, onC
         </CardHeader>
         <CardContent className="space-y-3">
           <p>{pedidoId == null ? "Elige un pedido de las listas." : `Pedido #${pedidoId}`}</p>
-          <Input type="date" min={superAdmin ? fechaMexico(0) : fechaMexico(1)} value={fecha} onChange={(event) => setFecha(event.target.value)} aria-label="Nueva fecha" />
+          <DateField min={superAdmin ? fechaMexico(0) : fechaMexico(1)} value={fecha} onChange={setFecha} placeholder="Nueva fecha" />
           <Textarea value={motivo} onChange={(event) => setMotivo(event.target.value)} placeholder="Motivo" />
           <Button size="lg" className="h-12 px-8" disabled={busy || pedidoId == null || !fecha || !motivo.trim()} onClick={() => void reagendar()}>
             {fecha === fechaMexico(0) ? "Reagendar el mismo día" : fecha === fechaMexico(1) ? "Reagendar al día siguiente" : "Reagendar"}

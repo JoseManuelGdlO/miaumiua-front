@@ -18,11 +18,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { DateField } from "@/components/ui/date-field";
 import { 
   Plus, 
   Trash2, 
   Package as PackageIcon,
-  Calendar,
   MapPin,
   User,
   Phone,
@@ -405,10 +405,10 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
     if (!order) return;
 
     // Validaciones básicas
-    if (!formData.fkid_cliente || !formData.direccion_entrega || !formData.fkid_ciudad || !formData.metodo_pago) {
+    if (!formData.fkid_cliente || !formData.direccion_entrega || !formData.fkid_ciudad || !formData.metodo_pago || !formData.fecha_entrega_estimada) {
       toast({
         title: "Error",
-        description: "Por favor completa los campos obligatorios: Cliente, Dirección, Ciudad y Método de Pago",
+        description: "Por favor completa los campos obligatorios: Cliente, Dirección, Ciudad, Fecha de entrega y Método de Pago",
         variant: "destructive"
       });
       return;
@@ -502,7 +502,7 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
         email_referencia: formData.email_referencia || undefined,
         direccion_entrega: direccion,
         fkid_ciudad: parseInt(formData.fkid_ciudad),
-        fecha_entrega_estimada: formData.fecha_entrega_estimada || undefined,
+        fecha_entrega_estimada: formData.fecha_entrega_estimada,
         ventana: formData.ventana,
         metodo_pago: formData.metodo_pago,
         notas: formData.notas || undefined,
@@ -718,17 +718,12 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="fecha_entrega_estimada">Fecha de Entrega Estimada</Label>
-                  <div className="relative">
-                    <Calendar className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="fecha_entrega_estimada"
-                      type="date"
-                      value={formData.fecha_entrega_estimada}
-                      onChange={(e) => setFormData(prev => ({ ...prev, fecha_entrega_estimada: e.target.value }))}
-                      className="pl-8"
-                    />
-                  </div>
+                  <Label htmlFor="fecha_entrega_estimada">Fecha de Entrega Estimada *</Label>
+                  <DateField
+                    id="fecha_entrega_estimada"
+                    value={formData.fecha_entrega_estimada}
+                    onChange={(value) => setFormData((prev) => ({ ...prev, fecha_entrega_estimada: value }))}
+                  />
                 </div>
                 <div className="space-y-2 md:col-span-2">
                   <Label>Ventana de entrega</Label>

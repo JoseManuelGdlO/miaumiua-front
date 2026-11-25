@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateField } from "@/components/ui/date-field";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -487,21 +488,19 @@ const Orders = () => {
                 <Calendar className="h-4 w-4 text-muted-foreground" />
                 <div className="flex items-center space-x-2">
                   <label className="text-sm text-muted-foreground whitespace-nowrap">Fecha Pedido:</label>
-                  <Input
-                    type="date"
-                    placeholder="Fecha de pedido"
+                  <DateField
                     value={fechaPedido}
-                    onChange={(e) => handleFechaPedidoChange(e.target.value)}
+                    onChange={handleFechaPedidoChange}
+                    placeholder="Fecha de pedido"
                     className="w-[180px]"
                   />
                 </div>
                 <div className="flex items-center space-x-2">
                   <label className="text-sm text-muted-foreground whitespace-nowrap">Fecha Entrega:</label>
-                  <Input
-                    type="date"
-                    placeholder="Fecha de entrega"
+                  <DateField
                     value={fechaEntrega}
-                    onChange={(e) => handleFechaEntregaChange(e.target.value)}
+                    onChange={handleFechaEntregaChange}
+                    placeholder="Fecha de entrega"
                     className="w-[180px]"
                   />
                 </div>

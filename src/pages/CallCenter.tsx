@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { AlertTriangle, ChevronDown, ClipboardCheck, Download, Eye, Headphones, History, Inbox, LifeBuoy, Loader2, LogOut, Package, Phone, Receipt, RefreshCw, Search, Truck, Users, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateField } from "@/components/ui/date-field";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -848,7 +849,7 @@ function MonitorRepartidores({
                   {row.aprobaciones.map((solicitud) => (
                     <div key={solicitud.id} className="space-y-2 rounded-xl bg-pink-50 p-3">
                       <p className="font-semibold">
-                        {solicitud.ayuda === "dejar" ? "Dejar el paquete" : solicitud.ayuda === "tercero" ? "Entrega a otra persona" : solicitud.ayuda === "codigo" ? "Ayuda con el código" : solicitud.motivo === "averia" ? "Avería" : solicitud.motivo === "clima" ? "Clima" : solicitud.motivo === "propuesta" ? "Fecha propuesta" : solicitud.tipo === "llamada_cliente" ? "Llamada al cliente" : "Incidencia"}
+                        {solicitud.ayuda === "dejar" ? "Dejar el paquete" : solicitud.ayuda === "tercero" ? "Entrega a otra persona" : solicitud.ayuda === "codigo" ? "Ayuda con el código" : solicitud.motivo === "averia" ? "Avería" : solicitud.motivo === "clima" ? "Clima" : solicitud.motivo === "propuesta" ? "Fecha propuesta" : solicitud.motivo === "no_puedo" ? "Cliente no puede recibir" : solicitud.tipo === "llamada_cliente" ? "Llamada al cliente" : "Incidencia"}
                         {solicitud.numero_pedido ? ` · ${solicitud.numero_pedido}` : ""}
                       </p>
                       {solicitud.nota ? <p>{solicitud.nota}</p> : solicitud.motivo && solicitud.motivo !== "averia" && solicitud.motivo !== "clima" && solicitud.motivo !== "propuesta" ? <p>{solicitud.motivo}</p> : null}
@@ -1838,12 +1839,10 @@ const CallCenter = () => {
             <div className="flex flex-wrap items-end gap-3">
               <label className="space-y-1 text-sm">
                 <span className="block">Desde</span>
-                <Input
-                  type="date"
+                <DateField
                   className="w-44"
                   value={desdeHistorico}
-                  onChange={(event) => {
-                    const desde = event.target.value;
+                  onChange={(desde) => {
                     if (!desde || !hastaHistorico) {
                       setDesdeHistorico(desde);
                       return;
@@ -1855,12 +1854,10 @@ const CallCenter = () => {
               <span className="hidden pb-2 text-muted-foreground sm:inline">→</span>
               <label className="space-y-1 text-sm">
                 <span className="block">Hasta</span>
-                <Input
-                  type="date"
+                <DateField
                   className="w-44"
                   value={hastaHistorico}
-                  onChange={(event) => {
-                    const hasta = event.target.value;
+                  onChange={(hasta) => {
                     if (!desdeHistorico || !hasta) {
                       setHastaHistorico(hasta);
                       return;

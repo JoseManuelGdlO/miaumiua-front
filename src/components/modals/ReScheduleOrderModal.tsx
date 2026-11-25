@@ -18,15 +18,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Calendar } from "@/components/ui/calendar";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { CalendarIcon, Clock, User, AlertCircle } from "lucide-react";
+import { DateField, formatDay, parseDay } from "@/components/ui/date-field";
+import { Clock, User, AlertCircle } from "lucide-react";
 import { format } from "date-fns";
-import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -233,30 +227,12 @@ const ReScheduleOrderModal = ({ open, onOpenChange, order }: ReScheduleOrderModa
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Nueva Fecha de Entrega *</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        "justify-start text-left font-normal",
-                        !formData.newDeliveryDate && "text-muted-foreground"
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {formData.newDeliveryDate ? format(formData.newDeliveryDate, "PPP") : "Seleccionar nueva fecha"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={formData.newDeliveryDate}
-                      onSelect={(date) => setFormData(prev => ({ ...prev, newDeliveryDate: date }))}
-                      disabled={(date) => date <= new Date()}
-                      initialFocus
-                      className="p-3 pointer-events-auto"
-                    />
-                  </PopoverContent>
-                </Popover>
+                <DateField
+                  value={formData.newDeliveryDate ? formatDay(formData.newDeliveryDate) : ""}
+                  onChange={(value) => setFormData((prev) => ({ ...prev, newDeliveryDate: parseDay(value) }))}
+                  placeholder="Seleccionar nueva fecha"
+                  disableDate={(date) => date <= new Date()}
+                />
               </div>
 
               <div className="space-y-2">

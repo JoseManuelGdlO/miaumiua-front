@@ -34,6 +34,7 @@ import ClienteSelector from "@/components/ui/ClienteSelector";
 import { packagesService } from "@/services/packagesService";
 import type { Package } from "@/services/packagesService";
 import { mapsService, AVISO_SIN_UBICAR, direccionConCp } from "@/services/mapsService";
+import { DateField } from "@/components/ui/date-field";
 import { Loader2, Plus, Trash2, Package as PackageIcon, Package2, ChevronLeft, ChevronRight, MapPin, ShoppingBag, Tag, User } from "lucide-react";
 
 interface CreateOrderModalProps {
@@ -348,10 +349,10 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
     e.preventDefault();
 
     // Validaciones básicas
-    if (!formData.fkid_cliente || !formData.direccion_entrega || !formData.fkid_ciudad || !formData.metodo_pago) {
+    if (!formData.fkid_cliente || !formData.direccion_entrega || !formData.fkid_ciudad || !formData.metodo_pago || !formData.fecha_entrega_estimada) {
       toast({
         title: "Error",
-        description: "Por favor completa los campos obligatorios: Cliente, Dirección, Ciudad y Método de Pago",
+        description: "Por favor completa los campos obligatorios: Cliente, Dirección, Ciudad, Fecha de entrega y Método de Pago",
         variant: "destructive"
       });
       return;
@@ -446,7 +447,7 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
          email_referencia: formData.email_referencia || undefined,
          direccion_entrega: direccion,
          fkid_ciudad: parseInt(formData.fkid_ciudad),
-         fecha_entrega_estimada: formData.fecha_entrega_estimada || undefined,
+         fecha_entrega_estimada: formData.fecha_entrega_estimada,
          ventana: formData.ventana,
          metodo_pago: formData.metodo_pago as any,
          notas: formData.notas || undefined,
@@ -761,12 +762,11 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="fecha_entrega_estimada">Fecha de entrega</Label>
-                    <Input
+                    <Label htmlFor="fecha_entrega_estimada">Fecha de entrega *</Label>
+                    <DateField
                       id="fecha_entrega_estimada"
-                      type="date"
                       value={formData.fecha_entrega_estimada}
-                      onChange={(e) => handleInputChange("fecha_entrega_estimada", e.target.value)}
+                      onChange={(value) => handleInputChange("fecha_entrega_estimada", value)}
                     />
                   </div>
                   <div className="space-y-2 md:col-span-2">

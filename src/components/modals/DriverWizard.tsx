@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateField } from "@/components/ui/date-field";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -334,20 +335,18 @@ export function DriverWizard({
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="fecha_nacimiento">Fecha de nacimiento</Label>
-                <Input
+                <DateField
                   id="fecha_nacimiento"
-                  type="date"
                   value={formData.fecha_nacimiento || ""}
-                  onChange={(e) => onChange("fecha_nacimiento", e.target.value)}
+                  onChange={(value) => onChange("fecha_nacimiento", value)}
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="licencia_vigencia">Vigencia de la licencia</Label>
-                <Input
+                <DateField
                   id="licencia_vigencia"
-                  type="date"
                   value={formData.licencia_vigencia || ""}
-                  onChange={(e) => onChange("licencia_vigencia", e.target.value)}
+                  onChange={(value) => onChange("licencia_vigencia", value)}
                 />
               </div>
               <div className="space-y-2">

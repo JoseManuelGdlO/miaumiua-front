@@ -16,7 +16,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
+import { DateField } from "@/components/ui/date-field";
 import { Label } from "@/components/ui/label";
 // import RouteMap from "@/components/RouteMap";
 import AIRouteOptimizer from "@/components/AIRouteOptimizer";
@@ -818,12 +818,7 @@ const RouteManagement = () => {
             </div>
             <div className="space-y-2">
               <Label htmlFor="date">Fecha de Entrega</Label>
-              <Input
-                id="date"
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-              />
+              <DateField id="date" value={selectedDate} onChange={setSelectedDate} />
             </div>
             <div className="flex items-end gap-6 text-sm">
               <div><span className="block text-lg font-semibold text-primary">{availableOrders.length}</span><span className="text-muted-foreground">pedidos disponibles</span></div>
