@@ -47,6 +47,8 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
     numero_soporte_cliente: string;
     estado_inicial: City["estado_inicial"];
     max_pedidos_por_horario: number;
+    entregas_por_horario: boolean;
+    prioridad_ruta: 'hora' | 'distancia';
     dias_trabajo: number[];
     horario_por_dia: HorarioPorDia;
   }>({
@@ -59,6 +61,8 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
     numero_soporte_cliente: "",
     estado_inicial: "activa",
     max_pedidos_por_horario: 5,
+    entregas_por_horario: true,
+    prioridad_ruta: 'hora',
     dias_trabajo: [1, 2, 3, 4, 5],
     horario_por_dia: { ...HORARIO_POR_DIA_DEFAULT } as HorarioPorDia,
   });
@@ -143,6 +147,8 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
         numero_soporte_cliente: city.numero_soporte_cliente || "",
         estado_inicial: city.estado_inicial,
         max_pedidos_por_horario: city.max_pedidos_por_horario || 5,
+        entregas_por_horario: city.entregas_por_horario !== false,
+        prioridad_ruta: city.prioridad_ruta === 'distancia' ? 'distancia' : 'hora',
         dias_trabajo: city.dias_trabajo && city.dias_trabajo.length > 0 ? city.dias_trabajo : [1, 2, 3, 4, 5],
         horario_por_dia: getInitialHorarioPorDia(city),
       };
@@ -630,6 +636,20 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
               Número máximo de pedidos que se pueden programar por horario (mañana o tarde)
             </p>
           </div>
+
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="entregas_por_horario"
+              checked={formData.entregas_por_horario}
+              onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, entregas_por_horario: checked === true }))}
+            />
+            <Label htmlFor="entregas_por_horario" className="text-sm font-normal cursor-pointer">
+              Entregas por horario
+            </Label>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Si está apagado, el bot y el alta no preguntan mañana o tarde.
+          </p>
 
           <div className="space-y-2">
             <Label>Días de Trabajo *</Label>

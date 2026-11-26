@@ -45,6 +45,8 @@ export interface City {
   numero_soporte_cliente?: string | null;
   notas_adicionales: string;
   max_pedidos_por_horario?: number;
+  entregas_por_horario?: boolean;
+  prioridad_ruta?: 'hora' | 'distancia';
   horario_por_dia?: HorarioPorDia;
   dias_trabajo?: number[];
   hora_inicio_entrega?: number;
@@ -96,6 +98,8 @@ export interface CreateCityData {
   numero_soporte_cliente?: string | null;
   notas_adicionales?: string;
   max_pedidos_por_horario?: number;
+  entregas_por_horario?: boolean;
+  prioridad_ruta?: 'hora' | 'distancia';
   dias_trabajo?: number[];
   horario_por_dia?: HorarioPorDia;
 }
@@ -115,6 +119,8 @@ export interface UpdateCityData {
   numero_soporte_cliente?: string | null;
   notas_adicionales?: string;
   max_pedidos_por_horario?: number;
+  entregas_por_horario?: boolean;
+  prioridad_ruta?: 'hora' | 'distancia';
   dias_trabajo?: number[];
   horario_por_dia?: HorarioPorDia;
 }

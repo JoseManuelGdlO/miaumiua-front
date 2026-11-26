@@ -217,6 +217,7 @@ export interface AssignOrdersToRouteData {
     link_ubicacion?: string;
     notas_entrega?: string;
   }>;
+  prioridad?: 'hora' | 'distancia';
 }
 
 export interface ReorderRouteOrdersData {
@@ -508,6 +509,13 @@ class RoutesService {
     return this.makeRequest(`/rutas/${rutaId}/pedidos`, {
       method: 'POST',
       body: JSON.stringify(data),
+    });
+  }
+
+  async moverParada(rutaId: number, pedidoId: number, direccion: 'subir' | 'bajar') {
+    return this.makeRequest(`/rutas/${rutaId}/pedidos/${pedidoId}/orden`, {
+      method: 'POST',
+      body: JSON.stringify({ direccion }),
     });
   }
 

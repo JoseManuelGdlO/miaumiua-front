@@ -360,11 +360,13 @@ interface AIRouteOptimizerProps {
     nombre: string;
     departamento: string;
     direccion_operaciones: string;
+    entregas_por_horario?: boolean;
+    prioridad_ruta?: string;
   };
   date: string;
   driversAvailable: number;
   drivers?: { id: number; nombre_completo: string }[];
-  onRoutesGenerated: (routes: { [key: string]: Order[] }, opts?: { driverId?: number }) => void;
+  onRoutesGenerated: (routes: { [key: string]: Order[] }, opts?: { driverId?: number; prioridad?: 'hora' | 'distancia' }) => void;
 }
 
 const UN_SOLO_HASTA = 8;
@@ -380,6 +382,7 @@ const AIRouteOptimizer: React.FC<AIRouteOptimizerProps> = ({
 }) => {
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [driverId, setDriverId] = useState("auto");
+  const [prioridad, setPrioridad] = useState<'hora' | 'distancia'>('hora');
   const [error, setError] = useState("");
   const [lastOptimization, setLastOptimization] = useState<{
     routes: { [key: string]: Order[] };
@@ -420,6 +423,7 @@ const AIRouteOptimizer: React.FC<AIRouteOptimizerProps> = ({
       }
 
       const ordersWithCoordinates: Order[] = [];
+      const noUbicados: Order[] = [];
       const sinUbicar: string[] = [];
 
       for (const order of orders) {
@@ -437,6 +441,7 @@ const AIRouteOptimizer: React.FC<AIRouteOptimizerProps> = ({
         }
         if (!coords || esCentroCiudad(coords)) {
           sinUbicar.push(order.orderNumber || String(order.id));
+          noUbicados.push(order);
           continue;
         }
 
@@ -446,80 +451,76 @@ const AIRouteOptimizer: React.FC<AIRouteOptimizerProps> = ({
         });
       }
 
-      if (ordersWithCoordinates.length === 0) {
-        throw new Error(sinUbicar.length
-          ? `${AVISO_SIN_UBICAR} Pedidos: ${sinUbicar.join(', ')}.`
-          : 'No se pudieron obtener coordenadas para los pedidos');
-      }
-
-      // Paso 2: Construir arreglo de ubicaciones para el solver VRP
-      const locations: Location[] = [
-        {
-          lat: warehouseCoords.lat,
-          lng: warehouseCoords.lng,
-          label: cityInfo.nombre || 'Bodega',
-          address: cityInfo.direccion_operaciones
-        },
-        ...ordersWithCoordinates.map(o => ({
-          lat: o.coordinates.lat,
-          lng: o.coordinates.lng,
-          label: o.orderNumber || `Pedido ${o.id}`,
-          address: o.address
-        }))
-      ];
-
-      // Paso 3: Comparar 1 vs 2 repartidores usando el solver VRP
-      const comparison = await compareOneVsTwoDrivers(locations);
-      console.log('[AI ROUTES] Resultado comparación 1 vs 2 repartidores:', comparison);
-
-      // Determinar cuántos repartidores usar realmente según disponibilidad
-      const recommendedDrivers = comparison.recommendation === '2 drivers' ? 2 : 1;
-      const forceOne = ordersWithCoordinates.length <= UN_SOLO_HASTA || driverId !== 'auto';
-      const driversToUse = forceOne ? 1 : Math.min(driversAvailable, recommendedDrivers);
-
-      if (comparison.recommendation === '2 drivers' && driversAvailable < 2) {
-        console.warn('[AI ROUTES] La IA recomienda 2 repartidores, pero solo hay 1 disponible. Se usará 1 repartidor.');
-      }
-
       const optimizedRoutes: { [key: string]: Order[] } = {};
+      const ordenar = (lista: Order[]) => (prioridad === 'hora' ? mananaLuegoTarde(lista) : lista);
+      let driversToUse = 1;
+      let comparisonReason = 'Sin coordenadas suficientes para comparar 1 vs 2 repartidores.';
+      let comparisonLabel = '1 driver';
 
-      if (driversToUse === 1) {
-        // Usar solución de 1 repartidor
-        const route = comparison.oneDriver.routes[0];
-        if (route && route.stops.length > 1) {
-          const ordersForRoute: Order[] = [];
-          for (const stopIndex of route.stops) {
-            if (stopIndex === 0) continue; // Saltar la bodega
-            const orderIdx = stopIndex - 1; // Ajustar índice (0 es bodega)
-            const order = ordersWithCoordinates[orderIdx];
-            if (order) {
-              ordersForRoute.push(order);
-            }
-          }
-          optimizedRoutes['A'] = mananaLuegoTarde(ordersForRoute);
-        }
+      if (ordersWithCoordinates.length === 0) {
+        optimizedRoutes['A'] = noUbicados;
       } else {
-        // Usar solución de 2 repartidores
-        let routeKeyCharCode = 'A'.charCodeAt(0);
-        for (const route of comparison.twoDrivers.routes) {
-          if (!route || route.stops.length <= 1) continue;
+        const locations: Location[] = [
+          {
+            lat: warehouseCoords.lat,
+            lng: warehouseCoords.lng,
+            label: cityInfo.nombre || 'Bodega',
+            address: cityInfo.direccion_operaciones
+          },
+          ...ordersWithCoordinates.map(o => ({
+            lat: o.coordinates.lat,
+            lng: o.coordinates.lng,
+            label: o.orderNumber || `Pedido ${o.id}`,
+            address: o.address
+          }))
+        ];
 
-          const ordersForRoute: Order[] = [];
-          for (const stopIndex of route.stops) {
-            if (stopIndex === 0) continue; // Saltar la bodega
-            const orderIdx = stopIndex - 1; // Ajustar índice (0 es bodega)
-            const order = ordersWithCoordinates[orderIdx];
-            if (order) {
-              ordersForRoute.push(order);
+        const comparison = await compareOneVsTwoDrivers(locations);
+        console.log('[AI ROUTES] Resultado comparación 1 vs 2 repartidores:', comparison);
+        const recommendedDrivers = comparison.recommendation === '2 drivers' ? 2 : 1;
+        const forceOne = ordersWithCoordinates.length <= UN_SOLO_HASTA || driverId !== 'auto';
+        driversToUse = forceOne ? 1 : Math.min(driversAvailable, recommendedDrivers);
+        comparisonReason = comparison.reason;
+        comparisonLabel = comparison.recommendation;
+        if (comparison.recommendation === '2 drivers' && driversAvailable < 2) {
+          console.warn('[AI ROUTES] La IA recomienda 2 repartidores, pero solo hay 1 disponible. Se usará 1 repartidor.');
+        }
+
+        if (driversToUse === 1) {
+          const route = comparison.oneDriver.routes[0];
+          if (route && route.stops.length > 1) {
+            const ordersForRoute: Order[] = [];
+            for (const stopIndex of route.stops) {
+              if (stopIndex === 0) continue;
+              const orderIdx = stopIndex - 1;
+              const order = ordersWithCoordinates[orderIdx];
+              if (order) ordersForRoute.push(order);
+            }
+            optimizedRoutes['A'] = ordenar(ordersForRoute);
+          }
+        } else {
+          let routeKeyCharCode = 'A'.charCodeAt(0);
+          for (const route of comparison.twoDrivers.routes) {
+            if (!route || route.stops.length <= 1) continue;
+            const ordersForRoute: Order[] = [];
+            for (const stopIndex of route.stops) {
+              if (stopIndex === 0) continue;
+              const orderIdx = stopIndex - 1;
+              const order = ordersWithCoordinates[orderIdx];
+              if (order) ordersForRoute.push(order);
+            }
+            if (ordersForRoute.length > 0) {
+              const routeKey = String.fromCharCode(routeKeyCharCode);
+              optimizedRoutes[routeKey] = ordenar(ordersForRoute);
+              routeKeyCharCode++;
             }
           }
-
-          if (ordersForRoute.length > 0) {
-            const routeKey = String.fromCharCode(routeKeyCharCode);
-            optimizedRoutes[routeKey] = mananaLuegoTarde(ordersForRoute);
-            routeKeyCharCode++;
-          }
         }
+      }
+
+      if (noUbicados.length && ordersWithCoordinates.length > 0) {
+        const firstKey = Object.keys(optimizedRoutes)[0] || 'A';
+        optimizedRoutes[firstKey] = [...(optimizedRoutes[firstKey] || []), ...noUbicados];
       }
 
       const totalOrdersOptimized = Object.values(optimizedRoutes).reduce(
@@ -529,8 +530,8 @@ const AIRouteOptimizer: React.FC<AIRouteOptimizerProps> = ({
 
       const summary =
         `Se optimizaron ${totalOrdersOptimized} pedidos usando ${driversToUse} repartidor(es). ` +
-        `Recomendación de IA: ${comparison.recommendation}. ` +
-        `Motivo: ${comparison.reason}` +
+        `Recomendación de IA: ${comparisonLabel}. ` +
+        `Motivo: ${comparisonReason}` +
         (sinUbicar.length
           ? ` ${sinUbicar.length} pedido(s) no se ubicaron (${sinUbicar.join(', ')}). ${AVISO_SIN_UBICAR}`
           : '');
@@ -545,9 +546,9 @@ const AIRouteOptimizer: React.FC<AIRouteOptimizerProps> = ({
         && Number.isFinite(chosenId)
         && drivers.some((driver) => driver.id === chosenId);
       if (assigned) {
-        onRoutesGenerated(optimizedRoutes, { driverId: chosenId });
+        onRoutesGenerated(optimizedRoutes, { driverId: chosenId, prioridad });
       } else {
-        onRoutesGenerated(optimizedRoutes);
+        onRoutesGenerated(optimizedRoutes, { prioridad });
       }
 
     } catch (error) {
@@ -600,6 +601,28 @@ const AIRouteOptimizer: React.FC<AIRouteOptimizerProps> = ({
             </SelectContent>
           </Select>
           <p className="text-xs text-muted-foreground">Si no eliges uno, la ruta queda sin repartidor. 8 pedidos o menos salen en una sola ruta.</p>
+        </div>
+        <div className="space-y-2">
+          <Label>Cómo armar la ruta</Label>
+          <Select value={prioridad} onValueChange={(value) => setPrioridad(value === 'distancia' ? 'distancia' : 'hora')}>
+            <SelectTrigger>
+              <span>{prioridad === 'distancia' ? 'Más rápida' : 'Por horario'}</span>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="hora" className="items-start whitespace-normal py-2">
+                <span className="flex flex-col gap-0.5">
+                  <span>Por horario</span>
+                  <span className="text-xs text-muted-foreground">Mañana primero, tarde después. Los sin preferencia van en el hueco que menos desvío agrega.</span>
+                </span>
+              </SelectItem>
+              <SelectItem value="distancia" className="items-start whitespace-normal py-2">
+                <span className="flex flex-col gap-0.5">
+                  <span>Más rápida</span>
+                  <span className="text-xs text-muted-foreground">Una cadena desde la bodega, sin mirar la hora.</span>
+                </span>
+              </SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         {error ? (
           <Alert variant="destructive">

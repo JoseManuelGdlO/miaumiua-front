@@ -24,7 +24,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { ordersService, CreateOrderData, VENTANAS_ENTREGA, type VentanaEntrega } from "@/services/ordersService";
 import { clientesService, Cliente } from "@/services/clientesService";
-import { citiesService } from "@/services/citiesService";
+import { citiesService, type City } from "@/services/citiesService";
 import { Inventario, precioLista } from "@/services/inventariosService";
 import { promotionsService, Promotion } from "@/services/promotionsService";
 import ProductSelector from "@/components/ui/ProductSelector";
@@ -110,7 +110,7 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
   const [pendingStripeOrderId, setPendingStripeOrderId] = useState<number | null>(null);
   const [stripeRetryLoading, setStripeRetryLoading] = useState(false);
   const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
-  const [cities, setCities] = useState<Array<{ id: number; nombre: string; departamento: string }>>([]);
+  const [cities, setCities] = useState<City[]>([]);
   const [products, setProducts] = useState<ProductFormData[]>([]);
   const [packages, setPackages] = useState<PackageFormData[]>([]);
   const [selectedPromotion, setSelectedPromotion] = useState<Promotion | null>(null);
@@ -448,7 +448,9 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
          direccion_entrega: direccion,
          fkid_ciudad: parseInt(formData.fkid_ciudad),
          fecha_entrega_estimada: formData.fecha_entrega_estimada,
-         ventana: formData.ventana,
+         ventana: cities.find((row) => String(row.id) === formData.fkid_ciudad)?.entregas_por_horario === false
+           ? "cualquiera"
+           : formData.ventana,
          metodo_pago: formData.metodo_pago as any,
          notas: formData.notas || undefined,
          codigo_promocion: formData.codigo_promocion || undefined,
@@ -748,7 +750,11 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="fkid_ciudad">Ciudad *</Label>
-                    <Select value={formData.fkid_ciudad} onValueChange={(value) => handleInputChange("fkid_ciudad", value)}>
+                    <Select value={formData.fkid_ciudad} onValueChange={(value) => {
+                      handleInputChange("fkid_ciudad", value);
+                      const city = cities.find((row) => String(row.id) === value);
+                      if (city?.entregas_por_horario === false) handleInputChange("ventana", "cualquiera");
+                    }}>
                       <SelectTrigger>
                         <SelectValue placeholder="Selecciona una ciudad" />
                       </SelectTrigger>
@@ -769,6 +775,7 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
                       onChange={(value) => handleInputChange("fecha_entrega_estimada", value)}
                     />
                   </div>
+                  {cities.find((row) => String(row.id) === formData.fkid_ciudad)?.entregas_por_horario === false ? null : (
                   <div className="space-y-2 md:col-span-2">
                     <Label>Ventana de entrega</Label>
                     <div role="group" aria-label="Ventana de entrega" className="grid grid-cols-3 gap-2">
@@ -792,6 +799,7 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
                       Mañana 9:30–12:00, tarde 12:00–17:00. Cualquier hora no fija un rango.
                     </p>
                   </div>
+                  )}
                 </div>
               </section>
             </div>

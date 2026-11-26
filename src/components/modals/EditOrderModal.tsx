@@ -503,7 +503,9 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
         direccion_entrega: direccion,
         fkid_ciudad: parseInt(formData.fkid_ciudad),
         fecha_entrega_estimada: formData.fecha_entrega_estimada,
-        ventana: formData.ventana,
+        ventana: cities.find((row) => String(row.id) === formData.fkid_ciudad)?.entregas_por_horario === false
+          ? "cualquiera"
+          : formData.ventana,
         metodo_pago: formData.metodo_pago,
         notas: formData.notas || undefined,
         codigo_promocion: formData.codigo_promocion || undefined,
@@ -663,7 +665,12 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
                       // El select nativo del formulario emite "" mientras las opciones
                       // aún no existen y eso borraba la ciudad ya guardada en el pedido.
                       if (!value) return;
-                      setFormData(prev => ({ ...prev, fkid_ciudad: value }));
+                      const city = cities.find((row) => String(row.id) === value);
+                      setFormData(prev => ({
+                        ...prev,
+                        fkid_ciudad: value,
+                        ventana: city?.entregas_por_horario === false ? "cualquiera" : prev.ventana,
+                      }));
                     }}
                   >
                     <SelectTrigger>
@@ -725,6 +732,7 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
                     onChange={(value) => setFormData((prev) => ({ ...prev, fecha_entrega_estimada: value }))}
                   />
                 </div>
+                {cities.find((row) => String(row.id) === formData.fkid_ciudad)?.entregas_por_horario === false ? null : (
                 <div className="space-y-2 md:col-span-2">
                   <Label>Ventana de entrega</Label>
                   <div role="group" aria-label="Ventana de entrega" className="grid grid-cols-3 gap-2">
@@ -745,6 +753,7 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
                     })}
                   </div>
                 </div>
+                )}
 
                 <div className="space-y-2">
                   <Label htmlFor="metodo_pago">Método de Pago *</Label>
