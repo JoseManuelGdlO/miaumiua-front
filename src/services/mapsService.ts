@@ -14,6 +14,23 @@ export function direccionConCp(direccion: string, cp?: string) {
   return `${d}, ${c}`;
 }
 
+export async function pinDeDireccion(
+  address: string,
+  ciudad?: string,
+  codigo_postal?: string,
+  estado?: string,
+): Promise<boolean | null> {
+  try {
+    const res = await mapsService.geocodeAddress(address, ciudad, undefined, codigo_postal, estado);
+    return Boolean(res?.success && res.data?.lat != null && res.data?.lng != null);
+  } catch (error) {
+    const status = error && typeof error === "object" && "status" in error
+      ? Number((error as { status: number }).status)
+      : 0;
+    return status === 422 ? false : null;
+  }
+}
+
 interface Coordinates {
   lat: number;
   lng: number;
