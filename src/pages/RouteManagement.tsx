@@ -28,7 +28,7 @@ import { FlujoPasos } from "@/components/FlujoPasos";
 import { AgregarPedidosRuta } from "@/components/AgregarPedidosRuta";
 import { DropZone } from "@/components/DropZone";
 import { DndContext, DragEndEvent, DragOverEvent, DragOverlay, DragStartEvent, closestCenter } from '@dnd-kit/core';
-import { MapPin, Truck, Plus, Users, MoreHorizontal, Calendar, Navigation, Sparkles, Loader2, ChevronDown, Download, Trash2, X } from "lucide-react";
+import { MapPin, Truck, Plus, Users, MoreHorizontal, Calendar, Navigation, Sparkles, Loader2, ChevronDown, ChevronUp, Download, Trash2, X } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { descargarHoja, hojaDesdeRuta } from "@/lib/hojaRuta";
@@ -521,6 +521,22 @@ const RouteManagement = () => {
     }
   };
 
+  const moverParada = async (pedidoId: number, routeId: number, direccion: "subir" | "bajar") => {
+    try {
+      const response = await routesService.moverParada(routeId, pedidoId, direccion);
+      if (response.success) {
+        loadRouteDataSilently();
+      }
+    } catch (error) {
+      console.error("Error moviendo parada:", error);
+      toast({
+        title: "Error",
+        description: "No se pudo cambiar el orden",
+        variant: "destructive",
+      });
+    }
+  };
+
   const addOrderToRoute = async (orderId: number, routeId: string, showToast: boolean = false) => {
     try {
       const order = availableOrders.find(o => o.id === orderId);
@@ -865,7 +881,9 @@ const RouteManagement = () => {
               id: cities.find(c => c.id.toString() === selectedCity)!.id,
               nombre: cities.find(c => c.id.toString() === selectedCity)!.nombre,
               departamento: cities.find(c => c.id.toString() === selectedCity)!.departamento,
-              direccion_operaciones: cities.find(c => c.id.toString() === selectedCity)!.direccion_operaciones
+              direccion_operaciones: cities.find(c => c.id.toString() === selectedCity)!.direccion_operaciones,
+              entregas_por_horario: cities.find(c => c.id.toString() === selectedCity)!.entregas_por_horario,
+              prioridad_ruta: cities.find(c => c.id.toString() === selectedCity)!.prioridad_ruta,
             } : undefined}
             date={selectedDate}
             driversAvailable={drivers.length}
@@ -940,7 +958,8 @@ const RouteManagement = () => {
                       // Asignar pedidos a la ruta
                       try {
                         const assignResponse = await routesService.assignOrdersToRoute(routeIdNum, {
-                          pedidos: pedidosToAssign
+                          pedidos: pedidosToAssign,
+                          prioridad: opts?.prioridad,
                         });
                         
                         console.log(`[DEBUG] 📥 Respuesta del servidor:`, JSON.stringify(assignResponse, null, 2));
@@ -1194,13 +1213,24 @@ const RouteManagement = () => {
                                 <div className="space-y-2 pl-4">
                                   {pedidosAgrupados[fechaEstimada]
                                     .sort((a, b) => (a.orden_entrega || 0) - (b.orden_entrega || 0))
-                                    .map((routeOrder, index) => (
+                                    .map((routeOrder, index) => {
+                              const ordenRuta = [...(route.pedidos || [])].sort((a, b) => (a.orden_entrega || 0) - (b.orden_entrega || 0));
+                              const posicion = ordenRuta.findIndex((item) => item.id === routeOrder.id);
+                              return (
                               <div
                                 key={routeOrder.id}
                                 className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg border"
                               >
-                                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-semibold">
+                                <div className="flex flex-shrink-0 flex-col items-center gap-1">
+                                  <Button type="button" variant="outline" size="icon" className="h-8 w-8" aria-label="Subir" disabled={posicion <= 0} onClick={() => void moverParada(routeOrder.fkid_pedido, route.id, "subir")}>
+                                    <ChevronUp className="h-4 w-4" />
+                                  </Button>
+                                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
                                   {routeOrder.orden_entrega || index + 1}
+                                  </div>
+                                  <Button type="button" variant="outline" size="icon" className="h-8 w-8" aria-label="Bajar" disabled={posicion < 0 || posicion >= ordenRuta.length - 1} onClick={() => void moverParada(routeOrder.fkid_pedido, route.id, "bajar")}>
+                                    <ChevronDown className="h-4 w-4" />
+                                  </Button>
                                 </div>
                                 <div className="flex-1 min-w-0 space-y-2">
                                   <div className="flex items-start justify-between gap-2">
@@ -1413,7 +1443,8 @@ const RouteManagement = () => {
                                   )}
                                 </div>
                               </div>
-                                    ))}
+                                    );
+                                    })}
                                 </div>
                               </div>
                                 ))}
