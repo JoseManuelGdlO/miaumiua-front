@@ -33,7 +33,7 @@ import PromotionSelector from "@/components/ui/PromotionSelector";
 import ClienteSelector from "@/components/ui/ClienteSelector";
 import { packagesService } from "@/services/packagesService";
 import type { Package } from "@/services/packagesService";
-import { mapsService, AVISO_SIN_UBICAR, direccionConCp } from "@/services/mapsService";
+import { AVISO_SIN_UBICAR, direccionConCp, pinDeDireccion } from "@/services/mapsService";
 import { DateField } from "@/components/ui/date-field";
 import { Loader2, Plus, Trash2, Package as PackageIcon, Package2, ChevronLeft, ChevronRight, MapPin, ShoppingBag, Tag, User } from "lucide-react";
 
@@ -426,18 +426,10 @@ const CreateOrderModal = ({ open, onOpenChange, onOrderCreated }: CreateOrderMod
 
       const ciudad = cities.find((row) => String(row.id) === formData.fkid_ciudad);
       const direccion = direccionConCp(formData.direccion_entrega, codigoPostal);
-      try {
-        await mapsService.geocodeAddress(
-          direccion,
-          ciudad?.nombre,
-          undefined,
-          codigoPostal,
-          ciudad?.departamento,
-        );
-      } catch {
+      if (await pinDeDireccion(direccion, ciudad?.nombre, codigoPostal, ciudad?.departamento) === false) {
         toast({
           title: "Dirección sin ubicar",
-          description: `${AVISO_SIN_UBICAR} El pedido se guarda sin pin en el mapa.`,
+          description: `${AVISO_SIN_UBICAR} El pedido se guarda, pero no va a aparecer en el mapa.`,
         });
       }
 
