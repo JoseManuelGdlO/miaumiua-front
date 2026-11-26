@@ -15,6 +15,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -28,9 +29,9 @@ import {
   Phone,
   Mail,
   CreditCard,
-  FileText,
-  X,
-  Edit
+  ChevronLeft,
+  ChevronRight,
+  ShoppingBag,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ordersService, Order, UpdateOrderData, VENTANAS_ENTREGA, fechaEntregaDia, ventanaDeHorario, type VentanaEntrega } from "@/services/ordersService";
@@ -67,6 +68,12 @@ interface PackageFormData {
   paquete?: Package;
 }
 
+const STEPS = [
+  { id: 1, title: "Cliente y entrega" },
+  { id: 2, title: "Productos y paquetes" },
+  { id: 3, title: "Pago y resumen" },
+];
+
 interface EditOrderModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -77,6 +84,7 @@ interface EditOrderModalProps {
 const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrderModalProps) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [step, setStep] = useState(1);
   const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
   const [cities, setCities] = useState<City[]>([]);
   const [products, setProducts] = useState<ProductFormData[]>([]);
@@ -108,8 +116,10 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
   // Cargar datos del pedido cuando cambie
   useEffect(() => {
     if (order && open) {
+      setStep(1);
       loadOrderData();
     } else if (!open) {
+      setStep(1);
       // Limpiar estado cuando se cierra el modal
       setProducts([]);
       setPackages([]);
@@ -576,20 +586,78 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
     loading,
   );
 
+  function canNext() {
+    if (step === 1) {
+      return Boolean(
+        formData.fkid_cliente &&
+        formData.direccion_entrega &&
+        formData.fkid_ciudad &&
+        formData.codigo_postal.replace(/\D/g, "").length === 5 &&
+        formData.fecha_entrega_estimada,
+      );
+    }
+    if (step === 2) {
+      const hayProducto = products.some((p) => p.fkid_producto && p.producto && p.cantidad > 0);
+      const hayPaquete = packages.some((p) => p.fkid_paquete && p.paquete && p.cantidad > 0);
+      return hayProducto || hayPaquete;
+    }
+    return Boolean(formData.metodo_pago);
+  }
+
   if (!order) return null;
 
   return (
     <Dialog open={open} onOpenChange={guardClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Edit className="h-5 w-5" />
-            Editar Pedido #{order.numero_pedido}
+            <ShoppingBag className="h-5 w-5 text-primary" />
+            Editar pedido #{order.numero_pedido}
           </DialogTitle>
+          <DialogDescription>
+            Completa la información para actualizar el despacho en la flota oficial Miau Miau
+          </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Información del Cliente */}
+        <form
+          className="space-y-6"
+          onSubmit={(event) => {
+            if (step < 3) {
+              event.preventDefault();
+              if (canNext()) setStep(step + 1);
+              return;
+            }
+            void handleSubmit(event);
+          }}
+        >
+          <div className="grid grid-cols-3 gap-2">
+            {STEPS.map((item) => {
+              const active = step === item.id;
+              const done = step > item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => {
+                    if (item.id < step || (item.id === step + 1 && canNext())) setStep(item.id);
+                  }}
+                  className={`rounded-xl px-3 py-3 text-left ${
+                    active
+                      ? "bg-primary text-primary-foreground"
+                      : done
+                        ? "bg-emerald-50 text-emerald-800"
+                        : "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  <span className="block text-xs font-medium">{item.id}</span>
+                  <span className="block text-sm font-semibold leading-tight">{item.title}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {step === 1 ? (
+          <>
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -754,78 +822,14 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
                   </div>
                 </div>
                 )}
-
-                <div className="space-y-2">
-                  <Label htmlFor="metodo_pago">Método de Pago *</Label>
-                  <Select value={formData.metodo_pago} onValueChange={(value: any) => setFormData(prev => ({ ...prev, metodo_pago: value }))}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecciona método de pago" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="efectivo">Efectivo</SelectItem>
-                      <SelectItem value="tarjeta">Tarjeta</SelectItem>
-                      <SelectItem value="transferencia">Transferencia</SelectItem>
-                      <SelectItem value="pago_movil">Pago Móvil</SelectItem>
-                      <SelectItem value="mixto">Mixto</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="notas">Notas Adicionales</Label>
-                <div className="relative">
-                  <FileText className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Textarea
-                    id="notas"
-                    value={formData.notas}
-                    onChange={(e) => setFormData(prev => ({ ...prev, notas: e.target.value }))}
-                    className="pl-8"
-                    placeholder="Notas adicionales para el pedido"
-                    rows={3}
-                  />
-                </div>
               </div>
             </CardContent>
           </Card>
+          </>
+          ) : null}
 
-          {/* Promoción */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <CreditCard className="h-4 w-4" />
-                Promoción
-              </CardTitle>
-              <CardDescription>
-                Selecciona una promoción para aplicar al pedido
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <PromotionSelector
-                value={formData.codigo_promocion || undefined}
-                onValueChange={handlePromotionSelect}
-                placeholder="Buscar y seleccionar promoción..."
-                disabled={loading}
-              />
-              {selectedPromotion && (
-                <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium text-green-800">{selectedPromotion.nombre}</p>
-                      <p className="text-sm text-green-600">Código: {selectedPromotion.codigo}</p>
-                    </div>
-                    <Badge variant="secondary" className="bg-green-100 text-green-800">
-                      {selectedPromotion.tipo_promocion === 'porcentaje'
-                        ? `${selectedPromotion.valor_descuento}%`
-                        : `$${selectedPromotion.valor_descuento}`}
-                    </Badge>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Productos */}
+          {step === 2 ? (
+          <>
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -1093,8 +1097,65 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
               </Button>
             </CardContent>
           </Card>
+          </>
+          ) : null}
 
-          {/* Resumen del Pedido */}
+          {step === 3 ? (
+          <>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CreditCard className="h-4 w-4" />
+                Pago, promoción y notas
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="metodo_pago">Método de Pago *</Label>
+                <Select value={formData.metodo_pago} onValueChange={(value: any) => setFormData(prev => ({ ...prev, metodo_pago: value }))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecciona método de pago" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="efectivo">Efectivo</SelectItem>
+                    <SelectItem value="tarjeta">Tarjeta</SelectItem>
+                    <SelectItem value="transferencia">Transferencia</SelectItem>
+                    <SelectItem value="pago_movil">Pago Móvil</SelectItem>
+                    <SelectItem value="mixto">Mixto</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Promoción</Label>
+                <PromotionSelector
+                  value={formData.codigo_promocion || undefined}
+                  onValueChange={handlePromotionSelect}
+                  placeholder="Buscar y seleccionar promoción..."
+                  disabled={loading}
+                />
+                {selectedPromotion && (
+                  <div className="mt-2 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">
+                    <p className="font-medium">{selectedPromotion.nombre} · {selectedPromotion.codigo}</p>
+                    <p>
+                      Descuento: {selectedPromotion.tipo_promocion === "porcentaje"
+                        ? `${selectedPromotion.valor_descuento}%`
+                        : `$${selectedPromotion.valor_descuento}`}
+                    </p>
+                  </div>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="notas">Instrucciones especiales y notas de entrega</Label>
+                <Textarea
+                  id="notas"
+                  value={formData.notas}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, notas: e.target.value }))}
+                  placeholder="Instrucciones especiales para la entrega..."
+                  rows={3}
+                />
+              </div>
+            </CardContent>
+          </Card>
           <Card>
             <CardHeader>
               <CardTitle>Resumen del Pedido</CardTitle>
@@ -1118,23 +1179,35 @@ const EditOrderModal = ({ open, onOpenChange, order, onOrderUpdated }: EditOrder
               </div>
             </CardContent>
           </Card>
+          </>
+          ) : null}
 
-          {/* Botones de Acción */}
-          <div className="flex justify-end space-x-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleClose}
-              disabled={loading}
-            >
-              Cancelar
-            </Button>
-            <Button
-              type="submit"
-              disabled={loading}
-            >
-              {loading ? "Actualizando..." : "Actualizar Pedido"}
-            </Button>
+          <div className="flex items-center justify-between gap-3 border-t pt-4">
+            <p className="text-xs text-muted-foreground">
+              {step} de 3 · {step === 1 ? "Cliente y entrega" : step === 2 ? "Productos y paquetes" : "Pago y resumen"}
+            </p>
+            <div className="flex gap-2">
+              {step === 1 ? (
+                <Button type="button" variant="outline" onClick={handleClose} disabled={loading}>
+                  Cancelar
+                </Button>
+              ) : (
+                <Button type="button" variant="outline" onClick={() => setStep(step - 1)} disabled={loading}>
+                  <ChevronLeft className="mr-1 h-4 w-4" />
+                  Volver
+                </Button>
+              )}
+              {step < 3 ? (
+                <Button type="submit" disabled={!canNext() || loading}>
+                  Siguiente
+                  <ChevronRight className="ml-1 h-4 w-4" />
+                </Button>
+              ) : (
+                <Button type="submit" disabled={loading || !formData.metodo_pago}>
+                  {loading ? "Actualizando..." : "Actualizar pedido"}
+                </Button>
+              )}
+            </div>
           </div>
         </form>
       </DialogContent>

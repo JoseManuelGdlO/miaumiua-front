@@ -4,7 +4,6 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -21,10 +20,17 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { citiesService, City, HORARIO_POR_DIA_DEFAULT, type HorarioPorDia, type PointOfSale } from "@/services/citiesService";
 import { formatHour24To12, parseHour12To24 } from "@/utils/businessHoursTime";
-import { Loader2 } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Loader2, MapPin, User } from "lucide-react";
 import CityWhatsappCard from "@/components/cities/CityWhatsappCard";
 import { canEdit } from "@/utils/permissions";
 import { ConfirmCloseDialog, useConfirmClose } from "@/components/ConfirmClose";
+import { cn } from "@/lib/utils";
+
+const STEPS = [
+  { id: 1, title: "General y Responsables" },
+  { id: 2, title: "Operación y Horarios" },
+  { id: 3, title: "Puntos de Venta" },
+];
 
 interface EditCityModalProps {
   open: boolean;
@@ -37,6 +43,7 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [loadingPoints, setLoadingPoints] = useState(false);
+  const [step, setStep] = useState(1);
   const [formData, setFormData] = useState<{
     nombre: string;
     departamento: string;
@@ -153,6 +160,7 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
         horario_por_dia: getInitialHorarioPorDia(city),
       };
       setFormData(next);
+      setStep(1);
       setBaseline((prev) => ({ ...prev, form: JSON.stringify(next) }));
       setPointForm({
         nombre: "",
@@ -163,6 +171,7 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
       setEditingPointId(null);
       loadCityPoints(city.id);
     } else if (!open) {
+      setStep(1);
       setPointsOfSale([]);
       setPointForm({
         nombre: "",
@@ -303,91 +312,64 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
     }
   };
 
+  const mensajePaso1 = () => {
+    if (!formData.nombre || !formData.departamento || !formData.manager || !formData.telefono || !formData.email_contacto) {
+      return "Por favor completa todos los campos obligatorios";
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email_contacto)) {
+      return "El email no tiene un formato válido";
+    }
+    if (!/^[\+]?[0-9\s\-\(\)]+$/.test(formData.telefono)) {
+      return "El teléfono no tiene un formato válido";
+    }
+    if (formData.numero_soporte_cliente.trim() && !/^[\+]?[0-9\s\-\(\)]+$/.test(formData.numero_soporte_cliente)) {
+      return "El número de soporte al cliente no tiene un formato válido";
+    }
+    return null;
+  };
+
+  const mensajePaso2 = () => {
+    if (formData.max_pedidos_por_horario < 1 || formData.max_pedidos_por_horario > 100) {
+      return "El máximo de pedidos por horario debe estar entre 1 y 100";
+    }
+    if (!formData.dias_trabajo || formData.dias_trabajo.length === 0) {
+      return "Debe seleccionar al menos un día de trabajo";
+    }
+    const diasLabels: Record<string, string> = {
+      "0": "Domingo", "1": "Lunes", "2": "Martes", "3": "Miércoles",
+      "4": "Jueves", "5": "Viernes", "6": "Sábado",
+    };
+    for (const key of ["0", "1", "2", "3", "4", "5", "6"]) {
+      const slot = formData.horario_por_dia[key];
+      if (!slot) continue;
+      const { inicio, fin } = slot;
+      if (inicio < 0 || inicio > 23 || fin < 0 || fin > 23) {
+        return `En ${diasLabels[key]}: hora inicio y fin deben ser válidas (ej. 9 am, 5 pm)`;
+      }
+      if (inicio >= fin) {
+        return `En ${diasLabels[key]}: la hora de inicio debe ser menor que la de fin`;
+      }
+    }
+    return null;
+  };
+
+  const canNext = () => (step === 1 ? !mensajePaso1() : step === 2 ? !mensajePaso2() : true);
+
+  const goStep = (id: number) => {
+    if (id < step || (id === step + 1 && canNext())) setStep(id);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!city) return;
 
-    if (!formData.nombre || !formData.departamento || !formData.manager || !formData.telefono || !formData.email_contacto) {
-      toast({
-        title: "Error",
-        description: "Por favor completa todos los campos obligatorios",
-        variant: "destructive"
-      });
+    const falta = mensajePaso1() || mensajePaso2();
+    if (falta) {
+      toast({ title: "Error", description: falta, variant: "destructive" });
+      if (mensajePaso1()) setStep(1);
+      else setStep(2);
       return;
-    }
-
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email_contacto)) {
-      toast({
-        title: "Error",
-        description: "El email no tiene un formato válido",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    if (!/^[\+]?[0-9\s\-\(\)]+$/.test(formData.telefono)) {
-      toast({
-        title: "Error",
-        description: "El teléfono no tiene un formato válido",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    if (formData.numero_soporte_cliente.trim() && !/^[\+]?[0-9\s\-\(\)]+$/.test(formData.numero_soporte_cliente)) {
-      toast({
-        title: "Error",
-        description: "El número de soporte al cliente no tiene un formato válido",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    // Validar max_pedidos_por_horario
-    if (formData.max_pedidos_por_horario < 1 || formData.max_pedidos_por_horario > 100) {
-      toast({
-        title: "Error",
-        description: "El máximo de pedidos por horario debe estar entre 1 y 100",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    if (!formData.dias_trabajo || formData.dias_trabajo.length === 0) {
-      toast({
-        title: "Error",
-        description: "Debe seleccionar al menos un día de trabajo",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    // Validar horario por día: 0 <= inicio, fin <= 23 y inicio < fin
-    const diasLabels: Record<string, string> = {
-      '0': 'Domingo', '1': 'Lunes', '2': 'Martes', '3': 'Miércoles',
-      '4': 'Jueves', '5': 'Viernes', '6': 'Sábado',
-    };
-    for (const key of ['0', '1', '2', '3', '4', '5', '6']) {
-      const slot = formData.horario_por_dia[key];
-      if (!slot) continue;
-      const { inicio, fin } = slot;
-      if (inicio < 0 || inicio > 23 || fin < 0 || fin > 23) {
-        toast({
-          title: "Error",
-          description: `En ${diasLabels[key]}: hora inicio y fin deben ser válidas (ej. 9 am, 5 pm)`,
-          variant: "destructive"
-        });
-        return;
-      }
-      if (inicio >= fin) {
-        toast({
-          title: "Error",
-          description: `En ${diasLabels[key]}: la hora de inicio debe ser menor que la de fin`,
-          variant: "destructive"
-        });
-        return;
-      }
     }
 
     try {
@@ -509,117 +491,168 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
 
   return (
     <Dialog open={open} onOpenChange={guardClose}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Editar Ciudad</DialogTitle>
-          <DialogDescription>
-            Modifica la información de la ciudad de operación
-          </DialogDescription>
+          <div className="flex items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <MapPin className="h-5 w-5" />
+            </span>
+            <div className="space-y-1">
+              <DialogTitle className="flex flex-wrap items-center gap-2">
+                Editar Ciudad
+                <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">Operaciones</span>
+              </DialogTitle>
+              <DialogDescription>
+                Modifica la información de la ciudad de operación
+              </DialogDescription>
+            </div>
+          </div>
         </DialogHeader>
 
         {city && (
           <CityWhatsappCard cityId={city.id} initial={city.whatsapp} canEdit={canEdit("cities")} />
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="nombre">Nombre de la Ciudad *</Label>
-              <Input
-                id="nombre"
-                value={formData.nombre}
-                onChange={(e) => handleInputChange('nombre', e.target.value)}
-                placeholder="Ej: Bogotá"
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="departamento">Departamento *</Label>
-              <Input
-                id="departamento"
-                value={formData.departamento}
-                onChange={(e) => handleInputChange('departamento', e.target.value)}
-                placeholder="Ej: Cundinamarca"
-                required
-              />
-            </div>
+        <form
+          className="space-y-6"
+          onSubmit={(event) => {
+            if (step < 3) {
+              event.preventDefault();
+              if (canNext()) setStep(step + 1);
+              return;
+            }
+            void handleSubmit(event);
+          }}
+        >
+          <div className="grid grid-cols-3 gap-2">
+            {STEPS.map((item) => {
+              const active = step === item.id;
+              const done = step > item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => goStep(item.id)}
+                  className={`rounded-xl px-3 py-3 text-left ${
+                    active
+                      ? "bg-primary text-primary-foreground"
+                      : done
+                        ? "bg-emerald-50 text-emerald-800"
+                        : "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  <span className="block text-xs font-medium">{item.id}</span>
+                  <span className="block text-sm font-semibold leading-tight">{item.title}</span>
+                </button>
+              );
+            })}
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="direccion_operaciones">Dirección de Operaciones</Label>
-            <Input
-              id="direccion_operaciones"
-              value={formData.direccion_operaciones}
-              onChange={(e) => handleInputChange('direccion_operaciones', e.target.value)}
-              placeholder="Dirección completa de las operaciones"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="manager">Manager *</Label>
-              <Input
-                id="manager"
-                value={formData.manager}
-                onChange={(e) => handleInputChange('manager', e.target.value)}
-                placeholder="Nombre del manager"
-                required
-              />
+          {step === 1 ? (
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold">Datos de la ciudad</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="nombre">Nombre de la Ciudad *</Label>
+                  <Input
+                    id="nombre"
+                    value={formData.nombre}
+                    onChange={(e) => handleInputChange("nombre", e.target.value)}
+                    placeholder="Ej: Bogotá"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="departamento">Departamento *</Label>
+                  <Input
+                    id="departamento"
+                    value={formData.departamento}
+                    onChange={(e) => handleInputChange("departamento", e.target.value)}
+                    placeholder="Ej: Cundinamarca"
+                    required
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="direccion_operaciones">Dirección de Operaciones</Label>
+                <Input
+                  id="direccion_operaciones"
+                  value={formData.direccion_operaciones}
+                  onChange={(e) => handleInputChange("direccion_operaciones", e.target.value)}
+                  placeholder="Dirección completa de las operaciones"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="estado_inicial">Estado Inicial</Label>
+                <Select value={formData.estado_inicial} onValueChange={(value) => handleInputChange("estado_inicial", value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecciona un estado" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {estados.map((estado) => (
+                      <SelectItem key={estado.value} value={estado.value}>
+                        <span className="flex items-center gap-2">
+                          <span className={cn("h-2 w-2 rounded-full", estado.value === "activa" ? "bg-emerald-500" : "bg-muted-foreground/40")} />
+                          {estado.label}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-4 rounded-md border p-4">
+                <h3 className="flex items-center gap-2 text-sm font-semibold">
+                  <User className="h-4 w-4 text-primary" />
+                  Responsables y canales locales
+                </h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="manager">Manager *</Label>
+                    <Input
+                      id="manager"
+                      value={formData.manager}
+                      onChange={(e) => handleInputChange("manager", e.target.value)}
+                      placeholder="Nombre del manager"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="email_contacto">Email *</Label>
+                    <Input
+                      id="email_contacto"
+                      type="email"
+                      value={formData.email_contacto}
+                      onChange={(e) => handleInputChange("email_contacto", e.target.value)}
+                      placeholder="manager@miaumiau.com"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="telefono">Teléfono *</Label>
+                    <Input
+                      id="telefono"
+                      value={formData.telefono}
+                      onChange={(e) => handleInputChange("telefono", e.target.value)}
+                      placeholder="+57 1 234 5678"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="numero_soporte_cliente">Número de soporte al cliente</Label>
+                    <Input
+                      id="numero_soporte_cliente"
+                      value={formData.numero_soporte_cliente}
+                      onChange={(e) => handleInputChange("numero_soporte_cliente", e.target.value)}
+                      placeholder="618 1892035"
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
+          ) : null}
 
-            <div className="space-y-2">
-              <Label htmlFor="estado_inicial">Estado Inicial</Label>
-              <Select value={formData.estado_inicial} onValueChange={(value) => handleInputChange('estado_inicial', value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecciona un estado" />
-                </SelectTrigger>
-                <SelectContent>
-                  {estados.map((estado) => (
-                    <SelectItem key={estado.value} value={estado.value}>
-                      {estado.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="telefono">Teléfono *</Label>
-              <Input
-                id="telefono"
-                value={formData.telefono}
-                onChange={(e) => handleInputChange('telefono', e.target.value)}
-                placeholder="+57 1 234 5678"
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="email_contacto">Email *</Label>
-              <Input
-                id="email_contacto"
-                type="email"
-                value={formData.email_contacto}
-                onChange={(e) => handleInputChange('email_contacto', e.target.value)}
-                placeholder="manager@miaumiau.com"
-                required
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="numero_soporte_cliente">Número de soporte al cliente</Label>
-            <Input
-              id="numero_soporte_cliente"
-              value={formData.numero_soporte_cliente}
-              onChange={(e) => handleInputChange('numero_soporte_cliente', e.target.value)}
-              placeholder="618 1892035"
-            />
-          </div>
-
+          {step === 2 ? (
+            <div className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="max_pedidos_por_horario">Máximo de Pedidos por Horario *</Label>
             <Input
@@ -717,8 +750,11 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
                 })}
             </div>
           </div>
+            </div>
+          ) : null}
 
-          <div className="space-y-3 border rounded-md p-4">
+          {step === 3 ? (
+          <div className="space-y-3">
             <div>
               <Label className="font-semibold">Puntos de venta de la ciudad</Label>
               <p className="text-sm text-muted-foreground">
@@ -839,21 +875,37 @@ const EditCityModal = ({ open, onOpenChange, city, onCityUpdated }: EditCityModa
               </Button>
             </div>
           </div>
+          ) : null}
 
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={requestClose}
-              disabled={loading}
-            >
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={loading}>
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Actualizar Ciudad
-            </Button>
-          </DialogFooter>
+          <div className="flex items-center justify-between gap-3 border-t pt-4">
+            <p className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+              3 secciones configurables
+            </p>
+            <div className="flex gap-2">
+              {step === 1 ? (
+                <Button type="button" variant="outline" onClick={requestClose} disabled={loading}>
+                  Cancelar
+                </Button>
+              ) : (
+                <Button type="button" variant="outline" onClick={() => setStep(step - 1)} disabled={loading}>
+                  <ChevronLeft className="h-4 w-4" />
+                  Volver
+                </Button>
+              )}
+              {step < 3 ? (
+                <Button type="submit" disabled={!canNext() || loading}>
+                  Siguiente
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              ) : (
+                <Button type="submit" disabled={loading}>
+                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                  Actualizar Ciudad
+                </Button>
+              )}
+            </div>
+          </div>
         </form>
       </DialogContent>
       <ConfirmCloseDialog open={ask} onOpenChange={setAsk} onConfirm={confirm} />
