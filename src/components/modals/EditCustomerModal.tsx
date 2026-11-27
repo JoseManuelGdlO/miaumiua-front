@@ -64,9 +64,6 @@ const EditCustomerModal = ({ open, onOpenChange, cliente, onClienteUpdated }: Ed
     tipo_cuenta: "general" as TipoCuenta,
   });
   const [baseline, setBaseline] = useState({ form: "", pets: "[]" });
-  const [estado, setEstado] = useState("todos");
-  const estados = [...new Set(cities.map((city) => city.departamento).filter(Boolean))].sort();
-  const ciudadesVisibles = estado === "todos" ? cities : cities.filter((city) => city.departamento === estado);
 
   // Cargar ciudades y mascotas al abrir el modal
   useEffect(() => {
@@ -100,7 +97,6 @@ const EditCustomerModal = ({ open, onOpenChange, cliente, onClienteUpdated }: Ed
       };
       setFormData(next);
       setBaseline((prev) => ({ ...prev, form: JSON.stringify(next) }));
-      setEstado(cliente.ciudad?.departamento || "todos");
     }
   }, [cliente, open]);
 
@@ -455,47 +451,24 @@ const EditCustomerModal = ({ open, onOpenChange, cliente, onClienteUpdated }: Ed
                     placeholder="correo@ejemplo.com"
                   />
                 </div>
-
                 <div className="space-y-2">
-                  <Label>Estado</Label>
+                  <Label htmlFor="fkid_ciudad">Ciudad *</Label>
                   <Select
-                    value={estado}
-                    onValueChange={(value) => {
-                      setEstado(value);
-                      const still = (value === "todos" ? cities : cities.filter((city) => city.departamento === value))
-                        .some((city) => city.id.toString() === formData.fkid_ciudad);
-                      if (!still) handleInputChange("fkid_ciudad", "");
-                    }}
+                    value={formData.fkid_ciudad}
+                    onValueChange={(value) => handleInputChange('fkid_ciudad', value)}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Estado" />
+                      <SelectValue placeholder="Selecciona una ciudad" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="todos">Todos</SelectItem>
-                      {estados.map((name) => (
-                        <SelectItem key={name} value={name}>{name}</SelectItem>
+                      {cities.map((city) => (
+                        <SelectItem key={city.id} value={city.id.toString()}>
+                          {city.nombre}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="fkid_ciudad">Ciudad *</Label>
-                <Select
-                  value={formData.fkid_ciudad}
-                  onValueChange={(value) => handleInputChange('fkid_ciudad', value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecciona una ciudad" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ciudadesVisibles.map((city) => (
-                      <SelectItem key={city.id} value={city.id.toString()}>
-                        {city.nombre} - {city.departamento}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
 
               <div className="space-y-2">

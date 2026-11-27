@@ -366,7 +366,7 @@ interface AIRouteOptimizerProps {
   date: string;
   driversAvailable: number;
   drivers?: { id: number; nombre_completo: string }[];
-  onRoutesGenerated: (routes: { [key: string]: Order[] }, opts?: { driverId?: number; prioridad?: 'hora' | 'distancia' }) => void;
+  onRoutesGenerated: (routes: { [key: string]: Order[] }, opts?: { driverId?: number; prioridad?: 'hora' | 'distancia'; cierre?: 'ultima' | 'bodega' }) => void;
 }
 
 const UN_SOLO_HASTA = 8;
@@ -382,7 +382,8 @@ const AIRouteOptimizer: React.FC<AIRouteOptimizerProps> = ({
 }) => {
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [driverId, setDriverId] = useState("auto");
-  const [prioridad, setPrioridad] = useState<'hora' | 'distancia'>('hora');
+  const [prioridad, setPrioridad] = useState<'hora' | 'distancia'>('distancia');
+  const [cierre, setCierre] = useState<'ultima' | 'bodega'>('bodega');
   const [error, setError] = useState("");
   const [lastOptimization, setLastOptimization] = useState<{
     routes: { [key: string]: Order[] };
@@ -546,9 +547,9 @@ const AIRouteOptimizer: React.FC<AIRouteOptimizerProps> = ({
         && Number.isFinite(chosenId)
         && drivers.some((driver) => driver.id === chosenId);
       if (assigned) {
-        onRoutesGenerated(optimizedRoutes, { driverId: chosenId, prioridad });
+        onRoutesGenerated(optimizedRoutes, { driverId: chosenId, prioridad, cierre });
       } else {
-        onRoutesGenerated(optimizedRoutes, { prioridad });
+        onRoutesGenerated(optimizedRoutes, { prioridad, cierre });
       }
 
     } catch (error) {
@@ -619,6 +620,28 @@ const AIRouteOptimizer: React.FC<AIRouteOptimizerProps> = ({
                 <span className="flex flex-col gap-0.5">
                   <span>Más rápida</span>
                   <span className="text-xs text-muted-foreground">Una cadena desde la bodega, sin mirar la hora.</span>
+                </span>
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>Dónde termina</Label>
+          <Select value={cierre} onValueChange={(value) => setCierre(value === 'bodega' ? 'bodega' : 'ultima')}>
+            <SelectTrigger>
+              <span>{cierre === 'bodega' ? 'Vuelve a la bodega' : 'Última entrega'}</span>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ultima" className="items-start whitespace-normal py-2">
+                <span className="flex flex-col gap-0.5">
+                  <span>Última entrega</span>
+                  <span className="text-xs text-muted-foreground">Sale de la bodega y termina en el último pedido.</span>
+                </span>
+              </SelectItem>
+              <SelectItem value="bodega" className="items-start whitespace-normal py-2">
+                <span className="flex flex-col gap-0.5">
+                  <span>Vuelve a la bodega</span>
+                  <span className="text-xs text-muted-foreground">El trazo cierra en la bodega después de la última parada.</span>
                 </span>
               </SelectItem>
             </SelectContent>
