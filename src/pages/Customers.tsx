@@ -374,7 +374,12 @@ const Customers = () => {
       <CreateCustomerModal 
         open={isCreateModalOpen} 
         onOpenChange={setIsCreateModalOpen}
-        onClienteCreated={loadClientes}
+        onClienteCreated={() => {
+          setSearchTerm("");
+          if (currentPage === 1) loadClientes();
+          else setCurrentPage(1);
+        }}
+        onVerCliente={handleEditCliente}
       />
 
       <EditCustomerModal

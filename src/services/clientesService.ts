@@ -63,8 +63,15 @@ export interface ClienteResponse {
   success: boolean;
   data: {
     cliente: Cliente;
+    alreadyExists?: boolean;
   };
   message?: string;
+}
+
+export function clienteDeError(error: unknown): Cliente | null {
+  if (!error || typeof error !== "object" || !("data" in error)) return null;
+  const cliente = (error as { data?: { cliente?: Cliente } }).data?.cliente;
+  return cliente?.id ? cliente : null;
 }
 
 export interface ClientesResponse {
