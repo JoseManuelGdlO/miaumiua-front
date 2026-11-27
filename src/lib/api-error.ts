@@ -98,9 +98,12 @@ export function vistaDeError(description: string): string {
   return `${explicado.motivo}\nCódigo: ${explicado.codigo}`;
 }
 
-export function falloHttp(response: Response, body: unknown): Error & { status: number } {
-  const error = new Error(vistaDeError(`${textoDeError(body)}\nCódigo: ${response.status}`)) as Error & { status: number };
+export function falloHttp(response: Response, body: unknown): Error & { status: number; data?: unknown } {
+  const error = new Error(vistaDeError(`${textoDeError(body)}\nCódigo: ${response.status}`)) as Error & { status: number; data?: unknown };
   error.status = response.status;
+  if (body && typeof body === "object" && "data" in body) {
+    error.data = (body as { data?: unknown }).data;
+  }
   return error;
 }
 

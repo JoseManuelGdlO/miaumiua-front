@@ -21,7 +21,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { clientesService, CreateClienteData } from "@/services/clientesService";
+import { clientesService, Cliente, CreateClienteData, clienteDeError } from "@/services/clientesService";
 import { petsService, CreatePetData } from "@/services/petsService";
 import { citiesService } from "@/services/citiesService";
 import { Loader2, Plus, Trash2, Heart } from "lucide-react";
@@ -43,6 +43,7 @@ interface CreateCustomerModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onClienteCreated: () => void;
+  onVerCliente?: (cliente: Cliente) => void;
 }
 
 interface PetFormData {
@@ -54,9 +55,10 @@ interface PetFormData {
   notas_especiales: string;
 }
 
-const CreateCustomerModal = ({ open, onOpenChange, onClienteCreated }: CreateCustomerModalProps) => {
+const CreateCustomerModal = ({ open, onOpenChange, onClienteCreated, onVerCliente }: CreateCustomerModalProps) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [duplicado, setDuplicado] = useState<Cliente | null>(null);
   const [cities, setCities] = useState<Array<{ id: number; nombre: string; departamento: string }>>([]);
   
   const [formData, setFormData] = useState(EMPTY_CUSTOMER);
@@ -184,9 +186,20 @@ const CreateCustomerModal = ({ open, onOpenChange, onClienteCreated }: CreateCus
         notas_especiales: formData.notas_especiales || undefined
       };
 
-      const clienteResponse = await clientesService.createCliente(clienteData);
+      const clienteResponse = await clientesService.createCliente({
+        ...clienteData,
+        email: formData.email.trim() || undefined,
+        nombre_completo: formData.nombre_completo.trim(),
+        telefono: formData.telefono.trim(),
+      });
 
       if (clienteResponse.success) {
+        if (clienteResponse.data.alreadyExists) {
+          onClienteCreated();
+          onOpenChange(false);
+          setDuplicado(clienteResponse.data.cliente);
+          return;
+        }
         const clienteId = clienteResponse.data.cliente.id;
 
         // Crear mascotas si las hay
@@ -215,6 +228,12 @@ const CreateCustomerModal = ({ open, onOpenChange, onClienteCreated }: CreateCus
         onOpenChange(false);
       }
     } catch (error) {
+      const yaExiste = clienteDeError(error);
+      if (yaExiste) {
+        onOpenChange(false);
+        setDuplicado(yaExiste);
+        return;
+      }
       console.error('Error al crear cliente:', error);
       toast({
         title: "Error",
@@ -240,6 +259,7 @@ const CreateCustomerModal = ({ open, onOpenChange, onClienteCreated }: CreateCus
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={guardClose}>
       <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -527,6 +547,34 @@ const CreateCustomerModal = ({ open, onOpenChange, onClienteCreated }: CreateCus
       </DialogContent>
       <ConfirmCloseDialog open={ask} onOpenChange={setAsk} onConfirm={confirm} />
     </Dialog>
+    <Dialog open={Boolean(duplicado)} onOpenChange={(next) => { if (!next) setDuplicado(null); }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Este cliente ya existe</DialogTitle>
+          <DialogDescription>
+            {duplicado
+              ? `Ya está registrado ${duplicado.nombre_completo}${duplicado.telefono ? ` · ${duplicado.telefono}` : ""}. ¿Quieres ver o editar su ficha?`
+              : ""}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => setDuplicado(null)}>
+            Cerrar
+          </Button>
+          <Button
+            type="button"
+            onClick={() => {
+              const cliente = duplicado;
+              setDuplicado(null);
+              if (cliente) onVerCliente?.(cliente);
+            }}
+          >
+            Ver / Editar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 };
 

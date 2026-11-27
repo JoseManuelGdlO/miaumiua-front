@@ -34,7 +34,7 @@ import {
 } from "@/components/ui/select";
 import { Check, ChevronsUpDown, User, Search, Loader2, Phone, Mail, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { clientesService, Cliente, CreateClienteData } from "@/services/clientesService";
+import { clientesService, Cliente, CreateClienteData, clienteDeError } from "@/services/clientesService";
 import { citiesService } from "@/services/citiesService";
 import { useToast } from "@/hooks/use-toast";
 
@@ -228,11 +228,11 @@ const ClienteSelector = ({
       
       if (response.success) {
         toast({
-          title: "Cliente creado",
-          description: `Cliente "${response.data.cliente.nombre_completo}" creado exitosamente`,
+          title: response.data.alreadyExists ? "Este cliente ya existía" : "Cliente creado",
+          description: response.data.alreadyExists
+            ? (response.message || `Se usará "${response.data.cliente.nombre_completo}"`)
+            : `Cliente "${response.data.cliente.nombre_completo}" creado exitosamente`,
         });
-        
-        // Seleccionar el nuevo cliente
         handleSelect(response.data.cliente);
         
         // Limpiar formulario y cerrar modal
@@ -244,6 +244,17 @@ const ClienteSelector = ({
         setCreateModalOpen(false);
       }
     } catch (error) {
+      const yaExiste = clienteDeError(error);
+      if (yaExiste) {
+        toast({
+          title: "Este cliente ya existía",
+          description: `Se usará "${yaExiste.nombre_completo}"`,
+        });
+        handleSelect(yaExiste);
+        setNewClienteData(emptyCliente);
+        setCreateModalOpen(false);
+        return;
+      }
       console.error('Error al crear cliente:', error);
       toast({
         title: "Error",
