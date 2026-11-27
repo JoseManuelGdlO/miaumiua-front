@@ -4,6 +4,7 @@ import { decodePolyline, loadMaps, mapsApi, mapsKey, pin } from "@/lib/googleMap
 
 const ROSA = "#E83E8C";
 const NARANJA = "#FF6300";
+const VERDE = "#16A34A";
 const geoMemo = new Map<string, Punto | null>();
 
 type Punto = { lat: number; lng: number };
@@ -55,10 +56,12 @@ export function MapaRutaPlaneada({
   paradas = [],
   polylineEncoded = null,
   ciudad = null,
+  bodegaDireccion = null,
 }: {
   paradas?: Parada[];
   polylineEncoded?: string | null;
   ciudad?: string | null;
+  bodegaDireccion?: string | null;
 }) {
   const key = mapsKey();
   const node = useRef<HTMLDivElement>(null);
@@ -70,6 +73,7 @@ export function MapaRutaPlaneada({
   const [failed, setFailed] = useState(false);
   const [buscando, setBuscando] = useState(false);
   const [stops, setStops] = useState<Stop[]>([]);
+  const [bodega, setBodega] = useState<Punto | null>(null);
   const clave = paradas.map((parada) => `${parada.orden_entrega}:${parada.lat},${parada.lng}:${parada.direccion || ""}`).join("|");
 
   useEffect(() => {
@@ -131,8 +135,29 @@ export function MapaRutaPlaneada({
     };
   }, [key, apagada, clave, ciudad]);
 
-  const path = polylineEncoded ? decodePolyline(polylineEncoded) : stops.map((row) => row.punto);
-  const vista = `${stops.map((row) => `${row.orden}:${row.punto.lat},${row.punto.lng}`).join("|")}|${polylineEncoded || ""}`;
+  useEffect(() => {
+    if (!bodegaDireccion || !key || apagada) {
+      setBodega(null);
+      return;
+    }
+    let vivo = true;
+    void loadMaps(key).then(async () => {
+      const maps = mapsApi();
+      if (!vivo || !maps) return;
+      const punto = await geocodeDireccion(maps, bodegaDireccion, ciudad);
+      if (vivo) setBodega(punto);
+    }).catch(() => {
+      if (vivo) setBodega(null);
+    });
+    return () => {
+      vivo = false;
+    };
+  }, [key, apagada, bodegaDireccion, ciudad]);
+
+  const path = polylineEncoded
+    ? decodePolyline(polylineEncoded)
+    : [...(bodega ? [bodega] : []), ...stops.map((row) => row.punto)];
+  const vista = `${bodega ? `${bodega.lat},${bodega.lng}|` : ""}${stops.map((row) => `${row.orden}:${row.punto.lat},${row.punto.lng}`).join("|")}|${polylineEncoded || ""}`;
 
   useEffect(() => {
     if (!key || apagada || stops.length === 0) return;
@@ -164,6 +189,15 @@ export function MapaRutaPlaneada({
         title: row.parada.numero || `Parada ${row.orden}`,
         zIndex: row.orden,
       }));
+      if (bodega) {
+        pinsRef.current.push(new maps.Marker({
+          map,
+          position: bodega,
+          icon: pin(maps, VERDE, "B"),
+          title: "Bodega",
+          zIndex: 0,
+        }));
+      }
       if (!lineRef.current) {
         lineRef.current = new maps.Polyline({
           map,
@@ -180,6 +214,7 @@ export function MapaRutaPlaneada({
         sello.current = vista;
         const bounds = new maps.LatLngBounds();
         for (const row of stops) bounds.extend(row.punto);
+        if (bodega) bounds.extend(bodega);
         for (const punto of path) bounds.extend(punto);
         map.fitBounds(bounds);
       }
@@ -220,6 +255,7 @@ export function MapaRutaPlaneada({
       <p className="px-3 py-2 text-xs font-medium text-muted-foreground">
         Ruta planeada · {stops.length} parada{stops.length === 1 ? "" : "s"}
         {stops.length !== paradas.length ? ` de ${paradas.length}` : ""}
+        {bodega ? " · bodega" : ""}
       </p>
       {sinMapa ? (
         <div className="mx-3 mb-3 flex h-64 items-end rounded-md bg-muted p-3">

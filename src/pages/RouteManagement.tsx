@@ -1464,6 +1464,7 @@ const RouteManagement = () => {
                   <div id={`mapa-ruta-${route.id}`} className="scroll-mt-24">
                     <MapaRutaPlaneada
                       ciudad={route.ciudad?.nombre || null}
+                      bodegaDireccion={cities.find((city) => String(city.id) === selectedCity)?.direccion_operaciones || null}
                       paradas={(route.pedidos || []).map((parada) => {
                         const punto = puntoCliente({ lat: parada.lat, lng: parada.lng })
                           || puntoCliente(parada.pedido?.cliente);
