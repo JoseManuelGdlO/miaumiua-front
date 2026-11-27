@@ -960,6 +960,7 @@ const RouteManagement = () => {
                         const assignResponse = await routesService.assignOrdersToRoute(routeIdNum, {
                           pedidos: pedidosToAssign,
                           prioridad: opts?.prioridad,
+                          cierre: opts?.cierre,
                         });
                         
                         console.log(`[DEBUG] 📥 Respuesta del servidor:`, JSON.stringify(assignResponse, null, 2));

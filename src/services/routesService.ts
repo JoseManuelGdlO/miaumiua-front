@@ -218,6 +218,7 @@ export interface AssignOrdersToRouteData {
     notas_entrega?: string;
   }>;
   prioridad?: 'hora' | 'distancia';
+  cierre?: 'ultima' | 'bodega';
 }
 
 export interface ReorderRouteOrdersData {

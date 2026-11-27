@@ -429,7 +429,7 @@ const ClienteSelector = ({
                 <SelectContent>
                   {cities.map((city) => (
                     <SelectItem key={city.id} value={city.id.toString()}>
-                      {city.nombre} - {city.departamento}
+                      {city.nombre}
                     </SelectItem>
                   ))}
                 </SelectContent>
